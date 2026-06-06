@@ -3,20 +3,27 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Drive to YouTube pipeline API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: jobs
+    description: Pipeline job management
+  - name: drive
+    description: Google Drive operations
+  - name: youtube
+    description: YouTube operations
+  - name: settings
+    description: Pipeline settings
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +31,185 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /jobs:
+    get:
+      operationId: listJobs
+      tags: [jobs]
+      summary: List all pipeline jobs
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, processing, done, failed]
+          required: false
+      responses:
+        "200":
+          description: List of jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Job"
+    post:
+      operationId: createJob
+      tags: [jobs]
+      summary: Enqueue a Drive video for YouTube upload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobInput"
+      responses:
+        "201":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /jobs/{id}:
+    get:
+      operationId: getJob
+      tags: [jobs]
+      summary: Get a job by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteJob
+      tags: [jobs]
+      summary: Delete a job
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /jobs/{id}/retry:
+    post:
+      operationId: retryJob
+      tags: [jobs]
+      summary: Retry a failed job
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job re-queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /pipeline/trigger:
+    post:
+      operationId: triggerPipeline
+      tags: [jobs]
+      summary: Scan Drive folder and enqueue new videos
+      responses:
+        "200":
+          description: Scan results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TriggerResult"
+
+  /pipeline/stats:
+    get:
+      operationId: getPipelineStats
+      tags: [jobs]
+      summary: Summary counts by status
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelineStats"
+
+  /drive/files:
+    get:
+      operationId: listDriveFiles
+      tags: [drive]
+      summary: List video files in the configured Drive folder
+      responses:
+        "200":
+          description: List of Drive files
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DriveFile"
+
+  /youtube/playlists:
+    get:
+      operationId: listYoutubePlaylists
+      tags: [youtube]
+      summary: List YouTube playlists for the connected account
+      responses:
+        "200":
+          description: List of playlists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/YoutubePlaylist"
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get current pipeline settings
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+    put:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Update pipeline settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsInput"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +220,126 @@ components:
       required:
         - status
 
+    Job:
+      type: object
+      required: [id, driveFileId, driveFileName, status, createdAt]
+      properties:
+        id:
+          type: integer
+        driveFileId:
+          type: string
+        driveFileName:
+          type: string
+        driveFileSizeBytes:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [pending, processing, done, failed]
+        youtubeVideoId:
+          type: ["string", "null"]
+        youtubeUrl:
+          type: ["string", "null"]
+        errorMessage:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    JobInput:
+      type: object
+      required: [driveFileId, driveFileName]
+      properties:
+        driveFileId:
+          type: string
+        driveFileName:
+          type: string
+        driveFileSizeBytes:
+          type: ["integer", "null"]
+
+    TriggerResult:
+      type: object
+      required: [newJobsCreated, alreadyQueued, totalScanned]
+      properties:
+        newJobsCreated:
+          type: integer
+        alreadyQueued:
+          type: integer
+        totalScanned:
+          type: integer
+
+    PipelineStats:
+      type: object
+      required: [pending, processing, done, failed, total]
+      properties:
+        pending:
+          type: integer
+        processing:
+          type: integer
+        done:
+          type: integer
+        failed:
+          type: integer
+        total:
+          type: integer
+
+    DriveFile:
+      type: object
+      required: [id, name, mimeType]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        mimeType:
+          type: string
+        sizeBytes:
+          type: ["integer", "null"]
+        createdTime:
+          type: ["string", "null"]
+        alreadyQueued:
+          type: boolean
+
+    YoutubePlaylist:
+      type: object
+      required: [id, title]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        itemCount:
+          type: ["integer", "null"]
+
+    Settings:
+      type: object
+      required: [driveFolderId, youtubePlaylistId, autoSync, syncIntervalMinutes]
+      properties:
+        driveFolderId:
+          type: ["string", "null"]
+        driveFolderName:
+          type: ["string", "null"]
+        youtubePlaylistId:
+          type: ["string", "null"]
+        youtubePlaylistName:
+          type: ["string", "null"]
+        autoSync:
+          type: boolean
+        syncIntervalMinutes:
+          type: integer
+
+    SettingsInput:
+      type: object
+      properties:
+        driveFolderId:
+          type: ["string", "null"]
+        driveFolderName:
+          type: ["string", "null"]
+        youtubePlaylistId:
+          type: ["string", "null"]
+        youtubePlaylistName:
+          type: ["string", "null"]
+        autoSync:
+          type: boolean
+        syncIntervalMinutes:
+          type: integer
