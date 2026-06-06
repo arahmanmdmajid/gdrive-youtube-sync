@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, bigint, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -6,7 +6,7 @@ export const jobsTable = pgTable("jobs", {
   id: serial("id").primaryKey(),
   driveFileId: text("drive_file_id").notNull().unique(),
   driveFileName: text("drive_file_name").notNull(),
-  driveFileSizeBytes: integer("drive_file_size_bytes"),
+  driveFileSizeBytes: bigint("drive_file_size_bytes", { mode: "number" }),
   driveCreatedTime: text("drive_created_time"),
   status: text("status", { enum: ["pending", "processing", "done", "failed"] }).notNull().default("pending"),
   youtubeVideoId: text("youtube_video_id"),

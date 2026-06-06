@@ -37,7 +37,7 @@ export default function Jobs() {
   const params = statusFilter === "all" ? undefined : { status: statusFilter };
   
   const { data: jobs, isLoading } = useListJobs(params, {
-    query: { refetchInterval: 30000 }
+    query: { queryKey: getListJobsQueryKey(params), refetchInterval: 30000 }
   });
 
   const deleteMutation = useDeleteJob({

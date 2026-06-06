@@ -20,11 +20,11 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
 
   const { data: stats, isLoading: statsLoading } = useGetPipelineStats({
-    query: { refetchInterval: 30000 }
+    query: { queryKey: getGetPipelineStatsQueryKey(), refetchInterval: 30000 }
   });
 
   const { data: jobs, isLoading: jobsLoading } = useListJobs(undefined, {
-    query: { refetchInterval: 30000 }
+    query: { queryKey: getListJobsQueryKey(), refetchInterval: 30000 }
   });
 
   const triggerMutation = useTriggerPipeline({
