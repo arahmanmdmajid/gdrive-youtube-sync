@@ -28,9 +28,11 @@ export const ListJobsResponseItem = zod.object({
   "driveFileId": zod.string(),
   "driveFileName": zod.string(),
   "driveFileSizeBytes": zod.number().nullish(),
+  "driveCreatedTime": zod.string().nullish(),
   "status": zod.enum(['pending', 'processing', 'done', 'failed']),
   "youtubeVideoId": zod.string().nullish(),
   "youtubeUrl": zod.string().nullish(),
+  "youtubeTitle": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string().optional()
@@ -44,7 +46,8 @@ export const ListJobsResponse = zod.array(ListJobsResponseItem)
 export const CreateJobBody = zod.object({
   "driveFileId": zod.string(),
   "driveFileName": zod.string(),
-  "driveFileSizeBytes": zod.number().nullish()
+  "driveFileSizeBytes": zod.number().nullish(),
+  "driveCreatedTime": zod.string().nullish()
 })
 
 
@@ -60,9 +63,11 @@ export const GetJobResponse = zod.object({
   "driveFileId": zod.string(),
   "driveFileName": zod.string(),
   "driveFileSizeBytes": zod.number().nullish(),
+  "driveCreatedTime": zod.string().nullish(),
   "status": zod.enum(['pending', 'processing', 'done', 'failed']),
   "youtubeVideoId": zod.string().nullish(),
   "youtubeUrl": zod.string().nullish(),
+  "youtubeTitle": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string().optional()
@@ -89,9 +94,11 @@ export const RetryJobResponse = zod.object({
   "driveFileId": zod.string(),
   "driveFileName": zod.string(),
   "driveFileSizeBytes": zod.number().nullish(),
+  "driveCreatedTime": zod.string().nullish(),
   "status": zod.enum(['pending', 'processing', 'done', 'failed']),
   "youtubeVideoId": zod.string().nullish(),
   "youtubeUrl": zod.string().nullish(),
+  "youtubeTitle": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string().optional()

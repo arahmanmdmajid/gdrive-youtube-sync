@@ -25,11 +25,15 @@ export interface Job {
   driveFileName: string;
   /** @nullable */
   driveFileSizeBytes?: number | null;
+  /** @nullable */
+  driveCreatedTime?: string | null;
   status: JobStatus;
   /** @nullable */
   youtubeVideoId?: string | null;
   /** @nullable */
   youtubeUrl?: string | null;
+  /** @nullable */
+  youtubeTitle?: string | null;
   /** @nullable */
   errorMessage?: string | null;
   createdAt: string;
@@ -41,6 +45,8 @@ export interface JobInput {
   driveFileName: string;
   /** @nullable */
   driveFileSizeBytes?: number | null;
+  /** @nullable */
+  driveCreatedTime?: string | null;
 }
 
 export interface TriggerResult {

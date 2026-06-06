@@ -1,10 +1,8 @@
 import { google } from "googleapis";
+import { getGoogleAuthClient } from "./googleAuth";
 
 export function getYoutubeClient() {
-  const token = process.env.YOUTUBE_ACCESS_TOKEN;
-  if (!token) return null;
-
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials({ access_token: token });
+  const auth = getGoogleAuthClient();
+  if (!auth) return null;
   return google.youtube({ version: "v3", auth });
 }

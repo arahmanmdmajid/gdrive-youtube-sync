@@ -11,4 +11,6 @@ export interface JobInput {
   driveFileName: string;
   /** @nullable */
   driveFileSizeBytes?: number | null;
+  /** @nullable */
+  driveCreatedTime?: string | null;
 }

@@ -2,6 +2,7 @@ import { db, jobsTable, settingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getDriveClient, streamDriveFile } from "./driveClient";
 import { getYoutubeClient } from "./youtubeClient";
+import { buildYoutubeTitle, buildYoutubeDescription } from "./schedule";
 import { logger } from "./logger";
 
 export async function runPipelineScan(): Promise<{
@@ -38,10 +39,12 @@ export async function runPipelineScan(): Promise<{
     if (queuedIds.has(file.id)) {
       alreadyQueued++;
     } else {
+      const createdTime = file.createdTime ?? null;
       await db.insert(jobsTable).values({
         driveFileId: file.id,
         driveFileName: file.name ?? "Untitled",
         driveFileSizeBytes: file.size ? parseInt(file.size, 10) : null,
+        driveCreatedTime: createdTime,
         status: "pending",
       });
       newJobsCreated++;
@@ -69,21 +72,19 @@ export async function processNextPendingJob() {
     const youtube = getYoutubeClient();
 
     if (!youtube) {
-      throw new Error("YouTube not configured. Please connect your YouTube account.");
+      throw new Error("YouTube not configured. Please add a YOUTUBE_ACCESS_TOKEN secret.");
     }
+
+    const title = buildYoutubeTitle(job.driveFileName, job.driveCreatedTime);
+    const description = buildYoutubeDescription(job.driveFileName, job.driveCreatedTime);
 
     const fileStream = await streamDriveFile(job.driveFileId);
 
     const uploadResponse = await youtube.videos.insert({
       part: ["snippet", "status"],
       requestBody: {
-        snippet: {
-          title: job.driveFileName,
-          description: `Uploaded automatically from Google Drive by the recording pipeline.`,
-        },
-        status: {
-          privacyStatus: "unlisted",
-        },
+        snippet: { title, description },
+        status: { privacyStatus: "unlisted" },
       },
       media: {
         mimeType: "video/*",
@@ -100,20 +101,23 @@ export async function processNextPendingJob() {
         requestBody: {
           snippet: {
             playlistId: settings.youtubePlaylistId,
-            resourceId: {
-              kind: "youtube#video",
-              videoId,
-            },
+            resourceId: { kind: "youtube#video", videoId },
           },
         },
       });
     }
 
     await db.update(jobsTable)
-      .set({ status: "done", youtubeVideoId: videoId, youtubeUrl, updatedAt: new Date() })
+      .set({
+        status: "done",
+        youtubeVideoId: videoId,
+        youtubeUrl,
+        youtubeTitle: title,
+        updatedAt: new Date(),
+      })
       .where(eq(jobsTable.id, job.id));
 
-    logger.info({ jobId: job.id, videoId }, "Job completed");
+    logger.info({ jobId: job.id, videoId, title }, "Job completed");
     return job.id;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

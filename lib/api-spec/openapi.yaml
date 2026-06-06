@@ -232,12 +232,16 @@ components:
           type: string
         driveFileSizeBytes:
           type: ["integer", "null"]
+        driveCreatedTime:
+          type: ["string", "null"]
         status:
           type: string
           enum: [pending, processing, done, failed]
         youtubeVideoId:
           type: ["string", "null"]
         youtubeUrl:
+          type: ["string", "null"]
+        youtubeTitle:
           type: ["string", "null"]
         errorMessage:
           type: ["string", "null"]
@@ -256,6 +260,8 @@ components:
           type: string
         driveFileSizeBytes:
           type: ["integer", "null"]
+        driveCreatedTime:
+          type: ["string", "null"]
 
     TriggerResult:
       type: object
