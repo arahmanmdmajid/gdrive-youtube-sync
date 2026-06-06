@@ -97,6 +97,12 @@ router.post("/pipeline/trigger", async (req, res) => {
   res.json(result);
 });
 
+// Clear all jobs (reset) so a fresh scan can re-queue everything
+router.delete("/jobs", async (req, res) => {
+  await db.delete(jobsTable);
+  res.status(204).send();
+});
+
 router.get("/pipeline/stats", async (req, res) => {
   const rows = await db.select().from(jobsTable);
   const stats = { pending: 0, processing: 0, done: 0, failed: 0, total: rows.length };
