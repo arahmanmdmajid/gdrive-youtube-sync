@@ -35,7 +35,6 @@ export async function runPipelineScan(): Promise<{
     return { newJobsCreated: 0, alreadyQueued: 0, totalScanned: 0, filtered: 0 };
   }
 
-  // Fetch up to 1000 files (paginate if needed)
   let allFiles: Array<{ id: string; name: string; mimeType: string; size: string; createdTime: string }> = [];
   let pageToken: string | undefined;
 
@@ -43,7 +42,7 @@ export async function runPipelineScan(): Promise<{
     const response = await drive.files.list({
       q: `'${settings.driveFolderId}' in parents and mimeType contains 'video/' and trashed = false`,
       fields: "nextPageToken,files(id,name,mimeType,size,createdTime)",
-      orderBy: "createdTime desc",
+      orderBy: "createdTime asc",
       pageSize: 100,
       ...(pageToken ? { pageToken } : {}),
     });
@@ -54,7 +53,6 @@ export async function runPipelineScan(): Promise<{
 
   const totalScanned = allFiles.length;
 
-  // Apply meeting-code and date filters
   const eligible = allFiles.filter(
     (f) => f.id && f.name && isAllowedFile(f.name, f.createdTime)
   );
@@ -85,15 +83,11 @@ export async function runPipelineScan(): Promise<{
   return { newJobsCreated, alreadyQueued, totalScanned, filtered };
 }
 
-export async function processNextPendingJob() {
-  const [job] = await db
-    .select()
-    .from(jobsTable)
-    .where(eq(jobsTable.status, "pending"))
-    .limit(1);
-
-  if (!job) return null;
-
+/**
+ * Core upload logic — shared by both processNextPendingJob and processJobById.
+ * The job must already exist and be in "pending" status before calling this.
+ */
+async function uploadJob(job: typeof jobsTable.$inferSelect): Promise<void> {
   await db.update(jobsTable)
     .set({ status: "processing", updatedAt: new Date() })
     .where(eq(jobsTable.id, job.id));
@@ -108,6 +102,8 @@ export async function processNextPendingJob() {
 
     const title = buildYoutubeTitle(job.driveFileName, job.driveCreatedTime);
     const description = buildYoutubeDescription(job.driveFileName, job.driveCreatedTime);
+
+    logger.info({ jobId: job.id, title }, "Starting upload to YouTube");
 
     const fileStream = await streamDriveFile(job.driveFileId);
 
@@ -126,18 +122,7 @@ export async function processNextPendingJob() {
     const videoId = uploadResponse.data.id ?? "";
     const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-    if (settings?.youtubePlaylistId && videoId) {
-      await youtube.playlistItems.insert({
-        part: ["snippet"],
-        requestBody: {
-          snippet: {
-            playlistId: settings.youtubePlaylistId,
-            resourceId: { kind: "youtube#video", videoId },
-          },
-        },
-      });
-    }
-
+    // Save video as done first — playlist insertion is best-effort
     await db.update(jobsTable)
       .set({
         status: "done",
@@ -148,16 +133,63 @@ export async function processNextPendingJob() {
       })
       .where(eq(jobsTable.id, job.id));
 
-    logger.info({ jobId: job.id, videoId, title }, "Job completed");
-    return job.id;
+    if (settings?.youtubePlaylistId && videoId) {
+      try {
+        await youtube.playlistItems.insert({
+          part: ["snippet"],
+          requestBody: {
+            snippet: {
+              playlistId: settings.youtubePlaylistId,
+              resourceId: { kind: "youtube#video", videoId },
+            },
+          },
+        });
+      } catch (playlistErr) {
+        // Playlist insert failed — video is uploaded but not in playlist.
+        // Log as warning but keep job status as "done".
+        logger.warn({ jobId: job.id, videoId, playlistErr }, "Video uploaded but playlist insert failed");
+      }
+    }
+
+    logger.info({ jobId: job.id, videoId, title }, "Job completed successfully");
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error({ jobId: job.id, err }, "Job failed");
     await db.update(jobsTable)
       .set({ status: "failed", errorMessage: message, updatedAt: new Date() })
       .where(eq(jobsTable.id, job.id));
-    return null;
   }
+}
+
+/**
+ * Picks the oldest pending job and uploads it.
+ */
+export async function processNextPendingJob() {
+  const [job] = await db
+    .select()
+    .from(jobsTable)
+    .where(eq(jobsTable.status, "pending"))
+    .limit(1);
+
+  if (!job) return null;
+  await uploadJob(job);
+  return job.id;
+}
+
+/**
+ * Uploads a specific job by its DB id.
+ * Returns false if the job doesn't exist or isn't pending.
+ */
+export async function processJobById(id: number): Promise<boolean> {
+  const [job] = await db
+    .select()
+    .from(jobsTable)
+    .where(eq(jobsTable.id, id));
+
+  if (!job || job.status !== "pending") return false;
+  // Run in background — caller gets immediate response
+  setImmediate(() => uploadJob(job).catch((err) => logger.error({ jobId: id, err }, "Background upload error")));
+  return true;
 }
 
 let workerInterval: ReturnType<typeof setInterval> | null = null;

@@ -8,7 +8,7 @@ import {
   DeleteJobParams,
   RetryJobParams,
 } from "@workspace/api-zod";
-import { runPipelineScan } from "../lib/pipeline";
+import { runPipelineScan, processJobById } from "../lib/pipeline";
 
 const router = Router();
 
@@ -72,6 +72,21 @@ router.delete("/jobs/:id", async (req, res) => {
   }
   await db.delete(jobsTable).where(eq(jobsTable.id, parsed.data.id));
   res.status(204).send();
+});
+
+// Trigger upload for a specific pending job (runs in background, returns immediately)
+router.post("/jobs/:id/process", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  const started = await processJobById(id);
+  if (!started) {
+    res.status(404).json({ error: "Job not found or not in pending status" });
+    return;
+  }
+  res.json({ started: true, jobId: id });
 });
 
 router.post("/jobs/:id/retry", async (req, res) => {
