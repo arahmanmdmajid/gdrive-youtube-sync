@@ -53,12 +53,33 @@ const SCHEDULE: Record<string, DaySchedule> = {
 
 const PKT_OFFSET_HOURS = 5; // UTC+5
 
+// Meeting code → allowed days of week (PKT)
+// uys-vqbk-mnn = Monday (1) + Tuesday (2)
+// zeo-iaqz-qqu = Friday (5) + Saturday (6)
+const MEETING_CODE_DAYS: Record<string, number[]> = {
+  "uys-vqbk-mnn": [1, 2],
+  "zeo-iaqz-qqu": [5, 6],
+};
+
+/**
+ * Extracts the meeting code from a Drive filename (e.g. "uys-vqbk-mnn 2026-05-19…").
+ */
+export function extractMeetingCode(fileName: string): string | null {
+  const lower = fileName.toLowerCase();
+  for (const code of Object.keys(MEETING_CODE_DAYS)) {
+    if (lower.startsWith(code)) return code;
+  }
+  return null;
+}
+
 /**
  * Resolves a class slot from a Drive ISO createdTime string.
  * Converts UTC → PKT, then looks up day-of-week + 30-min slot in the schedule.
  * Rounds the minutes to the nearest :00 or :30 boundary.
+ * If meetingCode is supplied, only returns a match when the PKT day belongs to
+ * that code's allowed days (uys-vqbk-mnn → Mon/Tue; zeo-iaqz-qqu → Fri/Sat).
  */
-export function resolveClassFromTime(isoTimestamp: string): ClassSlot | null {
+export function resolveClassFromTime(isoTimestamp: string, meetingCode?: string | null): ClassSlot | null {
   const utc = new Date(isoTimestamp);
   // Shift to PKT by adding offset as ms so we can use UTC getters
   const pktMs = utc.getTime() + PKT_OFFSET_HOURS * 60 * 60 * 1000;
@@ -67,6 +88,12 @@ export function resolveClassFromTime(isoTimestamp: string): ClassSlot | null {
   const dayOfWeek = pkt.getUTCDay(); // 0=Sun,1=Mon,2=Tue,5=Fri,6=Sat
   const hours = pkt.getUTCHours();
   const minutes = pkt.getUTCMinutes();
+
+  // If a meeting code is given, reject days that don't belong to it
+  if (meetingCode) {
+    const allowedDays = MEETING_CODE_DAYS[meetingCode];
+    if (allowedDays && !allowedDays.includes(dayOfWeek)) return null;
+  }
 
   // Round to nearest 30-min slot
   const slotMinutes = minutes < 30 ? 0 : 30;
@@ -89,7 +116,8 @@ function toPktDateStr(isoTimestamp: string): string {
 
 export function buildYoutubeTitle(fileName: string, createdTime: string | null | undefined): string {
   if (createdTime) {
-    const classInfo = resolveClassFromTime(createdTime);
+    const meetingCode = extractMeetingCode(fileName);
+    const classInfo = resolveClassFromTime(createdTime, meetingCode);
     if (classInfo) {
       const dateStr = toPktDateStr(createdTime);
       return `${classInfo.subject} | ${classInfo.teacher} | ${dateStr}`;
@@ -101,7 +129,8 @@ export function buildYoutubeTitle(fileName: string, createdTime: string | null |
 export function buildYoutubeDescription(fileName: string, createdTime: string | null | undefined): string {
   const lines: string[] = [];
   if (createdTime) {
-    const classInfo = resolveClassFromTime(createdTime);
+    const meetingCode = extractMeetingCode(fileName);
+    const classInfo = resolveClassFromTime(createdTime, meetingCode);
     if (classInfo) {
       lines.push(`Subject: ${classInfo.subject}`);
       lines.push(`Teacher: ${classInfo.teacher}`);
