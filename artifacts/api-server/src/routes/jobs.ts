@@ -9,6 +9,7 @@ import {
   RetryJobParams,
 } from "@workspace/api-zod";
 import { runPipelineScan, processJobById } from "../lib/pipeline";
+import { getYoutubeClient } from "../lib/youtubeClient";
 
 const router = Router();
 
@@ -72,6 +73,32 @@ router.delete("/jobs/:id", async (req, res) => {
   }
   await db.delete(jobsTable).where(eq(jobsTable.id, parsed.data.id));
   res.status(204).send();
+});
+
+// Delete the YouTube video for a job and remove the job from DB
+router.delete("/jobs/:id/youtube", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
+  if (!job) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (job.youtubeVideoId) {
+    const youtube = getYoutubeClient();
+    if (youtube) {
+      try {
+        await youtube.videos.delete({ id: job.youtubeVideoId });
+      } catch (_err) {
+        // Video may already be gone — proceed with DB cleanup regardless
+      }
+    }
+  }
+  await db.delete(jobsTable).where(eq(jobsTable.id, id));
+  res.json({ deleted: true, jobId: id, youtubeVideoId: job.youtubeVideoId ?? null });
 });
 
 // Trigger upload for a specific pending job (runs in background, returns immediately)

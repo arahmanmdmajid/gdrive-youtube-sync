@@ -2,21 +2,33 @@ import { db, jobsTable, settingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getDriveClient, streamDriveFile } from "./driveClient";
 import { getYoutubeClient } from "./youtubeClient";
-import { buildYoutubeTitle, buildYoutubeDescription } from "./schedule";
+import { buildYoutubeTitle, buildYoutubeDescription, extractMeetingCode } from "./schedule";
 import { logger } from "./logger";
-
-// Only process recordings from these two Google Meet codes
-const ALLOWED_MEETING_CODES = ["zeo-iaqz-qqu", "uys-vqbk-mnn"];
 
 // Only files recorded from May 17 2026 onwards (user has already uploaded up to and including May 16)
 const CUTOFF_DATE = new Date("2026-05-16T19:00:00Z"); // midnight PKT May 17 = 19:00 UTC May 16
 
+// Meeting code → allowed days of week in PKT (matches schedule.ts)
+// uys-vqbk-mnn = Monday/Tuesday only
+// zeo-iaqz-qqu = Friday/Saturday only
+const MEETING_CODE_DAYS: Record<string, number[]> = {
+  "uys-vqbk-mnn": [1, 2],
+  "zeo-iaqz-qqu": [5, 6],
+};
+const PKT_OFFSET_MS = 5 * 60 * 60 * 1000;
+
 function isAllowedFile(name: string, createdTime: string | null | undefined): boolean {
-  const nameLower = name.toLowerCase();
-  const hasCode = ALLOWED_MEETING_CODES.some((code) => nameLower.startsWith(code));
-  if (!hasCode) return false;
   if (!createdTime) return false;
-  return new Date(createdTime) > CUTOFF_DATE;
+  const meetingCode = extractMeetingCode(name);
+  if (!meetingCode) return false;
+  if (new Date(createdTime) <= CUTOFF_DATE) return false;
+
+  // Reject if recording day doesn't match the code's allowed days
+  const pktDay = new Date(new Date(createdTime).getTime() + PKT_OFFSET_MS).getUTCDay();
+  const allowedDays = MEETING_CODE_DAYS[meetingCode];
+  if (allowedDays && !allowedDays.includes(pktDay)) return false;
+
+  return true;
 }
 
 export async function runPipelineScan(): Promise<{
