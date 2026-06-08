@@ -20,7 +20,7 @@ export const HealthCheckResponse = zod.object({
  * @summary List all pipeline jobs
  */
 export const ListJobsQueryParams = zod.object({
-  "status": zod.enum(['pending', 'processing', 'done', 'failed']).optional()
+  "status": zod.enum(['needs_review', 'pending', 'processing', 'done', 'failed']).optional()
 })
 
 export const ListJobsResponseItem = zod.object({
@@ -29,7 +29,9 @@ export const ListJobsResponseItem = zod.object({
   "driveFileName": zod.string(),
   "driveFileSizeBytes": zod.number().nullish(),
   "driveCreatedTime": zod.string().nullish(),
-  "status": zod.enum(['pending', 'processing', 'done', 'failed']),
+  "status": zod.enum(['needs_review', 'pending', 'processing', 'done', 'failed']),
+  "proposedTitle": zod.string().nullish(),
+  "proposedDescription": zod.string().nullish(),
   "youtubeVideoId": zod.string().nullish(),
   "youtubeUrl": zod.string().nullish(),
   "youtubeTitle": zod.string().nullish(),
@@ -64,7 +66,9 @@ export const GetJobResponse = zod.object({
   "driveFileName": zod.string(),
   "driveFileSizeBytes": zod.number().nullish(),
   "driveCreatedTime": zod.string().nullish(),
-  "status": zod.enum(['pending', 'processing', 'done', 'failed']),
+  "status": zod.enum(['needs_review', 'pending', 'processing', 'done', 'failed']),
+  "proposedTitle": zod.string().nullish(),
+  "proposedDescription": zod.string().nullish(),
   "youtubeVideoId": zod.string().nullish(),
   "youtubeUrl": zod.string().nullish(),
   "youtubeTitle": zod.string().nullish(),
@@ -95,7 +99,9 @@ export const RetryJobResponse = zod.object({
   "driveFileName": zod.string(),
   "driveFileSizeBytes": zod.number().nullish(),
   "driveCreatedTime": zod.string().nullish(),
-  "status": zod.enum(['pending', 'processing', 'done', 'failed']),
+  "status": zod.enum(['needs_review', 'pending', 'processing', 'done', 'failed']),
+  "proposedTitle": zod.string().nullish(),
+  "proposedDescription": zod.string().nullish(),
   "youtubeVideoId": zod.string().nullish(),
   "youtubeUrl": zod.string().nullish(),
   "youtubeTitle": zod.string().nullish(),
@@ -116,9 +122,34 @@ export const TriggerPipelineResponse = zod.object({
 
 
 /**
+ * @summary Edit proposed title/description of a needs_review or pending job
+ */
+export const PatchJobBody = zod.object({
+  "lectureName": zod.string().optional(),
+  "proposedTitle": zod.string().optional(),
+  "proposedDescription": zod.string().optional(),
+})
+
+
+/**
+ * @summary Approve a needs_review job (optionally update title/description) and move to pending
+ */
+export const ApproveJobParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ApproveJobBody = zod.object({
+  "lectureName": zod.string().optional(),
+  "proposedTitle": zod.string().optional(),
+  "proposedDescription": zod.string().optional(),
+})
+
+
+/**
  * @summary Summary counts by status
  */
 export const GetPipelineStatsResponse = zod.object({
+  "needs_review": zod.number(),
   "pending": zod.number(),
   "processing": zod.number(),
   "done": zod.number(),
@@ -136,7 +167,10 @@ export const ListDriveFilesResponseItem = zod.object({
   "mimeType": zod.string(),
   "sizeBytes": zod.number().nullish(),
   "createdTime": zod.string().nullish(),
-  "alreadyQueued": zod.boolean().optional()
+  "modifiedTime": zod.string().nullish(),
+  "alreadyQueued": zod.boolean().optional(),
+  "skipReason": zod.string().nullish(),
+  "isSuspiciousSize": zod.boolean().optional(),
 })
 export const ListDriveFilesResponse = zod.array(ListDriveFilesResponseItem)
 

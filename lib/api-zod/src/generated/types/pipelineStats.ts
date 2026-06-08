@@ -7,6 +7,7 @@
  */
 
 export interface PipelineStats {
+  needs_review: number;
   pending: number;
   processing: number;
   done: number;

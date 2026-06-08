@@ -1,6 +1,7 @@
-import { 
-  useGetPipelineStats, 
-  useTriggerPipeline, 
+import {
+  useGetPipelineStats,
+  useTriggerPipeline,
+  useTriggerUpload,
   useListJobs,
   getGetPipelineStatsQueryKey,
   getListJobsQueryKey
@@ -11,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Play, Activity, Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, ArrowRight } from "lucide-react";
+import { Play, Upload, Activity, Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, ArrowRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "wouter";
 
@@ -47,6 +48,26 @@ export default function Dashboard() {
     }
   });
 
+  const uploadMutation = useTriggerUpload({
+    mutation: {
+      onSuccess: (data) => {
+        queryClient.invalidateQueries({ queryKey: getGetPipelineStatsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
+        toast({
+          title: data.started === 0 ? "Nothing to upload" : "Upload started",
+          description: data.message,
+        });
+      },
+      onError: (err: any) => {
+        toast({
+          title: "Upload Failed",
+          description: err?.message || "Could not start the upload.",
+          variant: "destructive"
+        });
+      }
+    }
+  });
+
   const recentJobs = jobs?.slice(0, 5) || [];
 
   return (
@@ -56,45 +77,73 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold font-mono tracking-tight text-foreground">Mission Control</h1>
           <p className="text-muted-foreground mt-1">Google Drive to YouTube Upload Pipeline</p>
         </div>
-        <Button 
-          onClick={() => triggerMutation.mutate()} 
-          disabled={triggerMutation.isPending}
-          data-testid="button-scan-now"
-          className="gap-2 font-mono font-medium"
-        >
-          {triggerMutation.isPending ? (
-            <RefreshCw className="h-4 w-4 animate-spin" />
-          ) : (
-            <Play className="h-4 w-4" />
-          )}
-          Scan Now
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => triggerMutation.mutate()}
+            disabled={triggerMutation.isPending}
+            data-testid="button-scan-now"
+            className="gap-2 font-mono font-medium"
+          >
+            {triggerMutation.isPending ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <Play className="h-4 w-4" />
+            )}
+            Scan Now
+          </Button>
+          <Button
+            onClick={() => uploadMutation.mutate()}
+            disabled={uploadMutation.isPending || !stats?.pending}
+            data-testid="button-upload-now"
+            className="gap-2 font-mono font-medium"
+          >
+            {uploadMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
+            Upload Pending
+            {!!stats?.pending && (
+              <span className="ml-1 rounded-full bg-white/20 px-1.5 py-0.5 text-xs font-mono">
+                {stats.pending}
+              </span>
+            )}
+          </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard 
-          title="Pending" 
-          value={stats?.pending} 
-          icon={<Clock className="h-4 w-4 text-muted-foreground" />} 
-          loading={statsLoading} 
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <StatCard
+          title="Needs Review"
+          value={stats?.needs_review}
+          icon={<AlertCircle className="h-4 w-4 text-amber-500" />}
+          loading={statsLoading}
+          highlight={!!stats?.needs_review}
         />
-        <StatCard 
-          title="Processing" 
-          value={stats?.processing} 
-          icon={<RefreshCw className="h-4 w-4 text-amber-500" />} 
-          loading={statsLoading} 
+        <StatCard
+          title="Pending"
+          value={stats?.pending}
+          icon={<Clock className="h-4 w-4 text-muted-foreground" />}
+          loading={statsLoading}
         />
-        <StatCard 
-          title="Done" 
-          value={stats?.done} 
-          icon={<CheckCircle className="h-4 w-4 text-green-500" />} 
-          loading={statsLoading} 
+        <StatCard
+          title="Processing"
+          value={stats?.processing}
+          icon={<RefreshCw className="h-4 w-4 text-amber-500" />}
+          loading={statsLoading}
         />
-        <StatCard 
-          title="Failed" 
-          value={stats?.failed} 
-          icon={<AlertCircle className="h-4 w-4 text-destructive" />} 
-          loading={statsLoading} 
+        <StatCard
+          title="Done"
+          value={stats?.done}
+          icon={<CheckCircle className="h-4 w-4 text-green-500" />}
+          loading={statsLoading}
+        />
+        <StatCard
+          title="Failed"
+          value={stats?.failed}
+          icon={<AlertCircle className="h-4 w-4 text-destructive" />}
+          loading={statsLoading}
         />
       </div>
 
@@ -157,9 +206,9 @@ export default function Dashboard() {
   );
 }
 
-function StatCard({ title, value, icon, loading }: { title: string, value?: number, icon: React.ReactNode, loading: boolean }) {
+function StatCard({ title, value, icon, loading, highlight }: { title: string, value?: number, icon: React.ReactNode, loading: boolean, highlight?: boolean }) {
   return (
-    <Card className="border-border shadow-sm">
+    <Card className={`shadow-sm ${highlight ? "border-amber-500/40 bg-amber-500/5" : "border-border"}`}>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium font-mono text-muted-foreground">
           {title}
@@ -180,10 +229,12 @@ function StatCard({ title, value, icon, loading }: { title: string, value?: numb
 }
 
 export function JobStatusBadge({ status }: { status: string }) {
-  let variant: "default" | "secondary" | "destructive" | "outline" = "outline";
   let colorClass = "";
 
   switch (status) {
+    case "needs_review":
+      colorClass = "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 border-amber-500/30";
+      break;
     case "done":
       colorClass = "bg-green-500/10 text-green-500 hover:bg-green-500/20 border-green-500/20";
       break;
@@ -191,7 +242,7 @@ export function JobStatusBadge({ status }: { status: string }) {
       colorClass = "bg-destructive/10 text-destructive hover:bg-destructive/20 border-destructive/20";
       break;
     case "processing":
-      colorClass = "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20";
+      colorClass = "bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border-blue-500/20";
       break;
     case "pending":
     default:
@@ -199,9 +250,11 @@ export function JobStatusBadge({ status }: { status: string }) {
       break;
   }
 
+  const label = status === "needs_review" ? "review" : status;
+
   return (
     <Badge variant="outline" className={`font-mono text-[10px] uppercase tracking-wider ${colorClass}`}>
-      {status}
+      {label}
     </Badge>
   );
 }

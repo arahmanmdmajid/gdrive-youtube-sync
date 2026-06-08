@@ -17,6 +17,10 @@ export interface Job {
   driveCreatedTime?: string | null;
   status: JobStatus;
   /** @nullable */
+  proposedTitle?: string | null;
+  /** @nullable */
+  proposedDescription?: string | null;
+  /** @nullable */
   youtubeVideoId?: string | null;
   /** @nullable */
   youtubeUrl?: string | null;

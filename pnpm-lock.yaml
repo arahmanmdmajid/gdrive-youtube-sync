@@ -90,7 +90,6 @@ overrides:
   esbuild>@esbuild/sunos-x64: '-'
   esbuild>@esbuild/win32-arm64: '-'
   esbuild>@esbuild/win32-ia32: '-'
-  esbuild>@esbuild/win32-x64: '-'
   esbuild>@esbuild/aix-ppc64: '-'
   esbuild>@esbuild/android-arm: '-'
   esbuild>@esbuild/android-arm64: '-'
@@ -157,6 +156,15 @@ importers:
 
   .:
     devDependencies:
+      '@rollup/rollup-win32-x64-msvc':
+        specifier: ^4.61.1
+        version: 4.61.1
+      '@tailwindcss/oxide-win32-x64-msvc':
+        specifier: ^4.3.0
+        version: 4.3.0
+      lightningcss-win32-x64-msvc:
+        specifier: ^1.32.0
+        version: 1.32.0
       prettier:
         specifier: ^3.8.3
         version: 3.8.3
@@ -206,6 +214,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 25.6.2
+      cross-env:
+        specifier: ^10.1.0
+        version: 10.1.0
       esbuild:
         specifier: 0.27.3
         version: 0.27.3
@@ -746,11 +757,20 @@ packages:
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
 
+  '@epic-web/invariant@1.0.0':
+    resolution: {integrity: sha512-lrTPqgvfFQtR/eY/qkIzp98OGdNJu0m5ji3q/nJI8v3SXkRKEnWiOxMmbvcSoAIzv/cGiuvRy57k4suKQSAdwA==}
+
   '@esbuild/linux-x64@0.27.3':
     resolution: {integrity: sha512-Czi8yzXUWIQYAtL/2y6vogER8pvcsOsk5cpwL4Gk5nJqH5UZiVByIY8Eorm5R13gq+DQKYg0+JyQoytLQas4dA==}
     engines: {node: '>=18'}
     cpu: [x64]
     os: [linux]
+
+  '@esbuild/win32-x64@0.27.3':
+    resolution: {integrity: sha512-4uJGhsxuptu3OcpVAzli+/gWusVGwZZHTlS63hh++ehExkVT8SgiEf7/uC/PclrPPkLhZqGgCTjd0VWLo6xMqA==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [win32]
 
   '@floating-ui/core@1.7.5':
     resolution: {integrity: sha512-1Ih4WTWyw0+lKyFMcBHGbb5U5FtuHJuujoyyr5zTaWS5EYMeT6Jb2AuDeftsCsEuchO+mM2ij5+q9crhydzLhQ==}
@@ -1526,6 +1546,11 @@ packages:
     os: [linux]
     libc: [glibc]
 
+  '@rollup/rollup-win32-x64-msvc@4.61.1':
+    resolution: {integrity: sha512-X+zaP2x+j4RXGfbp/seSoRHWnPxzApilDszisZxbYH5C/jTxFhCtDNdPGZb9lJyYPs24wGxruPF7Y+sIXt9Gzw==}
+    cpu: [x64]
+    os: [win32]
+
   '@scalar/helpers@0.5.2':
     resolution: {integrity: sha512-Pi1GAl8jO6ungmGj2sjDfCfqiBNrKW6HXDZmminV94ybGU/KtRLOqHwd0n9FIhY3j0RYGpGC0VCuniCICfQPHg==}
     engines: {node: '>=22'}
@@ -1601,6 +1626,12 @@ packages:
       - '@tybys/wasm-util'
       - '@emnapi/wasi-threads'
       - tslib
+
+  '@tailwindcss/oxide-win32-x64-msvc@4.3.0':
+    resolution: {integrity: sha512-Mvrf2kXW/yeW/OTezZlCGOirXRcUuLIBx/5Y12BaPM7wJoryG6dfS/NJL8aBPqtTEx/Vm4T4vKzFUcKDT+TKUA==}
+    engines: {node: '>= 20'}
+    cpu: [x64]
+    os: [win32]
 
   '@tailwindcss/oxide@4.3.0':
     resolution: {integrity: sha512-F7HZGBeN9I0/AuuJS5PwcD8xayx5ri5GhjYUDBEVYUkexyA/giwbDNjRVrxSezE3T250OU2K/wp/ltWx3UOefg==}
@@ -1908,6 +1939,11 @@ packages:
   cors@2.8.6:
     resolution: {integrity: sha512-tJtZBBHA6vjIAaF6EnIaq6laBBP9aq/Y3ouVJjEfoHbRBcHBAHYcMh/w8LDrk2PvIMMq8gmopa5D4V8RmbrxGw==}
     engines: {node: '>= 0.10'}
+
+  cross-env@10.1.0:
+    resolution: {integrity: sha512-GsYosgnACZTADcmEyJctkJIoqAhHjttw7RsFrVoJNXbsWWqaq6Ym+7kZjq6mS45O0jij6vtiReppKQEtqWy6Dw==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -2547,6 +2583,12 @@ packages:
     os: [linux]
     libc: [glibc]
 
+  lightningcss-win32-x64-msvc@1.32.0:
+    resolution: {integrity: sha512-Amq9B/SoZYdDi1kFrojnoqPLxYhQ4Wo5XiL8EVJrVsB8ARoC1PWW6VGtT0WKCemjy8aC+louJnjS7U18x3b06Q==}
+    engines: {node: '>= 12.0.0'}
+    cpu: [x64]
+    os: [win32]
+
   lightningcss@1.32.0:
     resolution: {integrity: sha512-NXYBzinNrblfraPGyrbPoD19C1h9lfI/1mzgWYvXUTe414Gz/X1FD2XBZSZM7rRTrMA8JL3OtAaGifrIKhQ5yQ==}
     engines: {node: '>= 12.0.0'}
@@ -2675,7 +2717,7 @@ packages:
     resolution: {integrity: sha512-3qT/88Y3FbH/Kx4szpQQ4HzUbVrHPKTLVpVocKiLfoYvw9XSGOX2FmD2d6DrXbVYyAQTF2HeF6My8jmzx7/CRw==}
 
   npm-run-path@6.0.0:
-    resolution: {integrity: sha512-9qny7Z9DsQU8Ou39ERsPU4OZQlSTP47ShQzuKZ6PRXpYLtIFgl/DEBYEXKlvcEa+9tHVcK8CF81Y2V72qaZhWA==, tarball: https://registry.npmjs.org/npm-run-path/-/npm-run-path-6.0.0.tgz}
+    resolution: {integrity: sha512-9qny7Z9DsQU8Ou39ERsPU4OZQlSTP47ShQzuKZ6PRXpYLtIFgl/DEBYEXKlvcEa+9tHVcK8CF81Y2V72qaZhWA==}
     engines: {node: '>=18'}
 
   object-assign@4.1.1:
@@ -3496,7 +3538,12 @@ snapshots:
 
   '@drizzle-team/brocli@0.10.2': {}
 
+  '@epic-web/invariant@1.0.0': {}
+
   '@esbuild/linux-x64@0.27.3':
+    optional: true
+
+  '@esbuild/win32-x64@0.27.3':
     optional: true
 
   '@floating-ui/core@1.7.5':
@@ -4398,6 +4445,8 @@ snapshots:
   '@rollup/rollup-linux-x64-gnu@4.60.3':
     optional: true
 
+  '@rollup/rollup-win32-x64-msvc@4.61.1': {}
+
   '@scalar/helpers@0.5.2': {}
 
   '@scalar/helpers@0.6.0': {}
@@ -4474,6 +4523,8 @@ snapshots:
 
   '@tailwindcss/oxide-wasm32-wasi@4.3.0':
     optional: true
+
+  '@tailwindcss/oxide-win32-x64-msvc@4.3.0': {}
 
   '@tailwindcss/oxide@4.3.0':
     optionalDependencies:
@@ -4791,6 +4842,11 @@ snapshots:
       object-assign: 4.1.1
       vary: 1.1.2
 
+  cross-env@10.1.0:
+    dependencies:
+      '@epic-web/invariant': 1.0.0
+      cross-spawn: 7.0.6
+
   cross-spawn@7.0.6:
     dependencies:
       path-key: 3.1.1
@@ -4952,6 +5008,7 @@ snapshots:
   esbuild@0.27.3:
     optionalDependencies:
       '@esbuild/linux-x64': 0.27.3
+      '@esbuild/win32-x64': 0.27.3
 
   escalade@3.2.0: {}
 
@@ -5356,6 +5413,8 @@ snapshots:
 
   lightningcss-linux-x64-gnu@1.32.0:
     optional: true
+
+  lightningcss-win32-x64-msvc@1.32.0: {}
 
   lightningcss@1.32.0:
     dependencies:

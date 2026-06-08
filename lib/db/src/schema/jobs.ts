@@ -8,7 +8,9 @@ export const jobsTable = pgTable("jobs", {
   driveFileName: text("drive_file_name").notNull(),
   driveFileSizeBytes: bigint("drive_file_size_bytes", { mode: "number" }),
   driveCreatedTime: text("drive_created_time"),
-  status: text("status", { enum: ["pending", "processing", "done", "failed"] }).notNull().default("pending"),
+  status: text("status", { enum: ["needs_review", "pending", "processing", "done", "failed"] }).notNull().default("needs_review"),
+  proposedTitle: text("proposed_title"),
+  proposedDescription: text("proposed_description"),
   youtubeVideoId: text("youtube_video_id"),
   youtubeUrl: text("youtube_url"),
   youtubeTitle: text("youtube_title"),
@@ -18,6 +20,12 @@ export const jobsTable = pgTable("jobs", {
 });
 
 export const insertJobSchema = createInsertSchema(jobsTable).omit({ id: true, createdAt: true, updatedAt: true });
+
+export const lectureNamesTable = pgTable("lecture_names", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
 export type InsertJob = z.infer<typeof insertJobSchema>;
 export type Job = typeof jobsTable.$inferSelect;
 

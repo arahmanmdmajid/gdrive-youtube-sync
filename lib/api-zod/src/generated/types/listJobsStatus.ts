@@ -10,6 +10,7 @@ export type ListJobsStatus = typeof ListJobsStatus[keyof typeof ListJobsStatus];
 
 
 export const ListJobsStatus = {
+  needs_review: 'needs_review',
   pending: 'pending',
   processing: 'processing',
   done: 'done',

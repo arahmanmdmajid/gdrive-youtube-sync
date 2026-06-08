@@ -106,12 +106,59 @@ export function resolveClassFromTime(isoTimestamp: string, meetingCode?: string 
 }
 
 /**
- * Returns a PKT date string (YYYY-MM-DD) from a Drive ISO createdTime.
+ * Returns a PKT date string (DD-MM-YYYY) from a Drive ISO createdTime.
  */
 function toPktDateStr(isoTimestamp: string): string {
   const utc = new Date(isoTimestamp);
   const pktMs = utc.getTime() + PKT_OFFSET_HOURS * 60 * 60 * 1000;
-  return new Date(pktMs).toISOString().slice(0, 10);
+  const pkt = new Date(pktMs);
+  const year = pkt.getUTCFullYear();
+  const month = String(pkt.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(pkt.getUTCDate()).padStart(2, "0");
+  return `${day}-${month}-${year}`;
+}
+
+/**
+ * Returns the PKT date (DD-MM-YYYY) and day-of-week (0=Sun … 6=Sat)
+ * for a Drive ISO timestamp.
+ */
+export function getPktInfo(isoTimestamp: string): { dateStr: string; dayOfWeek: number } {
+  const utc = new Date(isoTimestamp);
+  const pktMs = utc.getTime() + PKT_OFFSET_HOURS * 60 * 60 * 1000;
+  const pkt = new Date(pktMs);
+  const year = pkt.getUTCFullYear();
+  const month = String(pkt.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(pkt.getUTCDate()).padStart(2, "0");
+  return { dateStr: `${day}-${month}-${year}`, dayOfWeek: pkt.getUTCDay() };
+}
+
+/**
+ * Returns the class slots for a given PKT day-of-week in chronological order.
+ * Returns an empty array if the day has no schedule.
+ */
+export function getOrderedSlotsForDay(dayOfWeek: number): ClassSlot[] {
+  const daySchedule = SCHEDULE[String(dayOfWeek)];
+  if (!daySchedule) return [];
+  return Object.entries(daySchedule)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, slot]) => slot);
+}
+
+/**
+ * Builds a YouTube description from a resolved ClassSlot (used by positional naming).
+ */
+export function buildYoutubeDescriptionFromSlot(
+  slot: ClassSlot,
+  dateStr: string,
+  fileName: string,
+): string {
+  return [
+    `Subject: ${slot.subject}`,
+    `Teacher: ${slot.teacher}`,
+    `Date: ${dateStr}`,
+    `Source file: ${fileName}`,
+    `Uploaded automatically by the class recording pipeline.`,
+  ].join("\n");
 }
 
 export function buildYoutubeTitle(fileName: string, createdTime: string | null | undefined): string {
@@ -136,7 +183,7 @@ export function buildYoutubeDescription(fileName: string, createdTime: string | 
       lines.push(`Teacher: ${classInfo.teacher}`);
     }
     const dateStr = toPktDateStr(createdTime);
-    lines.push(`Date (PKT): ${dateStr}`);
+    lines.push(`Date: ${dateStr}`);
   }
   lines.push(`Source file: ${fileName}`);
   lines.push(`Uploaded automatically by the class recording pipeline.`);

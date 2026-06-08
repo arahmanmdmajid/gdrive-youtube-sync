@@ -15,4 +15,8 @@ export interface DriveFile {
   /** @nullable */
   createdTime?: string | null;
   alreadyQueued?: boolean;
+  /** null means the file is eligible; a string explains why the pipeline skips it */
+  skipReason?: string | null;
+  /** true if the file is over 500 MB and may be a batch recording */
+  isSuspiciousSize?: boolean;
 }

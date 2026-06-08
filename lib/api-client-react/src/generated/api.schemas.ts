@@ -13,6 +13,7 @@ export type JobStatus = typeof JobStatus[keyof typeof JobStatus];
 
 
 export const JobStatus = {
+  needs_review: 'needs_review',
   pending: 'pending',
   processing: 'processing',
   done: 'done',
@@ -28,6 +29,10 @@ export interface Job {
   /** @nullable */
   driveCreatedTime?: string | null;
   status: JobStatus;
+  /** @nullable */
+  proposedTitle?: string | null;
+  /** @nullable */
+  proposedDescription?: string | null;
   /** @nullable */
   youtubeVideoId?: string | null;
   /** @nullable */
@@ -56,11 +61,38 @@ export interface TriggerResult {
 }
 
 export interface PipelineStats {
+  needs_review: number;
   pending: number;
   processing: number;
   done: number;
   failed: number;
   total: number;
+}
+
+export interface LectureName {
+  id: number;
+  name: string;
+  createdAt: string;
+}
+
+export interface CreateLectureNameInput {
+  name: string;
+}
+
+export interface UpdateLectureNameInput {
+  name: string;
+}
+
+export interface ApproveJobInput {
+  lectureName?: string;
+  proposedTitle?: string;
+  proposedDescription?: string;
+}
+
+export interface PatchJobInput {
+  lectureName?: string;
+  proposedTitle?: string;
+  proposedDescription?: string;
 }
 
 export interface DriveFile {
@@ -71,7 +103,13 @@ export interface DriveFile {
   sizeBytes?: number | null;
   /** @nullable */
   createdTime?: string | null;
+  /** @nullable */
+  modifiedTime?: string | null;
   alreadyQueued?: boolean;
+  /** null means the file is eligible; a string explains why the pipeline skips it */
+  skipReason?: string | null;
+  /** true if the file is over 500 MB and may be a batch recording */
+  isSuspiciousSize?: boolean;
 }
 
 export interface YoutubePlaylist {
@@ -115,6 +153,7 @@ export type ListJobsStatus = typeof ListJobsStatus[keyof typeof ListJobsStatus];
 
 
 export const ListJobsStatus = {
+  needs_review: 'needs_review',
   pending: 'pending',
   processing: 'processing',
   done: 'done',

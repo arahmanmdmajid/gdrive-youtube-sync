@@ -1,9 +1,14 @@
-import { useEffect } from "react";
-import { 
-  useGetSettings, 
-  useUpdateSettings, 
+import { useEffect, useState, useRef } from "react";
+import {
+  useGetSettings,
+  useUpdateSettings,
   useListYoutubePlaylists,
-  getGetSettingsQueryKey
+  useListLectureNames,
+  useCreateLectureName,
+  useUpdateLectureName,
+  useDeleteLectureName,
+  getGetSettingsQueryKey,
+  getListLectureNamesQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -16,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Save } from "lucide-react";
+import { Loader2, Save, Plus, Trash2, Pencil, Check, X } from "lucide-react";
 
 const formSchema = z.object({
   driveFolderId: z.string().min(1, "Drive folder ID is required"),
@@ -30,9 +35,73 @@ type FormValues = z.infer<typeof formSchema>;
 export default function Settings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [newLectureName, setNewLectureName] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingValue, setEditingValue] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   const { data: settings, isLoading: settingsLoading } = useGetSettings();
   const { data: playlists, isLoading: playlistsLoading } = useListYoutubePlaylists();
+  const { data: lectureNames } = useListLectureNames();
+
+  const createLectureNameMutation = useCreateLectureName({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListLectureNamesQueryKey() });
+        setNewLectureName("");
+        toast({ title: "Lecture name added" });
+      },
+      onError: (err: any) => {
+        toast({ title: "Failed to add lecture name", description: err.message ?? "Name may already exist", variant: "destructive" });
+      }
+    }
+  });
+
+  const updateLectureNameMutation = useUpdateLectureName({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListLectureNamesQueryKey() });
+        setEditingId(null);
+        toast({ title: "Lecture name updated" });
+      },
+      onError: () => toast({ title: "Failed to update lecture name", variant: "destructive" })
+    }
+  });
+
+  const deleteLectureNameMutation = useDeleteLectureName({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListLectureNamesQueryKey() });
+        toast({ title: "Lecture name removed" });
+      },
+      onError: () => toast({ title: "Failed to remove lecture name", variant: "destructive" })
+    }
+  });
+
+  const handleAddLectureName = () => {
+    const trimmed = newLectureName.trim();
+    if (!trimmed) return;
+    createLectureNameMutation.mutate({ data: { name: trimmed } });
+  };
+
+  const startEditing = (id: number, currentName: string) => {
+    setEditingId(id);
+    setEditingValue(currentName);
+    // Focus the input on next render
+    setTimeout(() => editInputRef.current?.focus(), 0);
+  };
+
+  const commitEdit = () => {
+    if (!editingId) return;
+    const trimmed = editingValue.trim();
+    if (!trimmed) return;
+    updateLectureNameMutation.mutate({ id: editingId, data: { name: trimmed } });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingValue("");
+  };
 
   const updateMutation = useUpdateSettings({
     mutation: {
@@ -135,9 +204,9 @@ export default function Settings() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="font-mono">YouTube Playlist (Optional)</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      value={field.value || ""} 
+                    <Select
+                      onValueChange={(v) => field.onChange(v === "none" ? null : v)}
+                      value={field.value || "none"}
                       disabled={playlistsLoading}
                     >
                       <FormControl>
@@ -146,7 +215,7 @@ export default function Settings() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">None (Upload to channel only)</SelectItem>
+                        <SelectItem value="none">None (Upload to channel only)</SelectItem>
                         {playlists?.map(playlist => (
                           <SelectItem key={playlist.id} value={playlist.id}>
                             {playlist.title} ({playlist.itemCount} videos)
@@ -221,6 +290,116 @@ export default function Settings() {
           </div>
         </form>
       </Form>
+
+      {/* Lecture Names — outside the settings form, managed independently */}
+      <Card className="border-border shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-lg font-mono">Lecture Names</CardTitle>
+          <CardDescription>
+            Pre-configured names used when reviewing jobs. Format: <span className="font-mono text-foreground">Subject | Teacher</span>
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Add new */}
+          <div className="flex gap-2">
+            <Input
+              value={newLectureName}
+              onChange={(e) => setNewLectureName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleAddLectureName()}
+              placeholder="e.g. Fiqh | Sheikh Abdullah"
+              className="font-mono text-sm"
+              data-testid="input-lecture-name"
+            />
+            <Button
+              onClick={handleAddLectureName}
+              disabled={!newLectureName.trim() || createLectureNameMutation.isPending}
+              className="shrink-0"
+              data-testid="btn-add-lecture-name"
+            >
+              {createLectureNameMutation.isPending
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <Plus className="h-4 w-4" />}
+              Add
+            </Button>
+          </div>
+
+          {/* List */}
+          {!lectureNames || lectureNames.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No lecture names configured yet.</p>
+          ) : (
+            <ul className="space-y-1">
+              {lectureNames.map((ln) => (
+                <li
+                  key={ln.id}
+                  className="flex items-center gap-2 rounded-md border border-border px-3 py-2 bg-muted/20"
+                >
+                  {editingId === ln.id ? (
+                    <>
+                      <Input
+                        ref={editInputRef}
+                        value={editingValue}
+                        onChange={(e) => setEditingValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") commitEdit();
+                          if (e.key === "Escape") cancelEdit();
+                        }}
+                        className="flex-1 h-7 font-mono text-sm py-0"
+                        dir="rtl"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={commitEdit}
+                        disabled={!editingValue.trim() || updateLectureNameMutation.isPending}
+                        className="h-7 w-7 text-green-600 hover:text-green-700 shrink-0"
+                        title="Save"
+                      >
+                        {updateLectureNameMutation.isPending
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <Check className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={cancelEdit}
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground shrink-0"
+                        title="Cancel"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1 font-mono text-sm" dir="rtl">{ln.name}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => startEditing(ln.id, ln.name)}
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground shrink-0"
+                        title="Edit"
+                        data-testid={`btn-edit-lecture-name-${ln.id}`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => deleteLectureNameMutation.mutate({ id: ln.id })}
+                        disabled={deleteLectureNameMutation.isPending}
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+                        title="Delete"
+                        data-testid={`btn-delete-lecture-name-${ln.id}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

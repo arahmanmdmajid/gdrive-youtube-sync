@@ -20,10 +20,15 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ApproveJobInput,
+  PatchJobInput,
+  CreateLectureNameInput,
+  UpdateLectureNameInput,
   DriveFile,
   HealthStatus,
   Job,
   JobInput,
+  LectureName,
   ListJobsParams,
   PipelineStats,
   Settings,
@@ -493,6 +498,102 @@ export const useRetryJob = <TError = ErrorType<unknown>,
       return useMutation(getRetryJobMutationOptions(options));
     }
 
+export const getApproveJobUrl = (id: number) => {
+  return `/api/jobs/${id}/approve`
+}
+
+/**
+ * @summary Approve a needs_review job, optionally updating its proposed title/description
+ */
+export const approveJob = async (id: number, approveJobInput: ApproveJobInput, options?: RequestInit): Promise<Job> => {
+  return customFetch<Job>(getApproveJobUrl(id), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(approveJobInput),
+  });
+}
+
+export const getApproveJobMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof approveJob>>, TError, { id: number; data: BodyType<ApproveJobInput> }, TContext>, request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof approveJob>>, TError, { id: number; data: BodyType<ApproveJobInput> }, TContext> => {
+  const mutationKey = ['approveJob'];
+  const { mutation: mutationOptions, request: requestOptions } = options ?
+    options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof approveJob>>, { id: number; data: BodyType<ApproveJobInput> }> = (props) => {
+    const { id, data } = props ?? {};
+    return approveJob(id, data, requestOptions);
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type ApproveJobMutationResult = NonNullable<Awaited<ReturnType<typeof approveJob>>>
+export type ApproveJobMutationBody = BodyType<ApproveJobInput>
+export type ApproveJobMutationError = ErrorType<unknown>
+
+/**
+ * @summary Approve a needs_review job
+ */
+export const useApproveJob = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof approveJob>>, TError, { id: number; data: BodyType<ApproveJobInput> }, TContext>, request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof approveJob>>, TError, { id: number; data: BodyType<ApproveJobInput> }, TContext> => {
+  return useMutation(getApproveJobMutationOptions(options));
+}
+
+
+export const getPatchJobUrl = (id: number) => {
+  return `/api/jobs/${id}`
+}
+
+/**
+ * @summary Edit proposed title/description of a needs_review or pending job
+ */
+export const patchJob = async (id: number, patchJobInput: PatchJobInput, options?: RequestInit): Promise<Job> => {
+  return customFetch<Job>(getPatchJobUrl(id), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(patchJobInput),
+  });
+}
+
+export const getPatchJobMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof patchJob>>, TError, { id: number; data: BodyType<PatchJobInput> }, TContext>, request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof patchJob>>, TError, { id: number; data: BodyType<PatchJobInput> }, TContext> => {
+  const mutationKey = ['patchJob'];
+  const { mutation: mutationOptions, request: requestOptions } = options ?
+    options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchJob>>, { id: number; data: BodyType<PatchJobInput> }> = (props) => {
+    const { id, data } = props ?? {};
+    return patchJob(id, data, requestOptions);
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type PatchJobMutationResult = NonNullable<Awaited<ReturnType<typeof patchJob>>>
+export type PatchJobMutationBody = BodyType<PatchJobInput>
+export type PatchJobMutationError = ErrorType<unknown>
+
+/**
+ * @summary Edit proposed title/description of a needs_review or pending job
+ */
+export const usePatchJob = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof patchJob>>, TError, { id: number; data: BodyType<PatchJobInput> }, TContext>, request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof patchJob>>, TError, { id: number; data: BodyType<PatchJobInput> }, TContext> => {
+  return useMutation(getPatchJobMutationOptions(options));
+}
+
+
 export const getTriggerPipelineUrl = () => {
 
 
@@ -562,6 +663,35 @@ export const useTriggerPipeline = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getTriggerPipelineMutationOptions(options));
     }
+
+export const getTriggerUploadUrl = () => `/api/pipeline/upload`;
+
+export interface UploadResult {
+  started: number;
+  message: string;
+}
+
+export const triggerUpload = async (options?: RequestInit): Promise<UploadResult> =>
+  customFetch<UploadResult>(getTriggerUploadUrl(), { ...options, method: 'POST' });
+
+export const getTriggerUploadMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof triggerUpload>>, TError, void, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof triggerUpload>>, TError, void, TContext> => {
+  const mutationKey = ['triggerUpload'];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof triggerUpload>>, void> = () =>
+    triggerUpload(requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useTriggerUpload = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof triggerUpload>>, TError, void, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof triggerUpload>>, TError, void, TContext> =>
+  useMutation(getTriggerUploadMutationOptions(options));
 
 export const getGetPipelineStatsUrl = () => {
 
@@ -941,4 +1071,112 @@ export const useUpdateSettings = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getUpdateSettingsMutationOptions(options));
     }
+
+
+// ─── Lecture Names ────────────────────────────────────────────────────────────
+
+export const getListLectureNamesUrl = () => `/api/lecture-names`;
+
+export const listLectureNames = async (options?: RequestInit): Promise<LectureName[]> =>
+  customFetch<LectureName[]>(getListLectureNamesUrl(), { ...options, method: 'GET' });
+
+export const getListLectureNamesQueryKey = () => [`/api/lecture-names`] as const;
+
+export const getListLectureNamesQueryOptions = <TData = Awaited<ReturnType<typeof listLectureNames>>, TError = ErrorType<unknown>>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listLectureNames>>, TError, TData>; request?: SecondParameter<typeof customFetch> }
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getListLectureNamesQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listLectureNames>>> = ({ signal }) =>
+    listLectureNames({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof listLectureNames>>, TError, TData> & { queryKey: QueryKey };
+};
+
+export function useListLectureNames<TData = Awaited<ReturnType<typeof listLectureNames>>, TError = ErrorType<unknown>>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listLectureNames>>, TError, TData>; request?: SecondParameter<typeof customFetch> }
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListLectureNamesQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const createLectureName = async (body: CreateLectureNameInput, options?: RequestInit): Promise<LectureName> =>
+  customFetch<LectureName>(getListLectureNamesUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(body),
+  });
+
+export const getCreateLectureNameMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof createLectureName>>, TError, { data: BodyType<CreateLectureNameInput> }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof createLectureName>>, TError, { data: BodyType<CreateLectureNameInput> }, TContext> => {
+  const mutationKey = ['createLectureName'];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof createLectureName>>, { data: BodyType<CreateLectureNameInput> }> = ({ data }) =>
+    createLectureName(data, requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useCreateLectureName = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof createLectureName>>, TError, { data: BodyType<CreateLectureNameInput> }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof createLectureName>>, TError, { data: BodyType<CreateLectureNameInput> }, TContext> =>
+  useMutation(getCreateLectureNameMutationOptions(options));
+
+export const getDeleteLectureNameUrl = (id: number) => `/api/lecture-names/${id}`;
+
+export const deleteLectureName = async (id: number, options?: RequestInit): Promise<void> =>
+  customFetch<void>(getDeleteLectureNameUrl(id), { ...options, method: 'DELETE' });
+
+export const getDeleteLectureNameMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteLectureName>>, TError, { id: number }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof deleteLectureName>>, TError, { id: number }, TContext> => {
+  const mutationKey = ['deleteLectureName'];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteLectureName>>, { id: number }> = ({ id }) =>
+    deleteLectureName(id, requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useDeleteLectureName = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteLectureName>>, TError, { id: number }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof deleteLectureName>>, TError, { id: number }, TContext> =>
+  useMutation(getDeleteLectureNameMutationOptions(options));
+
+export const getUpdateLectureNameUrl = (id: number) => `/api/lecture-names/${id}`;
+
+export const updateLectureName = async (id: number, body: UpdateLectureNameInput, options?: RequestInit): Promise<LectureName> =>
+  customFetch<LectureName>(getUpdateLectureNameUrl(id), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(body),
+  });
+
+export const getUpdateLectureNameMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateLectureName>>, TError, { id: number; data: BodyType<UpdateLectureNameInput> }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof updateLectureName>>, TError, { id: number; data: BodyType<UpdateLectureNameInput> }, TContext> => {
+  const mutationKey = ['updateLectureName'];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateLectureName>>, { id: number; data: BodyType<UpdateLectureNameInput> }> = ({ id, data }) =>
+    updateLectureName(id, data, requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useUpdateLectureName = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateLectureName>>, TError, { id: number; data: BodyType<UpdateLectureNameInput> }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof updateLectureName>>, TError, { id: number; data: BodyType<UpdateLectureNameInput> }, TContext> =>
+  useMutation(getUpdateLectureNameMutationOptions(options));
 
