@@ -448,34 +448,49 @@ export async function processJobById(id: number): Promise<boolean> {
 }
 
 /**
+ * Module-level lock: true while a processAllPendingJobs run is in progress.
+ * Prevents concurrent batch uploads triggered by multiple button clicks or
+ * simultaneous pipeline-worker ticks.
+ */
+let _batchRunning = false;
+
+/**
  * Uploads ALL pending jobs in chronological order, one at a time.
- * Returns the number of jobs started.
+ * Returns the number of jobs processed, or -1 if a batch was already running.
  * Meant to be called and awaited in the background — each upload runs to completion
  * before the next begins, preserving playlist order.
  */
 export async function processAllPendingJobs(): Promise<number> {
-  const pending = await db
-    .select()
-    .from(jobsTable)
-    .where(eq(jobsTable.status, "pending"))
-    .orderBy(asc(jobsTable.driveCreatedTime));
-
-  let processed = 0;
-  for (const job of pending) {
-    try {
-      await uploadJob(job);
-      processed++;
-    } catch (err) {
-      if (err instanceof QuotaExceededError) {
-        // Daily quota hit — remaining jobs are still pending, stop here
-        logger.warn({ processed, remaining: pending.length - processed }, "Upload batch stopped: daily quota reached");
-        break;
-      }
-      logger.error({ jobId: job.id, err }, "processAllPendingJobs: job failed, continuing with next");
-    }
+  if (_batchRunning) {
+    logger.warn("processAllPendingJobs: batch already running — skipping duplicate call");
+    return -1;
   }
+  _batchRunning = true;
+  try {
+    const pending = await db
+      .select()
+      .from(jobsTable)
+      .where(eq(jobsTable.status, "pending"))
+      .orderBy(asc(jobsTable.driveCreatedTime));
 
-  return processed;
+    let processed = 0;
+    for (const job of pending) {
+      try {
+        await uploadJob(job);
+        processed++;
+      } catch (err) {
+        if (err instanceof QuotaExceededError) {
+          logger.warn({ processed, remaining: pending.length - processed }, "Upload batch stopped: daily quota reached");
+          break;
+        }
+        logger.error({ jobId: job.id, err }, "processAllPendingJobs: job failed, continuing with next");
+      }
+    }
+
+    return processed;
+  } finally {
+    _batchRunning = false;
+  }
 }
 
 let workerInterval: ReturnType<typeof setInterval> | null = null;
