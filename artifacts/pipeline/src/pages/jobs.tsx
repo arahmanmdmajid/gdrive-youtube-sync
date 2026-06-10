@@ -3,6 +3,7 @@ import {
   useListJobs,
   useDeleteJob,
   useRetryJob,
+  useRestoreJob,
   useApproveJob,
   usePatchJob,
   useListLectureNames,
@@ -19,7 +20,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, RefreshCcw, ExternalLink, ClipboardCheck, Pencil } from "lucide-react";
+import { Loader2, Trash2, RefreshCcw, ExternalLink, ClipboardCheck, Pencil, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import { JobStatusBadge } from "./dashboard";
 import {
@@ -92,8 +93,15 @@ export default function Jobs() {
 
   const deleteMutation = useDeleteJob({
     mutation: {
-      onSuccess: () => { invalidate(); toast({ title: "Job deleted" }); setDeleteId(null); },
-      onError: () => { toast({ title: "Failed to delete job", variant: "destructive" }); setDeleteId(null); }
+      onSuccess: () => { invalidate(); toast({ title: "Job rejected" }); setDeleteId(null); },
+      onError: () => { toast({ title: "Failed to reject job", variant: "destructive" }); setDeleteId(null); }
+    }
+  });
+
+  const restoreMutation = useRestoreJob({
+    mutation: {
+      onSuccess: () => { invalidate(); toast({ title: "Job restored to review queue" }); },
+      onError: () => toast({ title: "Failed to restore job", variant: "destructive" })
     }
   });
 
@@ -200,6 +208,7 @@ export default function Jobs() {
             <SelectItem value="processing">Processing</SelectItem>
             <SelectItem value="done">Done</SelectItem>
             <SelectItem value="failed">Failed</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -230,7 +239,7 @@ export default function Jobs() {
                 {jobs.map(job => (
                   <TableRow
                     key={job.id}
-                    className={`border-border group ${job.status === "needs_review" ? "bg-amber-500/5" : ""}`}
+                    className={`border-border group ${job.status === "needs_review" ? "bg-amber-500/5" : job.status === "rejected" ? "bg-muted/40 opacity-60" : ""}`}
                   >
                     <TableCell className="font-mono text-xs text-muted-foreground">#{job.id}</TableCell>
 
@@ -320,6 +329,20 @@ export default function Jobs() {
                             data-testid={`btn-retry-${job.id}`}
                           >
                             <RefreshCcw className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                          </Button>
+                        )}
+
+                        {job.status === "rejected" && (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => restoreMutation.mutate({ id: job.id })}
+                            disabled={restoreMutation.isPending}
+                            title="Restore to review queue"
+                            data-testid={`btn-restore-${job.id}`}
+                            className="border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+                          >
+                            <RotateCcw className="h-4 w-4" />
                           </Button>
                         )}
 
@@ -472,7 +495,7 @@ export default function Jobs() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Job</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete job #{deleteId}? This will remove it from the pipeline. It will not delete the file from Drive or YouTube.
+              Job #{deleteId} will be marked as rejected and removed from the review queue. The file will not be deleted from Drive. The pipeline will not re-scan it, but you can restore it at any time from the Rejected filter.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

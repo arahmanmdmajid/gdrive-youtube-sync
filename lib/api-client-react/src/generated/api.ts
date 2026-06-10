@@ -498,6 +498,38 @@ export const useRetryJob = <TError = ErrorType<unknown>,
       return useMutation(getRetryJobMutationOptions(options));
     }
 
+export const getRestoreJobUrl = (id: number) => {
+  return `/api/jobs/${id}/restore`
+}
+
+export const restoreJob = async (id: number, options?: RequestInit): Promise<Job> => {
+  return customFetch<Job>(getRestoreJobUrl(id), { ...options, method: 'POST' });
+}
+
+export const getRestoreJobMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof restoreJob>>, TError, {id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof restoreJob>>, TError, {id: number}, TContext> => {
+  const mutationKey = ['restoreJob'];
+  const {mutation: mutationOptions, request: requestOptions} = options ?
+    options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+    options : {...options, mutation: {...options.mutation, mutationKey}}
+    : {mutation: {mutationKey}, request: undefined};
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof restoreJob>>, {id: number}> = (props) => {
+    const {id} = props ?? {};
+    return restoreJob(id, requestOptions);
+  };
+  return {mutationFn, ...mutationOptions};
+}
+
+export type RestoreJobMutationResult = NonNullable<Awaited<ReturnType<typeof restoreJob>>>
+export type RestoreJobMutationError = ErrorType<unknown>
+
+export const useRestoreJob = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof restoreJob>>, TError, {id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationResult<Awaited<ReturnType<typeof restoreJob>>, TError, {id: number}, TContext> => {
+  return useMutation(getRestoreJobMutationOptions(options));
+}
+
 export const getApproveJobUrl = (id: number) => {
   return `/api/jobs/${id}/approve`
 }

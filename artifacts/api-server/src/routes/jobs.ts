@@ -155,8 +155,47 @@ router.delete("/jobs/:id", async (req, res) => {
     res.status(400).json({ error: "Invalid id" });
     return;
   }
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, parsed.data.id));
+  if (!job) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  // Soft-delete needs_review jobs so the pipeline won't re-scan them
+  if (job.status === "needs_review") {
+    const [updated] = await db
+      .update(jobsTable)
+      .set({ status: "rejected", updatedAt: new Date() })
+      .where(eq(jobsTable.id, parsed.data.id))
+      .returning();
+    res.json(formatJob(updated));
+    return;
+  }
   await db.delete(jobsTable).where(eq(jobsTable.id, parsed.data.id));
   res.status(204).send();
+});
+
+// Restore a rejected job back to the approval queue
+router.post("/jobs/:id/restore", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
+  if (!job) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (job.status !== "rejected") {
+    res.status(409).json({ error: "Job is not rejected" });
+    return;
+  }
+  const [updated] = await db
+    .update(jobsTable)
+    .set({ status: "needs_review", updatedAt: new Date() })
+    .where(eq(jobsTable.id, id))
+    .returning();
+  res.json(formatJob(updated));
 });
 
 // Delete the YouTube video for a job and remove the job from DB

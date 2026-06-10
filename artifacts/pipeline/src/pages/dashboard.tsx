@@ -244,6 +244,9 @@ export function JobStatusBadge({ status }: { status: string }) {
     case "processing":
       colorClass = "bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border-blue-500/20";
       break;
+    case "rejected":
+      colorClass = "bg-muted/50 text-muted-foreground hover:bg-muted border-border line-through";
+      break;
     case "pending":
     default:
       colorClass = "bg-muted text-muted-foreground hover:bg-muted/80 border-border";
