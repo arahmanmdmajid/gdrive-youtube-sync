@@ -3,6 +3,25 @@ export interface ClassSlot {
   teacher: string;
 }
 
+// Maps subject name → serial number prefix
+const SUBJECT_SERIAL: Record<string, string> = {
+  "جلالين اول":                       "1.1",
+  "جلالين دوم":                       "1.2",
+  "جلالين ثلث":                       "1.3",
+  "الفوز الكبير":                     "2.1",
+  "كتاب الآثار، خير الأصول":         "2.2",
+  "سراجى":                            "2.3",
+  "هداية ثاني حصہ اول":              "3.1",
+  "هداية ثاني حصہ دوم":              "3.2",
+  "هداية ثاني حصہ سوم":              "3.3",
+  "توضيح اول":                        "4.1",
+  "توضيح دوم":                        "4.2",
+  "شرح عقائد":                        "5.1",
+  "فلکیات":                           "5.2",
+  "متن الكافي، الهيئة الصغرى":       "6.1",
+  "ديوان حماسہ":                      "6.2",
+};
+
 type DaySchedule = {
   [timeSlot: string]: ClassSlot;
 };
@@ -147,6 +166,12 @@ export function getOrderedSlotsForDay(dayOfWeek: number): ClassSlot[] {
 /**
  * Builds a YouTube description from a resolved ClassSlot (used by positional naming).
  */
+export function buildYoutubeTitleFromSlot(slot: ClassSlot, dateStr: string): string {
+  const serial = SUBJECT_SERIAL[slot.subject];
+  const ltrPrefix = serial ? `${serial} | ${dateStr} | ` : `${dateStr} | `;
+  return `${ltrPrefix}${slot.subject} | ${slot.teacher}`;
+}
+
 export function buildYoutubeDescriptionFromSlot(
   slot: ClassSlot,
   dateStr: string,
@@ -167,7 +192,7 @@ export function buildYoutubeTitle(fileName: string, createdTime: string | null |
     const classInfo = resolveClassFromTime(createdTime, meetingCode);
     if (classInfo) {
       const dateStr = toPktDateStr(createdTime);
-      return `${classInfo.subject} | ${classInfo.teacher} | ${dateStr}`;
+      return buildYoutubeTitleFromSlot(classInfo, dateStr);
     }
   }
   return fileName.replace(/\.[^.]+$/, "");

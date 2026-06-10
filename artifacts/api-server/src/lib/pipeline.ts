@@ -6,6 +6,7 @@ import {
   buildYoutubeTitle,
   buildYoutubeDescription,
   buildYoutubeDescriptionFromSlot,
+  buildYoutubeTitleFromSlot,
   extractMeetingCode,
   getOrderedSlotsForDay,
   getPktInfo,
@@ -190,7 +191,7 @@ export async function runPipelineScan(): Promise<{
       const slot = slots[i];
       if (slot) {
         positionalAssignments.set(file.id, {
-          title: `${slot.subject} | ${slot.teacher} | ${group.pktDateStr}`,
+          title: buildYoutubeTitleFromSlot(slot, group.pktDateStr),
           description: buildYoutubeDescriptionFromSlot(slot, group.pktDateStr, file.name ?? file.id),
         });
       } else {
