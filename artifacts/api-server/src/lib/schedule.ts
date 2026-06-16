@@ -1,6 +1,8 @@
 export interface ClassSlot {
   subject: string;
   teacher: string;
+  subjectEn: string;
+  teacherEn: string;
 }
 
 // Maps subject name → serial number prefix
@@ -30,43 +32,43 @@ type DaySchedule = {
 const SCHEDULE: Record<string, DaySchedule> = {
   // جمعہ - Friday (day 5)
   "5": {
-    "18:00": { subject: "هداية ثاني حصہ اول", teacher: "م. سراج الحق صاحب" },
-    "18:30": { subject: "جلالين اول", teacher: "م. فياض صاحب" },
-    "19:00": { subject: "كتاب الآثار، خير الأصول", teacher: "م. حسيب صاحب" },
-    "19:30": { subject: "جلالين ثلث", teacher: "م. وسيم الله صاحب" },
-    "20:00": { subject: "توضيح اول", teacher: "م. عتيق الله صاحب" },
-    "20:30": { subject: "هداية ثاني حصہ دوم", teacher: "م. سعيد الرحمن صاحب" },
-    "21:00": { subject: "ديوان حماسہ", teacher: "م. فراز صاحب" },
-    "21:30": { subject: "شرح عقائد", teacher: "م. خالد زمان صاحب" },
+    "18:00": { subject: "هداية ثاني حصہ اول", teacher: "م. سراج الحق صاحب", subjectEn: "Hidaya Sani Part 1", teacherEn: "Ustad Sirajul Haq" },
+    "18:30": { subject: "جلالين اول", teacher: "م. فياض صاحب", subjectEn: "Jalalain Part 1", teacherEn: "Ustad Fayyaz" },
+    "19:00": { subject: "كتاب الآثار، خير الأصول", teacher: "م. حسيب صاحب", subjectEn: "Kitab ul Asar", teacherEn: "Ustad Haseeb" },
+    "19:30": { subject: "جلالين ثلث", teacher: "م. وسيم الله صاحب", subjectEn: "Jalalain Part 3", teacherEn: "Ustad Wasimullah" },
+    "20:00": { subject: "توضيح اول", teacher: "م. عتيق الله صاحب", subjectEn: "Tawzeeh Part 1", teacherEn: "Ustad Atiqullah" },
+    "20:30": { subject: "هداية ثاني حصہ دوم", teacher: "م. سعيد الرحمن صاحب", subjectEn: "Hidaya Sani Part 2", teacherEn: "Ustad Saeedur Rahman" },
+    "21:00": { subject: "ديوان حماسہ", teacher: "م. فراز صاحب", subjectEn: "Dewan Hamasa", teacherEn: "Ustad Faraz" },
+    "21:30": { subject: "شرح عقائد", teacher: "م. خالد زمان صاحب", subjectEn: "Sharah Aqaid", teacherEn: "Ustad Khalid Zaman" },
   },
   // ہفتہ - Saturday (day 6)
   "6": {
-    "18:00": { subject: "جلالين اول", teacher: "م. فياض صاحب" },
-    "18:30": { subject: "شرح عقائد", teacher: "م. خالد زمان صاحب" },
-    "19:00": { subject: "جلالين ثلث", teacher: "م. وسيم الله صاحب" },
-    "19:30": { subject: "كتاب الآثار، خير الأصول", teacher: "م. حسيب صاحب" },
-    "20:00": { subject: "هداية ثاني حصہ اول", teacher: "م. سراج الحق صاحب" },
-    "20:30": { subject: "توضيح اول", teacher: "م. عتيق الله صاحب" },
-    "21:00": { subject: "ديوان حماسہ", teacher: "م. فراز صاحب" },
-    "21:30": { subject: "هداية ثاني حصہ دوم", teacher: "م. سعيد الرحمن صاحب" },
+    "18:00": { subject: "جلالين اول", teacher: "م. فياض صاحب", subjectEn: "Jalalain Part 1", teacherEn: "Ustad Fayyaz" },
+    "18:30": { subject: "شرح عقائد", teacher: "م. خالد زمان صاحب", subjectEn: "Sharah Aqaid", teacherEn: "Ustad Khalid Zaman" },
+    "19:00": { subject: "جلالين ثلث", teacher: "م. وسيم الله صاحب", subjectEn: "Jalalain Part 3", teacherEn: "Ustad Wasimullah" },
+    "19:30": { subject: "كتاب الآثار، خير الأصول", teacher: "م. حسيب صاحب", subjectEn: "Kitab ul Asar", teacherEn: "Ustad Haseeb" },
+    "20:00": { subject: "هداية ثاني حصہ اول", teacher: "م. سراج الحق صاحب", subjectEn: "Hidaya Sani Part 1", teacherEn: "Ustad Sirajul Haq" },
+    "20:30": { subject: "توضيح اول", teacher: "م. عتيق الله صاحب", subjectEn: "Tawzeeh Part 1", teacherEn: "Ustad Atiqullah" },
+    "21:00": { subject: "ديوان حماسہ", teacher: "م. فراز صاحب", subjectEn: "Dewan Hamasa", teacherEn: "Ustad Faraz" },
+    "21:30": { subject: "هداية ثاني حصہ دوم", teacher: "م. سعيد الرحمن صاحب", subjectEn: "Hidaya Sani Part 2", teacherEn: "Ustad Saeedur Rahman" },
   },
   // پیر - Monday (day 1)
   "1": {
-    "18:00": { subject: "توضيح دوم", teacher: "م. سعيد الرحمن صاحب" },
-    "18:30": { subject: "جلالين دوم", teacher: "م. حسيب صاحب" },
-    "19:00": { subject: "متن الكافي، الهيئة الصغرى", teacher: "م. عامر اقبال صاحب" },
-    "19:30": { subject: "سراجى", teacher: "م. خالد زمان صاحب" },
-    "20:00": { subject: "الفوز الكبير", teacher: "م. حسيب صاحب" },
-    "20:30": { subject: "هداية ثاني حصہ سوم", teacher: "م. اسلم شاہ صاحب" },
+    "18:00": { subject: "توضيح دوم", teacher: "م. سعيد الرحمن صاحب", subjectEn: "Tawzeeh Part 2", teacherEn: "Ustad Saeedur Rahman" },
+    "18:30": { subject: "جلالين دوم", teacher: "م. حسيب صاحب", subjectEn: "Jalalain Part 2", teacherEn: "Ustad Haseeb" },
+    "19:00": { subject: "متن الكافي، الهيئة الصغرى", teacher: "م. عامر اقبال صاحب", subjectEn: "Matan ul Kafi", teacherEn: "Ustad Aamir Iqbal" },
+    "19:30": { subject: "سراجى", teacher: "م. خالد زمان صاحب", subjectEn: "Siraji", teacherEn: "Ustad Khalid Zaman" },
+    "20:00": { subject: "الفوز الكبير", teacher: "م. حسيب صاحب", subjectEn: "Al Fawz ul Kabir", teacherEn: "Ustad Haseeb" },
+    "20:30": { subject: "هداية ثاني حصہ سوم", teacher: "م. اسلم شاہ صاحب", subjectEn: "Hidaya Sani Part 3", teacherEn: "Ustad Aslam Shah" },
   },
   // منگل - Tuesday (day 2)
   "2": {
-    "18:00": { subject: "توضيح دوم", teacher: "م. سعيد الرحمن صاحب" },
-    "18:30": { subject: "متن الكافي، الهيئة الصغرى", teacher: "م. عامر اقبال صاحب" },
-    "19:00": { subject: "جلالين دوم", teacher: "م. حسيب صاحب" },
-    "19:30": { subject: "فلکیات", teacher: "م. خالد زمان صاحب" },
-    "20:00": { subject: "الفوز الكبير", teacher: "م. حسيب صاحب" },
-    "20:30": { subject: "هداية ثاني حصہ سوم", teacher: "م. اسلم شاہ صاحب" },
+    "18:00": { subject: "توضيح دوم", teacher: "م. سعيد الرحمن صاحب", subjectEn: "Tawzeeh Part 2", teacherEn: "Ustad Saeedur Rahman" },
+    "18:30": { subject: "متن الكافي، الهيئة الصغرى", teacher: "م. عامر اقبال صاحب", subjectEn: "Matan ul Kafi", teacherEn: "Ustad Aamir Iqbal" },
+    "19:00": { subject: "جلالين دوم", teacher: "م. حسيب صاحب", subjectEn: "Jalalain Part 2", teacherEn: "Ustad Haseeb" },
+    "19:30": { subject: "فلکیات", teacher: "م. خالد زمان صاحب", subjectEn: "Falakiyat", teacherEn: "Ustad Khalid Zaman" },
+    "20:00": { subject: "الفوز الكبير", teacher: "م. حسيب صاحب", subjectEn: "Al Fawz ul Kabir", teacherEn: "Ustad Haseeb" },
+    "20:30": { subject: "هداية ثاني حصہ سوم", teacher: "م. اسلم شاہ صاحب", subjectEn: "Hidaya Sani Part 3", teacherEn: "Ustad Aslam Shah" },
   },
 };
 
@@ -168,8 +170,8 @@ export function getOrderedSlotsForDay(dayOfWeek: number): ClassSlot[] {
  */
 export function buildYoutubeTitleFromSlot(slot: ClassSlot, dateStr: string): string {
   const serial = SUBJECT_SERIAL[slot.subject];
-  const ltrPrefix = serial ? `${serial} | ${dateStr} | ` : `${dateStr} | `;
-  return `${ltrPrefix}${slot.subject} | ${slot.teacher}`;
+  const ltrPrefix = serial ? `${serial} ` : "";
+  return `${ltrPrefix}${slot.subjectEn} | ${slot.teacherEn} | ${dateStr}`;
 }
 
 export function buildYoutubeDescriptionFromSlot(
@@ -178,8 +180,8 @@ export function buildYoutubeDescriptionFromSlot(
   fileName: string,
 ): string {
   return [
-    `Subject: ${slot.subject}`,
-    `Teacher: ${slot.teacher}`,
+    `Subject: ${slot.subjectEn}`,
+    `Teacher: ${slot.teacherEn}`,
     `Date: ${dateStr}`,
     `Source file: ${fileName}`,
     `Uploaded automatically by the class recording pipeline.`,
@@ -204,8 +206,8 @@ export function buildYoutubeDescription(fileName: string, createdTime: string | 
     const meetingCode = extractMeetingCode(fileName);
     const classInfo = resolveClassFromTime(createdTime, meetingCode);
     if (classInfo) {
-      lines.push(`Subject: ${classInfo.subject}`);
-      lines.push(`Teacher: ${classInfo.teacher}`);
+      lines.push(`Subject: ${classInfo.subjectEn}`);
+      lines.push(`Teacher: ${classInfo.teacherEn}`);
     }
     const dateStr = toPktDateStr(createdTime);
     lines.push(`Date: ${dateStr}`);
