@@ -12,6 +12,13 @@ import {
 } from "@workspace/api-zod";
 import { runPipelineScan, processJobById, processAllPendingJobs } from "../lib/pipeline";
 import { getYoutubeClient } from "../lib/youtubeClient";
+import {
+  getPktInfo,
+  extractMeetingCode,
+  getOrderedSlotsForDay,
+  buildYoutubeTitleFromSlot,
+  buildYoutubeDescriptionFromSlot,
+} from "../lib/schedule";
 
 /** Format a date as DD-MM-YYYY (PKT = UTC+5) */
 function formatDateDDMMYYYY(isoString: string): string {
@@ -93,6 +100,71 @@ async function buildAndAssignTitle(
   // Return the title assigned to the current job
   const myIndex = sorted.findIndex((r) => r.id === currentJobId);
   return `${baseTitle} | Part ${myIndex + 1}`;
+}
+
+/**
+ * When a user manually assigns a lecture name to a job, cascade the change to
+ * all subsequent needs_review jobs for the same PKT date + meeting code.
+ *
+ * Example: schedule has slots [A, B, C, D]. B wasn't recorded, so the pipeline
+ * assigned [A, B, C] to the 3 recordings. User changes job[1] from B → C.
+ * This function then updates job[2] to D automatically.
+ */
+async function cascadeSlotAssignment(
+  currentJobId: number,
+  selectedLectureName: string,
+  driveCreatedTime: string,
+  driveFileName: string,
+): Promise<void> {
+  const { dateStr, dayOfWeek } = getPktInfo(driveCreatedTime);
+  const meetingCode = extractMeetingCode(driveFileName);
+  const slots = getOrderedSlotsForDay(dayOfWeek);
+  if (slots.length === 0) return;
+
+  // Match the selected lecture name back to a slot by subjectEn.
+  // Lecture name format: "X.X SubjectEn | TeacherEn"
+  const nameWithoutSerial = selectedLectureName.replace(/^\d+\.\d+\s+/, "");
+  const subjectEn = nameWithoutSerial.split(" | ")[0]?.trim() ?? "";
+  const selectedSlotIdx = slots.findIndex(s => s.subjectEn === subjectEn);
+  if (selectedSlotIdx < 0) return;
+
+  // Find all needs_review siblings for the same PKT date + meeting code
+  const allNeedsReview = await db
+    .select({
+      id: jobsTable.id,
+      driveCreatedTime: jobsTable.driveCreatedTime,
+      driveFileName: jobsTable.driveFileName,
+    })
+    .from(jobsTable)
+    .where(eq(jobsTable.status, "needs_review"));
+
+  const siblings = allNeedsReview
+    .filter(j => {
+      if (!j.driveCreatedTime) return false;
+      const info = getPktInfo(j.driveCreatedTime);
+      if (info.dateStr !== dateStr) return false;
+      if (meetingCode) {
+        const jCode = extractMeetingCode(j.driveFileName ?? "");
+        if (jCode !== meetingCode) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => (a.driveCreatedTime ?? "").localeCompare(b.driveCreatedTime ?? ""));
+
+  const currentPos = siblings.findIndex(j => j.id === currentJobId);
+  if (currentPos < 0) return;
+
+  // Assign the next slots to each subsequent sibling
+  for (let i = currentPos + 1; i < siblings.length; i++) {
+    const nextSlotIdx = selectedSlotIdx + (i - currentPos);
+    if (nextSlotIdx >= slots.length) break;
+    const slot = slots[nextSlotIdx];
+    const title = buildYoutubeTitleFromSlot(slot, dateStr);
+    const description = buildYoutubeDescriptionFromSlot(slot, dateStr, siblings[i].driveFileName ?? "");
+    await db.update(jobsTable)
+      .set({ proposedTitle: title, proposedDescription: description, updatedAt: new Date() })
+      .where(eq(jobsTable.id, siblings[i].id));
+  }
 }
 
 const router = Router();
@@ -251,7 +323,10 @@ router.post("/jobs/:id/approve", async (req, res) => {
   if (bodyParsed.data.lectureName) {
     // Build title from lecture name + date, assigning part numbers across sibling jobs
     await buildAndAssignTitle(id, bodyParsed.data.lectureName, job.driveCreatedTime ?? null);
-    // Apply status + description update (title was already updated by buildAndAssignTitle)
+    // Cascade: update subsequent same-day needs_review jobs with the next schedule slots
+    if (job.driveCreatedTime && job.driveFileName) {
+      await cascadeSlotAssignment(id, bodyParsed.data.lectureName, job.driveCreatedTime, job.driveFileName);
+    }
     await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
   } else {
     if (bodyParsed.data.proposedTitle !== undefined) updates.proposedTitle = bodyParsed.data.proposedTitle;
@@ -288,6 +363,10 @@ router.patch("/jobs/:id", async (req, res) => {
 
   if (bodyParsed.data.lectureName) {
     await buildAndAssignTitle(id, bodyParsed.data.lectureName, job.driveCreatedTime ?? null);
+    // Cascade: update subsequent same-day needs_review jobs with the next schedule slots
+    if (job.driveCreatedTime && job.driveFileName) {
+      await cascadeSlotAssignment(id, bodyParsed.data.lectureName, job.driveCreatedTime, job.driveFileName);
+    }
     if (Object.keys(updates).length > 1) {
       await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
     }
