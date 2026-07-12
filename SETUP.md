@@ -78,14 +78,35 @@ cd ../..
 ## 6. Run database migrations
 
 ```bash
-cd artifacts/api-server
-pnpm run db:push
+cd lib/db
+pnpm run push
 cd ../..
 ```
 
 ---
 
-## 7. Get a Google OAuth refresh token (first time only)
+## 7. Import existing data (if migrating from another machine)
+
+If you have a `drivetotube-export.sql` dump file, import it **instead of** (or after) step 6:
+
+```bash
+# Windows (PowerShell) — replace XX with your PostgreSQL version (e.g. 17)
+$env:PGPASSWORD = "YOUR_POSTGRES_PASSWORD"
+& "C:\Program Files\PostgreSQL\XX\bin\psql.exe" `
+    --host=localhost --port=5432 `
+    --username=postgres `
+    --dbname=drivetotube `
+    --file="path\to\drivetotube-export.sql"
+
+# macOS / Linux
+PGPASSWORD=your_password psql -h localhost -U postgres -d drivetotube -f drivetotube-export.sql
+```
+
+> The export file contains all jobs, lecture names, and settings — you'll continue exactly where you left off.
+
+---
+
+## 8. Get a Google OAuth refresh token (first time only — skip if you have one)
 
 If you don't have a refresh token yet, or the existing one has expired (`invalid_grant` error):
 
@@ -101,7 +122,7 @@ If you don't have a refresh token yet, or the existing one has expired (`invalid
 
 ---
 
-## 8. Start the servers
+## 9. Start the servers
 
 ### Option A — PM2 (recommended, keeps servers alive)
 
@@ -138,7 +159,7 @@ pnpm run dev
 
 ---
 
-## 9. Open the app
+## 10. Open the app
 
 - **Dashboard**: http://localhost:5173
 - **API**: http://localhost:5000
