@@ -511,6 +511,6 @@ export function startPipelineWorker() {
       }
       logger.error({ err }, "Pipeline worker error");
     }
-  }, 60_000);
+  }, Number(process.env.WORKER_TICK_MS ?? 60_000));
   logger.info("Pipeline worker started");
 }
