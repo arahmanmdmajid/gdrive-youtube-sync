@@ -125,7 +125,7 @@
   --app-font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --app-font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
-  --radius: 0.25rem;
+  --radius: 0.75rem;
 
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.06);
   --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.08);
@@ -202,7 +202,7 @@
   --chart-4: 348 83% 47%;
   --chart-5: 280 65% 60%;
 
-  --radius: 0.25rem;
+  --radius: 0.75rem;
 
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
   --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.5), 0 1px 2px -1px rgb(0 0 0 / 0.5);
@@ -227,10 +227,4 @@
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }
-}
-
-/* Friendlier, rounder card feel for the student app only — admin keeps its
-   original dense/precise radius. */
-.dtt-student {
-  --radius: 0.75rem;
 }

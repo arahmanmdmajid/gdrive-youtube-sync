@@ -15,4 +15,6 @@ export const JobStatus = {
   processing: 'processing',
   done: 'done',
   failed: 'failed',
+  rejected: 'rejected',
+  removed: 'removed',
 } as const;

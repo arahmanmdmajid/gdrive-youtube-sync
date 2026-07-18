@@ -24,7 +24,7 @@ export default function StudentRegister() {
   }
 
   return (
-    <div className="dtt-student min-h-[100dvh] bg-background flex items-center justify-center px-4">
+    <div className="min-h-[100dvh] bg-background flex items-center justify-center px-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <div className="mx-auto mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">

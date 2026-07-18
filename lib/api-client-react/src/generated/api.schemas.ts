@@ -18,6 +18,15 @@ export const JobStatus = {
   processing: 'processing',
   done: 'done',
   failed: 'failed',
+  rejected: 'rejected',
+  removed: 'removed',
+} as const;
+
+export type JobSource = typeof JobSource[keyof typeof JobSource];
+
+export const JobSource = {
+  pipeline: 'pipeline',
+  manual: 'manual',
 } as const;
 
 export interface Job {
@@ -29,6 +38,7 @@ export interface Job {
   /** @nullable */
   driveCreatedTime?: string | null;
   status: JobStatus;
+  source?: JobSource;
   /** @nullable */
   proposedTitle?: string | null;
   /** @nullable */
@@ -95,6 +105,16 @@ export interface PatchJobInput {
   proposedDescription?: string;
 }
 
+export interface RenameYoutubeTitleInput {
+  title: string;
+}
+
+export interface ReconcileResult {
+  removed: number[];
+  restored: number[];
+  inserted: number[];
+}
+
 export interface DriveFile {
   id: string;
   name: string;
@@ -158,5 +178,7 @@ export const ListJobsStatus = {
   processing: 'processing',
   done: 'done',
   failed: 'failed',
+  rejected: 'rejected',
+  removed: 'removed',
 } as const;
 

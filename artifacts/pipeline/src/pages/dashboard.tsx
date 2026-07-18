@@ -2,6 +2,7 @@ import {
   useGetPipelineStats,
   useTriggerPipeline,
   useTriggerUpload,
+  useReconcilePlaylist,
   useListJobs,
   getGetPipelineStatsQueryKey,
   getListJobsQueryKey
@@ -12,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Play, Upload, Activity, Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, ArrowRight } from "lucide-react";
+import { Play, Upload, Activity, Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, ArrowRight, ListVideo } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "wouter";
 
@@ -68,6 +69,26 @@ export default function Dashboard() {
     }
   });
 
+  const reconcileMutation = useReconcilePlaylist({
+    mutation: {
+      onSuccess: (data) => {
+        queryClient.invalidateQueries({ queryKey: getGetPipelineStatsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
+        toast({
+          title: "Playlist synced",
+          description: `${data.inserted.length} added, ${data.removed.length} removed, ${data.restored.length} restored`,
+        });
+      },
+      onError: (err: any) => {
+        toast({
+          title: "Sync Failed",
+          description: err?.message || "Could not sync the playlist.",
+          variant: "destructive"
+        });
+      }
+    }
+  });
+
   const recentJobs = jobs?.slice(0, 5) || [];
 
   return (
@@ -91,6 +112,20 @@ export default function Dashboard() {
               <Play className="h-4 w-4" />
             )}
             Scan Now
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => reconcileMutation.mutate()}
+            disabled={reconcileMutation.isPending}
+            data-testid="button-sync-playlist"
+            className="gap-2 font-mono font-medium"
+          >
+            {reconcileMutation.isPending ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <ListVideo className="h-4 w-4" />
+            )}
+            Sync Playlist
           </Button>
           <Button
             onClick={() => uploadMutation.mutate()}
@@ -236,7 +271,7 @@ export function JobStatusBadge({ status }: { status: string }) {
       colorClass = "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 border-amber-500/30";
       break;
     case "done":
-      colorClass = "bg-green-500/10 text-green-500 hover:bg-green-500/20 border-green-500/20";
+      colorClass = "bg-success/10 text-success hover:bg-success/20 border-success/20";
       break;
     case "failed":
       colorClass = "bg-destructive/10 text-destructive hover:bg-destructive/20 border-destructive/20";
@@ -246,6 +281,9 @@ export function JobStatusBadge({ status }: { status: string }) {
       break;
     case "rejected":
       colorClass = "bg-muted/50 text-muted-foreground hover:bg-muted border-border line-through";
+      break;
+    case "removed":
+      colorClass = "bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 border-orange-500/30";
       break;
     case "pending":
     default:

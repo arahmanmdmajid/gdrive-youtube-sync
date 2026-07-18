@@ -64,21 +64,17 @@ function StudentRouter() {
 
 function AdminRouter() {
   return (
-    // Admin dashboard keeps its original fixed dark appearance, independent
-    // of the student app's light/dark toggle.
-    <div className="dark bg-background text-foreground min-h-[100dvh]">
-      <Suspense fallback={null}>
-        <Layout>
-          <Switch>
-            <Route path="/" component={Dashboard} />
-            <Route path="/jobs" component={Jobs} />
-            <Route path="/drive" component={Drive} />
-            <Route path="/settings" component={Settings} />
-            <Route component={NotFound} />
-          </Switch>
-        </Layout>
-      </Suspense>
-    </div>
+    <Suspense fallback={null}>
+      <Layout>
+        <Switch>
+          <Route path="/" component={Dashboard} />
+          <Route path="/jobs" component={Jobs} />
+          <Route path="/drive" component={Drive} />
+          <Route path="/settings" component={Settings} />
+          <Route component={NotFound} />
+        </Switch>
+      </Layout>
+    </Suspense>
   );
 }
 
@@ -88,15 +84,11 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          {isStudent ? (
-            <ThemeProvider>
-              <StudentRouter />
-            </ThemeProvider>
-          ) : (
-            <AdminRouter />
-          )}
-        </WouterRouter>
+        <ThemeProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            {isStudent ? <StudentRouter /> : <AdminRouter />}
+          </WouterRouter>
+        </ThemeProvider>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

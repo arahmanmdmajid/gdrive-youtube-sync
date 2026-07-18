@@ -9,8 +9,9 @@ import {
   RetryJobParams,
   ApproveJobBody,
   PatchJobBody,
+  RenameYoutubeTitleBody,
 } from "@workspace/api-zod";
-import { runPipelineScan, processJobById, processAllPendingJobs } from "../lib/pipeline";
+import { runPipelineScan, processJobById, processAllPendingJobs, reconcilePlaylist } from "../lib/pipeline";
 import { getYoutubeClient } from "../lib/youtubeClient";
 import {
   getPktInfo,
@@ -379,6 +380,103 @@ router.patch("/jobs/:id", async (req, res) => {
   res.json(formatJob(updated));
 });
 
+// Rename the YouTube title of a done job. Fetches the current snippet first
+// because YouTube's videos.update with part=snippet requires the *entire*
+// snippet object — omitted fields (description, categoryId, tags) get wiped.
+router.patch("/jobs/:id/youtube-title", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  const bodyParsed = RenameYoutubeTitleBody.safeParse(req.body);
+  if (!bodyParsed.success) {
+    res.status(400).json({ error: "Invalid body" });
+    return;
+  }
+  const { title } = bodyParsed.data;
+
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
+  if (!job) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (job.status !== "done") {
+    res.status(409).json({ error: "Can only rename the YouTube title of a done job" });
+    return;
+  }
+  if (!job.youtubeVideoId) {
+    res.status(409).json({ error: "Job has no associated YouTube video" });
+    return;
+  }
+
+  const youtube = getYoutubeClient();
+  if (!youtube) {
+    res.status(503).json({ error: "YouTube not configured" });
+    return;
+  }
+
+  try {
+    const current = await youtube.videos.list({ part: ["snippet"], id: [job.youtubeVideoId] });
+    const existingSnippet = current.data.items?.[0]?.snippet;
+    if (!existingSnippet) {
+      res.status(502).json({ error: "Video not found on YouTube (it may have been deleted)" });
+      return;
+    }
+    await youtube.videos.update({
+      part: ["snippet"],
+      requestBody: {
+        id: job.youtubeVideoId,
+        snippet: { ...existingSnippet, title },
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(502).json({ error: `Failed to update YouTube title: ${message}` });
+    return;
+  }
+
+  const [updated] = await db
+    .update(jobsTable)
+    .set({ youtubeTitle: title, updatedAt: new Date() })
+    .where(eq(jobsTable.id, id))
+    .returning();
+  res.json(formatJob(updated));
+});
+
+// Restore a "removed" job back to "done" after the admin manually re-adds the
+// video to the playlist. DB-only — does not touch YouTube.
+router.post("/jobs/:id/restore-done", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
+  if (!job) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (job.status !== "removed") {
+    res.status(409).json({ error: "Job is not removed" });
+    return;
+  }
+  const [updated] = await db
+    .update(jobsTable)
+    .set({ status: "done", updatedAt: new Date() })
+    .where(eq(jobsTable.id, id))
+    .returning();
+  res.json(formatJob(updated));
+});
+
+// Re-sync jobs against the current YouTube playlist: mark done jobs whose
+// video left the playlist as removed, self-heal removed jobs whose video
+// reappeared, and backfill jobs for playlist videos with no job at all.
+router.post("/pipeline/reconcile-playlist", async (req, res) => {
+  const result = await reconcilePlaylist();
+  res.json(result);
+});
+
 // Trigger upload for a specific pending job (runs in background, returns immediately)
 router.post("/jobs/:id/process", async (req, res) => {
   const id = Number(req.params.id);
@@ -467,6 +565,7 @@ function formatJob(j: typeof jobsTable.$inferSelect) {
     driveFileSizeBytes: j.driveFileSizeBytes ?? null,
     driveCreatedTime: j.driveCreatedTime ?? null,
     status: j.status,
+    source: j.source,
     proposedTitle: j.proposedTitle ?? null,
     proposedDescription: j.proposedDescription ?? null,
     youtubeVideoId: j.youtubeVideoId ?? null,

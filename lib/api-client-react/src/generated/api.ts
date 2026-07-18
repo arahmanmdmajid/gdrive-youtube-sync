@@ -22,6 +22,8 @@ import type {
 import type {
   ApproveJobInput,
   PatchJobInput,
+  RenameYoutubeTitleInput,
+  ReconcileResult,
   CreateLectureNameInput,
   UpdateLectureNameInput,
   DriveFile,
@@ -575,6 +577,119 @@ export const useApproveJob = <TError = ErrorType<unknown>, TContext = unknown>(
   options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof approveJob>>, TError, { id: number; data: BodyType<ApproveJobInput> }, TContext>, request?: SecondParameter<typeof customFetch> }
 ): UseMutationResult<Awaited<ReturnType<typeof approveJob>>, TError, { id: number; data: BodyType<ApproveJobInput> }, TContext> => {
   return useMutation(getApproveJobMutationOptions(options));
+}
+
+
+export const getRenameYoutubeTitleUrl = (id: number) => {
+  return `/api/jobs/${id}/youtube-title`
+}
+
+/**
+ * @summary Rename the YouTube title of a done job
+ */
+export const renameYoutubeTitle = async (id: number, renameYoutubeTitleInput: RenameYoutubeTitleInput, options?: RequestInit): Promise<Job> => {
+  return customFetch<Job>(getRenameYoutubeTitleUrl(id), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(renameYoutubeTitleInput),
+  });
+}
+
+export const getRenameYoutubeTitleMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof renameYoutubeTitle>>, TError, { id: number; data: BodyType<RenameYoutubeTitleInput> }, TContext>, request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof renameYoutubeTitle>>, TError, { id: number; data: BodyType<RenameYoutubeTitleInput> }, TContext> => {
+  const mutationKey = ['renameYoutubeTitle'];
+  const { mutation: mutationOptions, request: requestOptions } = options ?
+    options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof renameYoutubeTitle>>, { id: number; data: BodyType<RenameYoutubeTitleInput> }> = (props) => {
+    const { id, data } = props ?? {};
+    return renameYoutubeTitle(id, data, requestOptions);
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type RenameYoutubeTitleMutationResult = NonNullable<Awaited<ReturnType<typeof renameYoutubeTitle>>>
+export type RenameYoutubeTitleMutationBody = BodyType<RenameYoutubeTitleInput>
+export type RenameYoutubeTitleMutationError = ErrorType<unknown>
+
+/**
+ * @summary Rename the YouTube title of a done job
+ */
+export const useRenameYoutubeTitle = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof renameYoutubeTitle>>, TError, { id: number; data: BodyType<RenameYoutubeTitleInput> }, TContext>, request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof renameYoutubeTitle>>, TError, { id: number; data: BodyType<RenameYoutubeTitleInput> }, TContext> => {
+  return useMutation(getRenameYoutubeTitleMutationOptions(options));
+}
+
+
+export const getRestoreDoneJobUrl = (id: number) => {
+  return `/api/jobs/${id}/restore-done`
+}
+
+export const restoreDoneJob = async (id: number, options?: RequestInit): Promise<Job> => {
+  return customFetch<Job>(getRestoreDoneJobUrl(id), { ...options, method: 'POST' });
+}
+
+export const getRestoreDoneJobMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof restoreDoneJob>>, TError, {id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof restoreDoneJob>>, TError, {id: number}, TContext> => {
+  const mutationKey = ['restoreDoneJob'];
+  const {mutation: mutationOptions, request: requestOptions} = options ?
+    options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+    options : {...options, mutation: {...options.mutation, mutationKey}}
+    : {mutation: {mutationKey}, request: undefined};
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof restoreDoneJob>>, {id: number}> = (props) => {
+    const {id} = props ?? {};
+    return restoreDoneJob(id, requestOptions);
+  };
+  return {mutationFn, ...mutationOptions};
+}
+
+export type RestoreDoneJobMutationResult = NonNullable<Awaited<ReturnType<typeof restoreDoneJob>>>
+export type RestoreDoneJobMutationError = ErrorType<unknown>
+
+export const useRestoreDoneJob = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof restoreDoneJob>>, TError, {id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationResult<Awaited<ReturnType<typeof restoreDoneJob>>, TError, {id: number}, TContext> => {
+  return useMutation(getRestoreDoneJobMutationOptions(options));
+}
+
+
+export const getReconcilePlaylistUrl = () => {
+  return `/api/pipeline/reconcile-playlist`
+}
+
+export const reconcilePlaylist = async (options?: RequestInit): Promise<ReconcileResult> => {
+  return customFetch<ReconcileResult>(getReconcilePlaylistUrl(), { ...options, method: 'POST' });
+}
+
+export const getReconcilePlaylistMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof reconcilePlaylist>>, TError, void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reconcilePlaylist>>, TError, void, TContext> => {
+  const mutationKey = ['reconcilePlaylist'];
+  const {mutation: mutationOptions, request: requestOptions} = options ?
+    options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+    options : {...options, mutation: {...options.mutation, mutationKey}}
+    : {mutation: {mutationKey}, request: undefined};
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof reconcilePlaylist>>, void> = () => {
+    return reconcilePlaylist(requestOptions);
+  };
+  return {mutationFn, ...mutationOptions};
+}
+
+export type ReconcilePlaylistMutationResult = NonNullable<Awaited<ReturnType<typeof reconcilePlaylist>>>
+export type ReconcilePlaylistMutationError = ErrorType<unknown>
+
+export const useReconcilePlaylist = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof reconcilePlaylist>>, TError, void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationResult<Awaited<ReturnType<typeof reconcilePlaylist>>, TError, void, TContext> => {
+  return useMutation(getReconcilePlaylistMutationOptions(options));
 }
 
 

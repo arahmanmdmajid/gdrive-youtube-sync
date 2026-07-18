@@ -1,22 +1,26 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { 
-  Sidebar, 
-  SidebarContent, 
-  SidebarGroup, 
-  SidebarGroupContent, 
-  SidebarGroupLabel, 
-  SidebarHeader, 
-  SidebarMenu, 
-  SidebarMenuButton, 
-  SidebarMenuItem, 
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
   SidebarProvider,
   SidebarInset
 } from "@/components/ui/sidebar";
-import { Activity, HardDrive, List, Settings, Play } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Activity, HardDrive, List, Settings, Play, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/lib/theme";
 
 export function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
+  const { theme, toggleTheme } = useTheme();
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: Activity },
@@ -61,6 +65,19 @@ export function Layout({ children }: { children: ReactNode }) {
               </SidebarGroupContent>
             </SidebarGroup>
           </SidebarContent>
+          <SidebarFooter className="border-t border-border px-4 py-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleTheme}
+              className="gap-2 justify-start text-muted-foreground hover:text-foreground"
+              title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+              data-testid="button-theme-toggle"
+            >
+              {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+              <span className="text-sm">{theme === "light" ? "Dark mode" : "Light mode"}</span>
+            </Button>
+          </SidebarFooter>
         </Sidebar>
         <SidebarInset className="flex-1 bg-background flex flex-col min-w-0">
           <main className="flex-1 overflow-auto">

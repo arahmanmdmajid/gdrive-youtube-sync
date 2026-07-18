@@ -20,7 +20,7 @@ export const HealthCheckResponse = zod.object({
  * @summary List all pipeline jobs
  */
 export const ListJobsQueryParams = zod.object({
-  "status": zod.enum(['needs_review', 'pending', 'processing', 'done', 'failed']).optional()
+  "status": zod.enum(['needs_review', 'pending', 'processing', 'done', 'failed', 'rejected', 'removed']).optional()
 })
 
 export const ListJobsResponseItem = zod.object({
@@ -29,7 +29,8 @@ export const ListJobsResponseItem = zod.object({
   "driveFileName": zod.string(),
   "driveFileSizeBytes": zod.number().nullish(),
   "driveCreatedTime": zod.string().nullish(),
-  "status": zod.enum(['needs_review', 'pending', 'processing', 'done', 'failed']),
+  "status": zod.enum(['needs_review', 'pending', 'processing', 'done', 'failed', 'rejected', 'removed']),
+  "source": zod.enum(['pipeline', 'manual']).optional(),
   "proposedTitle": zod.string().nullish(),
   "proposedDescription": zod.string().nullish(),
   "youtubeVideoId": zod.string().nullish(),
@@ -66,7 +67,8 @@ export const GetJobResponse = zod.object({
   "driveFileName": zod.string(),
   "driveFileSizeBytes": zod.number().nullish(),
   "driveCreatedTime": zod.string().nullish(),
-  "status": zod.enum(['needs_review', 'pending', 'processing', 'done', 'failed']),
+  "status": zod.enum(['needs_review', 'pending', 'processing', 'done', 'failed', 'rejected', 'removed']),
+  "source": zod.enum(['pipeline', 'manual']).optional(),
   "proposedTitle": zod.string().nullish(),
   "proposedDescription": zod.string().nullish(),
   "youtubeVideoId": zod.string().nullish(),
@@ -99,7 +101,8 @@ export const RetryJobResponse = zod.object({
   "driveFileName": zod.string(),
   "driveFileSizeBytes": zod.number().nullish(),
   "driveCreatedTime": zod.string().nullish(),
-  "status": zod.enum(['needs_review', 'pending', 'processing', 'done', 'failed']),
+  "status": zod.enum(['needs_review', 'pending', 'processing', 'done', 'failed', 'rejected', 'removed']),
+  "source": zod.enum(['pipeline', 'manual']).optional(),
   "proposedTitle": zod.string().nullish(),
   "proposedDescription": zod.string().nullish(),
   "youtubeVideoId": zod.string().nullish(),
@@ -128,6 +131,36 @@ export const PatchJobBody = zod.object({
   "lectureName": zod.string().optional(),
   "proposedTitle": zod.string().optional(),
   "proposedDescription": zod.string().optional(),
+})
+
+
+/**
+ * @summary Rename the YouTube title of a done job
+ */
+export const RenameYoutubeTitleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RenameYoutubeTitleBody = zod.object({
+  "title": zod.string().min(1),
+})
+
+
+/**
+ * @summary Restore a removed job back to done (after re-adding it to the playlist)
+ */
+export const RestoreDoneJobParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Reconcile jobs against the current YouTube playlist
+ */
+export const ReconcilePlaylistResponse = zod.object({
+  "removed": zod.array(zod.number()),
+  "restored": zod.array(zod.number()),
+  "inserted": zod.array(zod.number()),
 })
 
 
