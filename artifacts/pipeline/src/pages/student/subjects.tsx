@@ -74,7 +74,7 @@ export default function StudentSubjects() {
                           {subject.total} lectures
                         </p>
                       </div>
-                      {done && <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />}
+                      {done && <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />}
                     </div>
                     <Progress value={pct} className="h-1.5" />
                     <p className="text-xs text-muted-foreground">

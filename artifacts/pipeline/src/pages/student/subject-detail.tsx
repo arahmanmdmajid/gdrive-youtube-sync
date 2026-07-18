@@ -27,7 +27,7 @@ function LectureRow({
 
   const statusIcon =
     lecture.progress === "completed" ? (
-      <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+      <CheckCircle2 className="h-5 w-5 text-success shrink-0" />
     ) : lecture.progress === "in_progress" ? (
       <PlayCircle className="h-5 w-5 text-primary shrink-0" />
     ) : (
