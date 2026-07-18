@@ -228,3 +228,26 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 }
+
+/* Buttons/badges apply "hover-elevate active-elevate-2" for hover/press
+   feedback, but no CSS ever defined those classes — so outline/ghost
+   buttons without their own explicit hover:bg-* looked unclickable
+   (e.g. Rename, View on YouTube). Implement them using the --elevate-1/2
+   tokens that were already wired up for this. */
+.hover-elevate {
+  position: relative;
+}
+.hover-elevate::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: transparent;
+}
+.hover-elevate:hover::after {
+  background: var(--elevate-1);
+}
+.hover-elevate.active-elevate-2:active::after {
+  background: var(--elevate-2);
+}
