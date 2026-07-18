@@ -1,13 +1,15 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Users, LogOut, GraduationCap } from "lucide-react";
+import { BookOpen, Users, LogOut, GraduationCap, Sun, Moon } from "lucide-react";
 import { getStoredUser } from "@/lib/auth";
 import { logout } from "@/lib/student-api";
+import { useTheme } from "@/lib/theme";
 
 export function StudentLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const user = getStoredUser();
+  const { theme, toggleTheme } = useTheme();
 
   const navigation = [
     { name: "Subjects", href: "/", icon: BookOpen },
@@ -34,6 +36,15 @@ export function StudentLayout({ children }: { children: ReactNode }) {
                 </Link>
               );
             })}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+              aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+            >
+              {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+            </Button>
             <Button variant="ghost" size="sm" className="gap-1.5" onClick={logout} title="Sign out">
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">{user?.displayName ?? "Sign out"}</span>

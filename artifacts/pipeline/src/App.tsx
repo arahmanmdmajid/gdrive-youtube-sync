@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { isLoggedIn } from "@/lib/auth";
+import { ThemeProvider } from "@/lib/theme";
 import StudentLogin from "@/pages/student/login";
 import StudentRegister from "@/pages/student/register";
 import StudentSubjects from "@/pages/student/subjects";
@@ -63,17 +64,21 @@ function StudentRouter() {
 
 function AdminRouter() {
   return (
-    <Suspense fallback={null}>
-      <Layout>
-        <Switch>
-          <Route path="/" component={Dashboard} />
-          <Route path="/jobs" component={Jobs} />
-          <Route path="/drive" component={Drive} />
-          <Route path="/settings" component={Settings} />
-          <Route component={NotFound} />
-        </Switch>
-      </Layout>
-    </Suspense>
+    // Admin dashboard keeps its original fixed dark appearance, independent
+    // of the student app's light/dark toggle.
+    <div className="dark bg-background text-foreground min-h-[100dvh]">
+      <Suspense fallback={null}>
+        <Layout>
+          <Switch>
+            <Route path="/" component={Dashboard} />
+            <Route path="/jobs" component={Jobs} />
+            <Route path="/drive" component={Drive} />
+            <Route path="/settings" component={Settings} />
+            <Route component={NotFound} />
+          </Switch>
+        </Layout>
+      </Suspense>
+    </div>
   );
 }
 
@@ -84,7 +89,13 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          {isStudent ? <StudentRouter /> : <AdminRouter />}
+          {isStudent ? (
+            <ThemeProvider>
+              <StudentRouter />
+            </ThemeProvider>
+          ) : (
+            <AdminRouter />
+          )}
         </WouterRouter>
         <Toaster />
       </TooltipProvider>
