@@ -92,7 +92,7 @@ export default function Dashboard() {
   const recentJobs = jobs?.slice(0, 5) || [];
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <div className="px-12 py-10 max-w-7xl mx-auto space-y-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold font-mono tracking-tight text-foreground">Mission Control</h1>
@@ -244,13 +244,13 @@ export default function Dashboard() {
 function StatCard({ title, value, icon, loading, highlight }: { title: string, value?: number, icon: React.ReactNode, loading: boolean, highlight?: boolean }) {
   return (
     <Card className={`shadow-sm ${highlight ? "border-amber-500/40 bg-amber-500/5" : "border-border"}`}>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium font-mono text-muted-foreground">
-          {title}
-        </CardTitle>
-        {icon}
-      </CardHeader>
-      <CardContent>
+      <CardContent className="p-6 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium font-mono text-muted-foreground">
+            {title}
+          </span>
+          {icon}
+        </div>
         {loading ? (
           <div className="h-8 w-16 bg-muted animate-pulse rounded" />
         ) : (

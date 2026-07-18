@@ -122,8 +122,8 @@
   --chart-4: 348 83% 47%;
   --chart-5: 280 65% 60%;
 
-  --app-font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --app-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --app-font-sans: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+  --app-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
   --radius: 0.75rem;
 

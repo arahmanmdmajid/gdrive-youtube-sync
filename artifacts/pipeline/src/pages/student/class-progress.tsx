@@ -33,7 +33,7 @@ export default function StudentClassProgress() {
         <Skeleton className="h-64" />
       ) : (
         <Card>
-          <CardContent className="py-4 space-y-4">
+          <CardContent className="p-6 space-y-4">
             {students.map((student) => {
               const pct = total ? Math.round((student.completed / total) * 100) : 0;
               const isMe = student.userId === me?.id;

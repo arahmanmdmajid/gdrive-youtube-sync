@@ -19,7 +19,7 @@ export function StudentLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-[100dvh] bg-background">
       <header className="border-b border-border sticky top-0 bg-background z-10">
-        <div className="mx-auto max-w-4xl px-4 py-3 flex items-center justify-between gap-3">
+        <div className="mx-auto max-w-3xl px-8 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 font-semibold text-sm">
             <GraduationCap className="h-5 w-5 text-primary" />
             <span>Class Lectures</span>
@@ -52,7 +52,7 @@ export function StudentLayout({ children }: { children: ReactNode }) {
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-4xl px-4 py-6">{children}</main>
+      <main className="mx-auto max-w-3xl px-8 py-12">{children}</main>
     </div>
   );
 }

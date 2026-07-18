@@ -47,19 +47,19 @@ export default function StudentSubjects() {
       )}
 
       {isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-28" />
           ))}
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2">
           {subjects.map((subject) => {
             const pct = subject.total ? Math.round((subject.completed / subject.total) * 100) : 0;
             const done = subject.completed === subject.total && subject.total > 0;
             return (
               <Link key={subject.serial} href={`/subject/${subject.serial}`}>
-                <Card className="h-full transition-colors hover:border-primary/50 cursor-pointer">
+                <Card className="h-full transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md hover:border-primary/50 cursor-pointer">
                   <CardContent className="py-4 space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
