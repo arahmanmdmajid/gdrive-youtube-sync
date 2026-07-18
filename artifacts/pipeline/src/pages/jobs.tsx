@@ -78,7 +78,7 @@ export default function Jobs() {
   const [statusFilter, setStatusFilter] = useState<ListJobsStatus | "all">("all");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
-  const [renameState, setRenameState] = useState<{ id: number; value: string } | null>(null);
+  const [renameState, setRenameState] = useState<{ id: number; value: string; selectedLectureName: string; driveCreatedTime?: string | null } | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const { toast } = useToast();
@@ -156,8 +156,8 @@ export default function Jobs() {
     }
   });
 
-  const startRename = (job: { id: number; youtubeTitle?: string | null }) => {
-    setRenameState({ id: job.id, value: job.youtubeTitle ?? "" });
+  const startRename = (job: { id: number; youtubeTitle?: string | null; driveCreatedTime?: string | null }) => {
+    setRenameState({ id: job.id, value: job.youtubeTitle ?? "", selectedLectureName: "", driveCreatedTime: job.driveCreatedTime });
     setTimeout(() => renameInputRef.current?.focus(), 0);
   };
   const commitRename = () => {
@@ -303,34 +303,61 @@ export default function Jobs() {
                         </div>
                       ) : job.youtubeTitle ? (
                         renameState?.id === job.id ? (
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <Input
-                              ref={renameInputRef}
-                              value={renameState.value}
-                              onChange={(e) => setRenameState({ ...renameState, value: e.target.value })}
-                              onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") cancelRename(); }}
-                              placeholder="{serial} {Subject} | {Teacher} | DD-MM-YYYY"
-                              className="flex-1 h-7 font-mono text-sm py-0"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={commitRename}
-                              disabled={!renameState.value.trim() || renameTitleMutation.isPending}
-                              className="h-7 w-7 text-green-600 hover:text-green-700 shrink-0"
-                              title="Save"
-                            >
-                              {renameTitleMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={cancelRename}
-                              className="h-7 w-7 text-muted-foreground hover:text-foreground shrink-0"
-                              title="Cancel"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
+                          <div className="space-y-1 mt-0.5 max-w-[320px]">
+                            {lectureNames && lectureNames.length > 0 && (
+                              <Select
+                                value={renameState.selectedLectureName || "none"}
+                                onValueChange={(v) => {
+                                  const name = v === "none" ? "" : v;
+                                  const value = name
+                                    ? `${name} | ${previewDate(renameState.driveCreatedTime)}`
+                                    : renameState.value;
+                                  setRenameState({ ...renameState, selectedLectureName: name, value });
+                                  if (name) setTimeout(() => renameInputRef.current?.focus(), 0);
+                                }}
+                              >
+                                <SelectTrigger className="h-7 font-mono text-xs py-0">
+                                  <SelectValue placeholder="Pick a lecture name…" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none" className="text-muted-foreground">— custom title —</SelectItem>
+                                  {lectureNames.map((ln) => (
+                                    <SelectItem key={ln.id} value={ln.name} className="font-mono">
+                                      {ln.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                            <div className="flex items-center gap-1">
+                              <Input
+                                ref={renameInputRef}
+                                value={renameState.value}
+                                onChange={(e) => setRenameState({ ...renameState, value: e.target.value })}
+                                onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") cancelRename(); }}
+                                placeholder="{serial} {Subject} | {Teacher} | DD-MM-YYYY"
+                                className="flex-1 h-7 font-mono text-sm py-0"
+                              />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={commitRename}
+                                disabled={!renameState.value.trim() || renameTitleMutation.isPending}
+                                className="h-7 w-7 text-green-600 hover:text-green-700 shrink-0"
+                                title="Save"
+                              >
+                                {renameTitleMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={cancelRename}
+                                className="h-7 w-7 text-muted-foreground hover:text-foreground shrink-0"
+                                title="Cancel"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
                           </div>
                         ) : (
                           <a
