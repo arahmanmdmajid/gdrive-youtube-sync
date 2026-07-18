@@ -3,20 +3,42 @@ import { Link, useParams, useSearchParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, CheckCircle2, Circle, ExternalLink, Loader2, PlayCircle } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, Circle, ExternalLink, Loader2, PlayCircle, Undo2 } from "lucide-react";
 import { StudentLayout } from "@/components/student-layout";
 import { useSubjectLectures, useSetProgress, type Lecture } from "@/lib/student-api";
 
+/**
+ * Every lecture title in a subject repeats the "{serial} {subject}" and
+ * usually "{teacher}" too (both already shown in the page header), which
+ * pushes the one part that actually varies per row — the date — out of view
+ * on narrow screens. Strip what's redundant so the row shows just what's
+ * distinguishing. Older/manually-added titles don't all follow the same
+ * segment count (some skip the teacher), so this strips leading segments
+ * one at a time rather than requiring one exact combined prefix.
+ */
+function shortLectureLabel(title: string, subjectPrefix: string, teacherEn: string): string {
+  let rest = title.startsWith(subjectPrefix) ? title.slice(subjectPrefix.length) : title;
+  const segments = rest.split("|").map((s) => s.trim()).filter(Boolean);
+  if (segments[0] === teacherEn) segments.shift();
+  rest = segments.join(" · ").trim();
+  return rest || title;
+}
+
 function LectureRow({
   lecture,
+  subjectPrefix,
+  teacherEn,
   open,
   onToggleOpen,
 }: {
   lecture: Lecture;
+  subjectPrefix: string;
+  teacherEn: string;
   open: boolean;
   onToggleOpen: () => void;
 }) {
   const setProgress = useSetProgress();
+  const label = shortLectureLabel(lecture.title, subjectPrefix, teacherEn);
 
   function openPlayer() {
     onToggleOpen();
@@ -43,8 +65,9 @@ function LectureRow({
           onClick={openPlayer}
           className="flex-1 min-w-0 text-left"
           data-testid={`lecture-${lecture.id}`}
+          title={lecture.title}
         >
-          <p className="text-sm truncate">{lecture.title}</p>
+          <p className="text-sm truncate">{label}</p>
           <p className="text-xs text-muted-foreground">
             {lecture.progress === "completed"
               ? "Completed"
@@ -57,21 +80,23 @@ function LectureRow({
           <Button
             variant="outline"
             size="sm"
-            className="shrink-0"
+            className="shrink-0 gap-1.5"
             disabled={setProgress.isPending}
             onClick={() => setProgress.mutate({ jobId: lecture.id, status: "completed" })}
           >
-            {setProgress.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Mark completed"}
+            {setProgress.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            <span className="hidden sm:inline">Mark completed</span>
           </Button>
         ) : (
           <Button
             variant="ghost"
             size="sm"
-            className="shrink-0 text-muted-foreground"
+            className="shrink-0 gap-1.5 text-muted-foreground"
             disabled={setProgress.isPending}
             onClick={() => setProgress.mutate({ jobId: lecture.id, status: "in_progress" })}
           >
-            Undo
+            {setProgress.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
+            <span className="hidden sm:inline">Undo</span>
           </Button>
         )}
       </div>
@@ -116,6 +141,11 @@ export default function StudentSubjectDetail() {
 
   const lectures = data?.lectures ?? [];
   const completed = lectures.filter((l) => l.progress === "completed").length;
+  const subjectPrefix =
+    data?.subject && data.subject.serial !== "other"
+      ? `${data.subject.serial} ${data.subject.nameEn}`
+      : "";
+  const teacherEn = data?.subject.teacherEn ?? "";
 
   return (
     <StudentLayout>
@@ -149,6 +179,8 @@ export default function StudentSubjectDetail() {
                 <LectureRow
                   key={lecture.id}
                   lecture={lecture}
+                  subjectPrefix={subjectPrefix}
+                  teacherEn={teacherEn}
                   open={openId === lecture.id}
                   onToggleOpen={() => setOpenId(openId === lecture.id ? null : lecture.id)}
                 />
