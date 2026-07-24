@@ -20,10 +20,9 @@ const NotFound = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient();
 
-/** Admin accounts can only view class progress — bounce them off any other student route. */
+/** Admin accounts have full access, including student routes. */
 function RequireStudent({ children }: { children: React.ReactNode }) {
   if (!isLoggedIn()) return <Redirect to="/login" />;
-  if (getStoredUser()?.role === "admin") return <Redirect to="/class" />;
   return <>{children}</>;
 }
 

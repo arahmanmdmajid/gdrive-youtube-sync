@@ -13,7 +13,10 @@ export function StudentLayout({ children }: { children: ReactNode }) {
 
   const navigation =
     user?.role === "admin"
-      ? [{ name: "Class progress", href: "/class", icon: Users }]
+      ? [
+          { name: "Subjects", href: "/", icon: BookOpen },
+          { name: "Class progress", href: "/class", icon: Users },
+        ]
       : [{ name: "Subjects", href: "/", icon: BookOpen }];
 
   return (

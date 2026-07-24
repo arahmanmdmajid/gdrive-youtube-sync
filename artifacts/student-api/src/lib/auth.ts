@@ -50,15 +50,6 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-/** Blocks admin-role accounts from student-only routes (subjects, lecture browsing, progress). */
-export function requireStudentRole(req: Request, res: Response, next: NextFunction) {
-  if ((req as AuthedRequest).role === "admin") {
-    res.status(403).json({ error: "Admin accounts can only view class progress" });
-    return;
-  }
-  next();
-}
-
 /** Blocks student-role accounts from admin-only routes (class progress). */
 export function requireAdminRole(req: Request, res: Response, next: NextFunction) {
   if ((req as AuthedRequest).role !== "admin") {
