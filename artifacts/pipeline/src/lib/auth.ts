@@ -5,6 +5,7 @@ export interface StudentUser {
   id: number;
   username: string;
   displayName: string;
+  role: "student" | "admin";
 }
 
 export function getToken(): string | null {

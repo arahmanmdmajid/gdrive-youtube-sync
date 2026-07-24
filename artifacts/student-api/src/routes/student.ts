@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { db, jobsTable, lectureProgressTable, usersTable } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
-import { requireAuth, type AuthedRequest } from "../lib/auth";
+import { requireAuth, requireStudentRole, type AuthedRequest } from "../lib/auth";
 import { SUBJECTS, UNGROUPED_SERIAL, serialForTitle } from "../lib/subjects";
 import { progressSchema } from "../zod";
 
@@ -49,7 +49,7 @@ async function progressMap(userId: number): Promise<Map<number, string>> {
   return new Map(rows.map((r) => [r.jobId, r.status]));
 }
 
-router.get("/subjects", async (req: Request, res: Response) => {
+router.get("/subjects", requireStudentRole, async (req: Request, res: Response) => {
   const { userId } = req as AuthedRequest;
   const [lectures, progress] = await Promise.all([doneLectures(), progressMap(userId)]);
 
@@ -84,7 +84,7 @@ router.get("/subjects", async (req: Request, res: Response) => {
   res.json({ subjects });
 });
 
-router.get("/subjects/:serial/lectures", async (req: Request, res: Response) => {
+router.get("/subjects/:serial/lectures", requireStudentRole, async (req: Request, res: Response) => {
   const { userId } = req as AuthedRequest;
   const serial = req.params.serial!;
   const subject =
@@ -104,7 +104,7 @@ router.get("/subjects/:serial/lectures", async (req: Request, res: Response) => 
   res.json({ subject, lectures: result });
 });
 
-router.put("/progress/:jobId", async (req: Request, res: Response) => {
+router.put("/progress/:jobId", requireStudentRole, async (req: Request, res: Response) => {
   const { userId } = req as AuthedRequest;
   const jobId = Number(req.params.jobId);
   const parsed = progressSchema.safeParse(req.body);
@@ -153,6 +153,7 @@ router.get("/class-progress", async (_req: Request, res: Response) => {
     })
     .from(usersTable)
     .leftJoin(lectureProgressTable, eq(lectureProgressTable.userId, usersTable.id))
+    .where(eq(usersTable.role, "student"))
     .groupBy(usersTable.id, usersTable.displayName)
     .orderBy(usersTable.displayName);
 
@@ -166,7 +167,7 @@ router.get("/class-progress", async (_req: Request, res: Response) => {
   });
 });
 
-router.get("/continue", async (req: Request, res: Response) => {
+router.get("/continue", requireStudentRole, async (req: Request, res: Response) => {
   const { userId } = req as AuthedRequest;
   const [latest] = await db
     .select({ jobId: lectureProgressTable.jobId, updatedAt: lectureProgressTable.updatedAt })

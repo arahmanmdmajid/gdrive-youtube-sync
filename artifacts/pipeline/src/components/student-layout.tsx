@@ -11,10 +11,13 @@ export function StudentLayout({ children }: { children: ReactNode }) {
   const user = getStoredUser();
   const { theme, toggleTheme } = useTheme();
 
-  const navigation = [
-    { name: "Subjects", href: "/", icon: BookOpen },
-    { name: "Class progress", href: "/class", icon: Users },
-  ];
+  const navigation =
+    user?.role === "admin"
+      ? [{ name: "Class progress", href: "/class", icon: Users }]
+      : [
+          { name: "Subjects", href: "/", icon: BookOpen },
+          { name: "Class progress", href: "/class", icon: Users },
+        ];
 
   return (
     <div className="min-h-[100dvh] bg-background">

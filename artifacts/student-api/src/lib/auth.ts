@@ -18,12 +18,15 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash);
 }
 
-export function signToken(userId: number): string {
-  return jwt.sign({}, jwtSecret(), { subject: String(userId), expiresIn: TOKEN_TTL });
+export type UserRole = "student" | "admin";
+
+export function signToken(userId: number, role: UserRole): string {
+  return jwt.sign({ role }, jwtSecret(), { subject: String(userId), expiresIn: TOKEN_TTL });
 }
 
 export interface AuthedRequest extends Request {
   userId: number;
+  role: UserRole;
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -38,9 +41,20 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     const sub = typeof payload === "object" ? payload.sub : null;
     const userId = Number(sub);
     if (!userId) throw new Error("missing sub");
+    const role = typeof payload === "object" && payload.role === "admin" ? "admin" : "student";
     (req as AuthedRequest).userId = userId;
+    (req as AuthedRequest).role = role;
     next();
   } catch {
     res.status(401).json({ error: "Invalid or expired session" });
   }
+}
+
+/** Blocks admin-role accounts from student-only routes (subjects, lecture browsing, progress). */
+export function requireStudentRole(req: Request, res: Response, next: NextFunction) {
+  if ((req as AuthedRequest).role === "admin") {
+    res.status(403).json({ error: "Admin accounts can only view class progress" });
+    return;
+  }
+  next();
 }

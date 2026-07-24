@@ -6,8 +6,8 @@ import { registerSchema, loginSchema } from "../zod";
 
 const router: Router = Router();
 
-function publicUser(user: { id: number; username: string; displayName: string }) {
-  return { id: user.id, username: user.username, displayName: user.displayName };
+function publicUser(user: { id: number; username: string; displayName: string; role: string }) {
+  return { id: user.id, username: user.username, displayName: user.displayName, role: user.role };
 }
 
 router.post("/register", async (req: Request, res: Response) => {
@@ -36,7 +36,7 @@ router.post("/register", async (req: Request, res: Response) => {
     .values({ username: normalized, passwordHash, displayName })
     .returning();
 
-  res.status(201).json({ token: signToken(user!.id), user: publicUser(user!) });
+  res.status(201).json({ token: signToken(user!.id, user!.role as "student" | "admin"), user: publicUser(user!) });
 });
 
 router.post("/login", async (req: Request, res: Response) => {
@@ -58,7 +58,7 @@ router.post("/login", async (req: Request, res: Response) => {
     return;
   }
 
-  res.json({ token: signToken(user.id), user: publicUser(user) });
+  res.json({ token: signToken(user.id, user.role as "student" | "admin"), user: publicUser(user) });
 });
 
 router.get("/me", requireAuth, async (req: Request, res: Response) => {

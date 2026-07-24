@@ -3,7 +3,7 @@ import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { isLoggedIn } from "@/lib/auth";
+import { isLoggedIn, getStoredUser } from "@/lib/auth";
 import { ThemeProvider } from "@/lib/theme";
 import StudentLogin from "@/pages/student/login";
 import StudentRegister from "@/pages/student/register";
@@ -22,6 +22,13 @@ const queryClient = new QueryClient();
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   if (!isLoggedIn()) return <Redirect to="/login" />;
+  return <>{children}</>;
+}
+
+/** Admin accounts can only view class progress — bounce them off any other student route. */
+function RequireStudent({ children }: { children: React.ReactNode }) {
+  if (!isLoggedIn()) return <Redirect to="/login" />;
+  if (getStoredUser()?.role === "admin") return <Redirect to="/class" />;
   return <>{children}</>;
 }
 
@@ -44,14 +51,14 @@ function StudentRouter() {
         </RedirectIfAuthed>
       </Route>
       <Route path="/">
-        <RequireAuth>
+        <RequireStudent>
           <StudentSubjects />
-        </RequireAuth>
+        </RequireStudent>
       </Route>
       <Route path="/subject/:serial">
-        <RequireAuth>
+        <RequireStudent>
           <StudentSubjectDetail />
-        </RequireAuth>
+        </RequireStudent>
       </Route>
       <Route path="/class">
         <RequireAuth>

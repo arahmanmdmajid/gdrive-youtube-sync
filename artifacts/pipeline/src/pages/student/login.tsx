@@ -17,7 +17,7 @@ export default function StudentLogin() {
     e.preventDefault();
     login.mutate(
       { username, password },
-      { onSuccess: () => navigate("/") },
+      { onSuccess: (data) => navigate(data.user.role === "admin" ? "/class" : "/") },
     );
   }
 
