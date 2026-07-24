@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { db, jobsTable, lectureProgressTable, usersTable } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
-import { requireAuth, requireStudentRole, type AuthedRequest } from "../lib/auth";
+import { requireAuth, requireStudentRole, requireAdminRole, type AuthedRequest } from "../lib/auth";
 import { SUBJECTS, UNGROUPED_SERIAL, serialForTitle } from "../lib/subjects";
 import { progressSchema } from "../zod";
 
@@ -141,7 +141,7 @@ router.put("/progress/:jobId", requireStudentRole, async (req: Request, res: Res
   res.json({ jobId, status });
 });
 
-router.get("/class-progress", async (_req: Request, res: Response) => {
+router.get("/class-progress", requireAdminRole, async (_req: Request, res: Response) => {
   const lectures = await doneLectures();
   const total = lectures.length;
 

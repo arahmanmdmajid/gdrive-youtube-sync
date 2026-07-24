@@ -58,3 +58,12 @@ export function requireStudentRole(req: Request, res: Response, next: NextFuncti
   }
   next();
 }
+
+/** Blocks student-role accounts from admin-only routes (class progress). */
+export function requireAdminRole(req: Request, res: Response, next: NextFunction) {
+  if ((req as AuthedRequest).role !== "admin") {
+    res.status(403).json({ error: "Class progress is only available to admin accounts" });
+    return;
+  }
+  next();
+}

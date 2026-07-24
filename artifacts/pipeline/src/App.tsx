@@ -20,15 +20,17 @@ const NotFound = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient();
 
-function RequireAuth({ children }: { children: React.ReactNode }) {
-  if (!isLoggedIn()) return <Redirect to="/login" />;
-  return <>{children}</>;
-}
-
 /** Admin accounts can only view class progress — bounce them off any other student route. */
 function RequireStudent({ children }: { children: React.ReactNode }) {
   if (!isLoggedIn()) return <Redirect to="/login" />;
   if (getStoredUser()?.role === "admin") return <Redirect to="/class" />;
+  return <>{children}</>;
+}
+
+/** Class progress is admin-only — bounce students back to their subjects. */
+function RequireAdmin({ children }: { children: React.ReactNode }) {
+  if (!isLoggedIn()) return <Redirect to="/login" />;
+  if (getStoredUser()?.role !== "admin") return <Redirect to="/" />;
   return <>{children}</>;
 }
 
@@ -61,9 +63,9 @@ function StudentRouter() {
         </RequireStudent>
       </Route>
       <Route path="/class">
-        <RequireAuth>
+        <RequireAdmin>
           <StudentClassProgress />
-        </RequireAuth>
+        </RequireAdmin>
       </Route>
     </Switch>
   );
