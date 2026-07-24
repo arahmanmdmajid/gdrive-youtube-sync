@@ -38,6 +38,7 @@ export const settingsTable = pgTable("settings", {
   youtubePlaylistName: text("youtube_playlist_name"),
   autoSync: boolean("auto_sync").notNull().default(false),
   syncIntervalMinutes: integer("sync_interval_minutes").notNull().default(60),
+  inviteCode: text("invite_code"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 

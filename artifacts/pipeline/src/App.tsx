@@ -10,6 +10,8 @@ import StudentRegister from "@/pages/student/register";
 import StudentSubjects from "@/pages/student/subjects";
 import StudentSubjectDetail from "@/pages/student/subject-detail";
 import StudentClassProgress from "@/pages/student/class-progress";
+import AdminStudents from "@/pages/student/admin-students";
+import AdminStudentDetail from "@/pages/student/admin-student-detail";
 
 const Layout = lazy(() => import("@/components/layout").then((m) => ({ default: m.Layout })));
 const Dashboard = lazy(() => import("@/pages/dashboard"));
@@ -64,6 +66,16 @@ function StudentRouter() {
       <Route path="/class">
         <RequireAdmin>
           <StudentClassProgress />
+        </RequireAdmin>
+      </Route>
+      <Route path="/admin/students">
+        <RequireAdmin>
+          <AdminStudents />
+        </RequireAdmin>
+      </Route>
+      <Route path="/admin/students/:id">
+        <RequireAdmin>
+          <AdminStudentDetail />
         </RequireAdmin>
       </Route>
     </Switch>

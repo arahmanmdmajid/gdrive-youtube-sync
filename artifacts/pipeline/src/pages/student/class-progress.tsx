@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -38,7 +39,11 @@ export default function StudentClassProgress() {
               const pct = total ? Math.round((student.completed / total) * 100) : 0;
               const isMe = student.userId === me?.id;
               return (
-                <div key={student.userId} className="flex items-center gap-3">
+                <Link
+                  key={student.userId}
+                  href={`/admin/students/${student.userId}`}
+                  className="flex items-center gap-3 -mx-2 px-2 py-1 rounded-md hover:bg-muted/40"
+                >
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
                     {initials(student.displayName)}
                   </div>
@@ -50,7 +55,7 @@ export default function StudentClassProgress() {
                   <span className="w-16 shrink-0 text-right text-xs text-muted-foreground">
                     {student.completed} · {pct}%
                   </span>
-                </div>
+                </Link>
               );
             })}
             {students.length === 0 && (

@@ -19,3 +19,11 @@ export const loginSchema = z.object({
 export const progressSchema = z.object({
   status: z.enum(["not_started", "in_progress", "completed"]),
 });
+
+export const resetPasswordSchema = z.object({
+  password: z.string().min(6).max(100),
+});
+
+export const inviteCodeSchema = z.object({
+  inviteCode: z.string().min(4).max(50),
+});

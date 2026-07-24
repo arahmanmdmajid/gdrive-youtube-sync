@@ -29,6 +29,19 @@ export interface ClassStudent {
   completed: number;
 }
 
+export interface RosterStudent {
+  id: number;
+  username: string;
+  displayName: string;
+  createdAt: string;
+  completed: number;
+}
+
+export interface StudentDrilldown {
+  student: { id: number; username: string; displayName: string };
+  subjects: Subject[];
+}
+
 interface AuthResponse {
   token: string;
   user: StudentUser;
@@ -98,5 +111,62 @@ export function useContinueLecture() {
     queryKey: ["student", "continue"],
     queryFn: () =>
       customFetch<{ lecture: (Omit<Lecture, "progress"> & { serial: string }) | null }>("/api/student/continue"),
+  });
+}
+
+export function useAdminStudents() {
+  return useQuery({
+    queryKey: ["admin", "students"],
+    queryFn: () => customFetch<{ total: number; students: RosterStudent[] }>("/api/admin/students"),
+  });
+}
+
+export function useStudentDrilldown(id: number) {
+  return useQuery({
+    queryKey: ["admin", "students", id],
+    queryFn: () => customFetch<StudentDrilldown>(`/api/admin/students/${id}/progress`),
+    enabled: Number.isFinite(id),
+  });
+}
+
+export function useResetStudentPassword() {
+  return useMutation({
+    mutationFn: ({ id, password }: { id: number; password: string }) =>
+      customFetch<{ ok: true }>(`/api/admin/students/${id}/password`, {
+        method: "PUT",
+        body: JSON.stringify({ password }),
+      }),
+  });
+}
+
+export function useRemoveStudent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: number }) => customFetch<{ ok: true }>(`/api/admin/students/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin"] });
+      queryClient.invalidateQueries({ queryKey: ["student", "class-progress"] });
+    },
+  });
+}
+
+export function useInviteCode() {
+  return useQuery({
+    queryKey: ["admin", "invite-code"],
+    queryFn: () => customFetch<{ inviteCode: string | null }>("/api/admin/invite-code"),
+  });
+}
+
+export function useUpdateInviteCode() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (inviteCode: string) =>
+      customFetch<{ inviteCode: string }>("/api/admin/invite-code", {
+        method: "PUT",
+        body: JSON.stringify({ inviteCode }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "invite-code"] });
+    },
   });
 }

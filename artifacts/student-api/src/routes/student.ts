@@ -9,7 +9,7 @@ const router: Router = Router();
 
 router.use(requireAuth);
 
-interface LectureRow {
+export interface LectureRow {
   id: number;
   title: string;
   youtubeVideoId: string | null;
@@ -17,7 +17,7 @@ interface LectureRow {
   driveCreatedTime: string | null;
 }
 
-async function doneLectures(): Promise<LectureRow[]> {
+export async function doneLectures(): Promise<LectureRow[]> {
   const rows = await db
     .select({
       id: jobsTable.id,
@@ -41,7 +41,7 @@ async function doneLectures(): Promise<LectureRow[]> {
     .sort((a, b) => (a.driveCreatedTime ?? "").localeCompare(b.driveCreatedTime ?? ""));
 }
 
-async function progressMap(userId: number): Promise<Map<number, string>> {
+export async function progressMap(userId: number): Promise<Map<number, string>> {
   const rows = await db
     .select({ jobId: lectureProgressTable.jobId, status: lectureProgressTable.status })
     .from(lectureProgressTable)
@@ -49,10 +49,7 @@ async function progressMap(userId: number): Promise<Map<number, string>> {
   return new Map(rows.map((r) => [r.jobId, r.status]));
 }
 
-router.get("/subjects", async (req: Request, res: Response) => {
-  const { userId } = req as AuthedRequest;
-  const [lectures, progress] = await Promise.all([doneLectures(), progressMap(userId)]);
-
+export function groupBySubject(lectures: LectureRow[], progress: Map<number, string>) {
   const groups = new Map<string, { total: number; completed: number; inProgress: number; latest: string | null }>();
   for (const lecture of lectures) {
     const serial = serialForTitle(lecture.title);
@@ -80,8 +77,13 @@ router.get("/subjects", async (req: Request, res: Response) => {
       ...ungrouped,
     });
   }
+  return subjects;
+}
 
-  res.json({ subjects });
+router.get("/subjects", async (req: Request, res: Response) => {
+  const { userId } = req as AuthedRequest;
+  const [lectures, progress] = await Promise.all([doneLectures(), progressMap(userId)]);
+  res.json({ subjects: groupBySubject(lectures, progress) });
 });
 
 router.get("/subjects/:serial/lectures", async (req: Request, res: Response) => {

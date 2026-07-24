@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { hashPassword, verifyPassword, signToken, requireAuth, type AuthedRequest } from "../lib/auth";
+import { getInviteCode } from "../lib/settings";
 import { registerSchema, loginSchema } from "../zod";
 
 const router: Router = Router();
@@ -18,7 +19,8 @@ router.post("/register", async (req: Request, res: Response) => {
   }
   const { inviteCode, username, password, displayName } = parsed.data;
 
-  if (inviteCode !== process.env.INVITE_CODE) {
+  const effectiveCode = await getInviteCode();
+  if (!effectiveCode || inviteCode !== effectiveCode) {
     res.status(403).json({ error: "Invalid invite code" });
     return;
   }
