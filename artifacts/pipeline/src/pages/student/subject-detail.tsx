@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,6 +6,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Check, CheckCircle2, Circle, ExternalLink, Loader2, PlayCircle, Undo2 } from "lucide-react";
 import { StudentLayout } from "@/components/student-layout";
 import { useSubjectLectures, useSetProgress, type Lecture } from "@/lib/student-api";
+import {
+  loadYouTubeIframeApi,
+  getResumePosition,
+  saveResumePosition,
+  clearResumePosition,
+  withResumeParam,
+} from "@/lib/youtube-player";
+
+// How often to persist the playback position while a lecture is playing.
+const PROGRESS_POLL_MS = 3000;
 
 /**
  * Every lecture title in a subject repeats the "{serial} {subject}" and
@@ -30,15 +40,20 @@ function LectureRow({
   teacherEn,
   open,
   onToggleOpen,
+  onEnded,
 }: {
   lecture: Lecture;
   subjectPrefix: string;
   teacherEn: string;
   open: boolean;
   onToggleOpen: () => void;
+  onEnded: () => void;
 }) {
   const setProgress = useSetProgress();
   const label = shortLectureLabel(lecture.title, subjectPrefix, teacherEn);
+  const playerContainerId = `yt-player-${lecture.id}`;
+  const playerRef = useRef<YT.Player | null>(null);
+  const [resumeSeconds, setResumeSeconds] = useState(() => getResumePosition(lecture.id));
 
   function openPlayer() {
     onToggleOpen();
@@ -46,6 +61,55 @@ function LectureRow({
       setProgress.mutate({ jobId: lecture.id, status: "in_progress" });
     }
   }
+
+  useEffect(() => {
+    if (!open || !lecture.youtubeVideoId) return;
+
+    let cancelled = false;
+    let pollId: ReturnType<typeof setInterval> | undefined;
+
+    loadYouTubeIframeApi().then((YTApi) => {
+      if (cancelled) return;
+      const player = new YTApi.Player(playerContainerId, {
+        videoId: lecture.youtubeVideoId!,
+        host: "https://www.youtube-nocookie.com",
+        playerVars: { enablejsapi: 1, playsinline: 1, origin: window.location.origin },
+        events: {
+          onReady: (event) => {
+            const saved = getResumePosition(lecture.id);
+            if (saved > 0) event.target.seekTo(saved, true);
+          },
+          onStateChange: (event) => {
+            if (pollId) clearInterval(pollId);
+
+            if (event.data === YTApi.PlayerState.PLAYING) {
+              pollId = setInterval(() => {
+                const seconds = player.getCurrentTime();
+                setResumeSeconds(seconds);
+                saveResumePosition(lecture.id, seconds);
+              }, PROGRESS_POLL_MS);
+            } else if (event.data === YTApi.PlayerState.ENDED) {
+              clearResumePosition(lecture.id);
+              setResumeSeconds(0);
+              if (lecture.progress !== "completed") {
+                setProgress.mutate({ jobId: lecture.id, status: "completed" });
+              }
+              onEnded();
+            }
+          },
+        },
+      });
+      playerRef.current = player;
+    });
+
+    return () => {
+      cancelled = true;
+      if (pollId) clearInterval(pollId);
+      playerRef.current?.destroy();
+      playerRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, lecture.youtubeVideoId]);
 
   const statusIcon =
     lecture.progress === "completed" ? (
@@ -103,17 +167,11 @@ function LectureRow({
       {open && lecture.youtubeVideoId && (
         <div className="pb-4 space-y-2">
           <div className="aspect-video w-full overflow-hidden rounded-md border border-border bg-black">
-            <iframe
-              src={`https://www.youtube-nocookie.com/embed/${lecture.youtubeVideoId}`}
-              title={lecture.title}
-              className="h-full w-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
+            <div id={playerContainerId} className="h-full w-full" />
           </div>
           {lecture.youtubeUrl && (
             <a
-              href={lecture.youtubeUrl}
+              href={withResumeParam(lecture.youtubeUrl, resumeSeconds)}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
@@ -175,7 +233,7 @@ export default function StudentSubjectDetail() {
 
           <Card>
             <CardContent className="py-1">
-              {lectures.map((lecture) => (
+              {lectures.map((lecture, index) => (
                 <LectureRow
                   key={lecture.id}
                   lecture={lecture}
@@ -183,6 +241,10 @@ export default function StudentSubjectDetail() {
                   teacherEn={teacherEn}
                   open={openId === lecture.id}
                   onToggleOpen={() => setOpenId(openId === lecture.id ? null : lecture.id)}
+                  onEnded={() => {
+                    const next = lectures[index + 1];
+                    if (next?.youtubeVideoId) setOpenId(next.id);
+                  }}
                 />
               ))}
               {lectures.length === 0 && (
