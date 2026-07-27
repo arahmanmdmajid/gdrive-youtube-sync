@@ -17,6 +17,21 @@ import {
 // How often to persist the playback position while a lecture is playing.
 const PROGRESS_POLL_MS = 3000;
 
+// Class titles bake the date in as literal text — either "DD-MM-YYYY" or,
+// for some older manually-added titles, an already-spelled-out "D Month YYYY".
+const DATE_SEGMENT_RE = /^\d{2}-\d{2}-\d{4}$|^\d{1,2}\s+[A-Za-z]+\s+\d{4}$/;
+
+// Schedule dates are all PKT (UTC+5, no DST), matching the offset the
+// pipeline uses when it stamps a PKT date onto the title in the first place.
+const PKT_OFFSET_MS = 5 * 60 * 60 * 1000;
+
+function formatPktDate(isoTimestamp: string): string {
+  const pkt = new Date(new Date(isoTimestamp).getTime() + PKT_OFFSET_MS);
+  const weekday = pkt.toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
+  const month = pkt.toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
+  return `${weekday}, ${pkt.getUTCDate()} ${month} ${pkt.getUTCFullYear()}`;
+}
+
 /**
  * Every lecture title in a subject repeats the "{serial} {subject}" and
  * usually "{teacher}" too (both already shown in the page header), which
@@ -25,11 +40,27 @@ const PROGRESS_POLL_MS = 3000;
  * distinguishing. Older/manually-added titles don't all follow the same
  * segment count (some skip the teacher), so this strips leading segments
  * one at a time rather than requiring one exact combined prefix.
+ *
+ * The date segment itself gets replaced with a freshly formatted version
+ * derived from driveCreatedTime (not parsed from the title text), so every
+ * row shows a consistent "Weekday, D Month YYYY" regardless of how the
+ * original title happened to write the date.
  */
-function shortLectureLabel(title: string, subjectPrefix: string, teacherEn: string): string {
+function shortLectureLabel(
+  title: string,
+  subjectPrefix: string,
+  teacherEn: string,
+  driveCreatedTime: string | null,
+): string {
   let rest = title.startsWith(subjectPrefix) ? title.slice(subjectPrefix.length) : title;
   const segments = rest.split("|").map((s) => s.trim()).filter(Boolean);
   if (segments[0] === teacherEn) segments.shift();
+  if (driveCreatedTime) {
+    const formatted = formatPktDate(driveCreatedTime);
+    for (let i = 0; i < segments.length; i++) {
+      if (DATE_SEGMENT_RE.test(segments[i]!)) segments[i] = formatted;
+    }
+  }
   rest = segments.join(" · ").trim();
   return rest || title;
 }
@@ -50,7 +81,7 @@ function LectureRow({
   onEnded: () => void;
 }) {
   const setProgress = useSetProgress();
-  const label = shortLectureLabel(lecture.title, subjectPrefix, teacherEn);
+  const label = shortLectureLabel(lecture.title, subjectPrefix, teacherEn, lecture.driveCreatedTime);
   const playerContainerId = `yt-player-${lecture.id}`;
   const playerRef = useRef<YT.Player | null>(null);
   const [resumeSeconds, setResumeSeconds] = useState(() => getResumePosition(lecture.id));
