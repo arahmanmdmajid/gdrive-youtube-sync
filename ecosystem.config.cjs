@@ -39,5 +39,21 @@ module.exports = {
         NODE_ENV: "development",
       },
     },
+    {
+      name: "dtt-student-frontend",
+      cwd: "./artifacts/pipeline",
+      script: "node",
+      args: "--experimental-vm-modules start.mjs",
+      watch: false,
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 3000,
+      env: {
+        NODE_ENV: "development",
+        PORT: "5174",
+        VITE_APP_MODE: "student",
+        API_PORT: "5001",
+      },
+    },
   ],
 };

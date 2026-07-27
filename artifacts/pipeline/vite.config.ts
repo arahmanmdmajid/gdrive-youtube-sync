@@ -40,6 +40,12 @@ export default defineConfig({
     dedupe: ["react", "react-dom"],
   },
   root: path.resolve(import.meta.dirname),
+  // Admin and student mode run as separate dev-server processes against the same
+  // root; a shared dep cache would race between them during optimizeDeps.
+  cacheDir: path.resolve(
+    import.meta.dirname,
+    "node_modules/.vite" + (process.env.VITE_APP_MODE === "student" ? "-student" : ""),
+  ),
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
