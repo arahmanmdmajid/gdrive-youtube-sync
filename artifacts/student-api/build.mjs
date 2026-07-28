@@ -22,10 +22,7 @@ async function buildAll() {
     outdir: distDir,
     outExtension: { ".js": ".mjs" },
     logLevel: "info",
-    // Packages that can't be bundled (native modules etc.) — same list as api-server.
-    // googleapis is externalized too, matching api-server: it's a huge non-tree-shakeable
-    // barrel package, so bundling it inline balloons the output ~15x for no benefit —
-    // it's a real runtime dependency either way, installed via the deploy's package manager.
+    // Packages that can't be bundled (native modules etc.) — same list as api-server
     external: [
       "*.node",
       "bcrypt",
@@ -33,7 +30,6 @@ async function buildAll() {
       "pg-native",
       "fsevents",
       "lightningcss",
-      "googleapis",
     ],
     sourcemap: "linked",
     plugins: [
