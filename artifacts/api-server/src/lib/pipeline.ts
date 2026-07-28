@@ -32,7 +32,19 @@ function isAuthError(err: unknown): boolean {
 /** Returns true if the error is a YouTube quota exceeded error. */
 export function isQuotaError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  return /quota exceeded|quotaExceeded|rateLimitExceeded/i.test(msg);
+  return /quota exceeded|quotaExceeded|rateLimitExceeded|exceeded your.*quota|exceeded.*quota/i.test(msg);
+}
+
+/**
+ * Returns true if the error is YouTube's per-account thumbnail-upload rate
+ * limit ("too many thumbnails recently") — separate from the daily upload
+ * quota, undocumented reset window, worth its own detection so bulk
+ * thumbnail application can stop cleanly instead of failing every
+ * remaining job in the batch.
+ */
+export function isThumbnailRateLimited(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /too many thumbnails/i.test(msg);
 }
 
 /**

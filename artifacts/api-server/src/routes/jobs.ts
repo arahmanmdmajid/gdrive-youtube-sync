@@ -12,7 +12,7 @@ import {
   PatchJobBody,
   RenameYoutubeTitleBody,
 } from "@workspace/api-zod";
-import { runPipelineScan, processJobById, processAllPendingJobs, reconcilePlaylist, isQuotaError } from "../lib/pipeline";
+import { runPipelineScan, processJobById, processAllPendingJobs, reconcilePlaylist, isQuotaError, isThumbnailRateLimited } from "../lib/pipeline";
 import { scanAudioLibrary } from "../lib/audioPipeline";
 import { getYoutubeClient } from "../lib/youtubeClient";
 import { extractSerial, getSubjectThumbnailPath } from "../lib/thumbnails";
@@ -606,8 +606,8 @@ router.post("/pipeline/apply-thumbnails", async (req, res) => {
       });
       applied++;
     } catch (err) {
-      if (isQuotaError(err)) {
-        logger.warn({ applied, skipped, failed }, "Bulk thumbnail apply stopped: quota exceeded — re-run later");
+      if (isQuotaError(err) || isThumbnailRateLimited(err)) {
+        logger.warn({ applied, skipped, failed }, "Bulk thumbnail apply stopped: rate-limited — re-run later");
         break;
       }
       logger.warn({ jobId: job.id, err }, "Bulk thumbnail apply: failed for job, continuing");
