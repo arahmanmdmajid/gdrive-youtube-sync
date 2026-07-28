@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Check, CheckCircle2, Circle, ExternalLink, Loader2, PlayCircle, Undo2 } from "lucide-react";
 import { StudentLayout } from "@/components/student-layout";
 import { useSubjectLectures, useSetProgress, type Lecture } from "@/lib/student-api";
+import { getBaseUrl } from "@workspace/api-client-react";
 import {
   loadYouTubeIframeApi,
   getResumePosition,
@@ -222,14 +223,16 @@ function LectureRow({
       )}
       {open && lecture.contentType === "audio" && lecture.driveFileId && (
         <div className="pb-4 space-y-2">
-          <div className="w-full overflow-hidden rounded-md border border-border bg-black">
-            <iframe
-              src={`https://drive.google.com/file/d/${lecture.driveFileId}/preview`}
-              title={lecture.title}
-              className="h-20 w-full"
-              allow="autoplay"
-            />
-          </div>
+          {/*
+            Streamed through our own backend rather than Drive's embedded
+            player: Drive's audio preview requires an authenticated Google
+            session cookie, which third-party cookie partitioning (e.g.
+            Firefox's Total Cookie Protection) blocks even for
+            "anyone with link" files, breaking playback entirely.
+          */}
+          <audio controls preload="none" className="w-full" src={`${getBaseUrl() ?? ""}/api/student/audio-stream/${lecture.driveFileId}`}>
+            Your browser does not support the audio element.
+          </audio>
           <a
             href={`https://drive.google.com/file/d/${lecture.driveFileId}/view`}
             target="_blank"
