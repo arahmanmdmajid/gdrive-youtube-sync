@@ -12,12 +12,15 @@ import StudentSubjectDetail from "@/pages/student/subject-detail";
 import StudentClassProgress from "@/pages/student/class-progress";
 import AdminStudents from "@/pages/student/admin-students";
 import AdminStudentDetail from "@/pages/student/admin-student-detail";
+import StudentLibrary from "@/pages/student/library";
+import StudentLibraryCategory from "@/pages/student/library-category";
 
 const Layout = lazy(() => import("@/components/layout").then((m) => ({ default: m.Layout })));
 const Dashboard = lazy(() => import("@/pages/dashboard"));
 const Jobs = lazy(() => import("@/pages/jobs"));
 const Drive = lazy(() => import("@/pages/drive"));
 const Settings = lazy(() => import("@/pages/settings"));
+const Library = lazy(() => import("@/pages/library"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient();
@@ -63,6 +66,16 @@ function StudentRouter() {
           <StudentSubjectDetail />
         </RequireStudent>
       </Route>
+      <Route path="/library">
+        <RequireStudent>
+          <StudentLibrary />
+        </RequireStudent>
+      </Route>
+      <Route path="/library/:category">
+        <RequireStudent>
+          <StudentLibraryCategory />
+        </RequireStudent>
+      </Route>
       <Route path="/class">
         <RequireAdmin>
           <StudentClassProgress />
@@ -91,6 +104,7 @@ function AdminRouter() {
           <Route path="/jobs" component={Jobs} />
           <Route path="/drive" component={Drive} />
           <Route path="/settings" component={Settings} />
+          <Route path="/library" component={Library} />
           <Route component={NotFound} />
         </Switch>
       </Layout>

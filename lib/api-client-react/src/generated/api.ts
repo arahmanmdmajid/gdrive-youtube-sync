@@ -31,11 +31,14 @@ import type {
   Job,
   JobInput,
   LectureName,
+  LibraryResource,
   ListJobsParams,
   PipelineStats,
+  ScanLibraryResult,
   Settings,
   SettingsInput,
   TriggerResult,
+  UpdateLibraryResourceInput,
   YoutubePlaylist
 } from './api.schemas';
 
@@ -1326,4 +1329,111 @@ export const useUpdateLectureName = <TError = ErrorType<unknown>, TContext = unk
   options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateLectureName>>, TError, { id: number; data: BodyType<UpdateLectureNameInput> }, TContext>; request?: SecondParameter<typeof customFetch> }
 ): UseMutationResult<Awaited<ReturnType<typeof updateLectureName>>, TError, { id: number; data: BodyType<UpdateLectureNameInput> }, TContext> =>
   useMutation(getUpdateLectureNameMutationOptions(options));
+
+
+// ─── Library ────────────────────────────────────────────────────────────────
+
+export const getListLibraryResourcesUrl = (params?: { category?: string }) => {
+  const search = params?.category ? `?category=${encodeURIComponent(params.category)}` : '';
+  return `/api/library/resources${search}`;
+};
+
+export const listLibraryResources = async (params?: { category?: string }, options?: RequestInit): Promise<LibraryResource[]> =>
+  customFetch<LibraryResource[]>(getListLibraryResourcesUrl(params), { ...options, method: 'GET' });
+
+export const getListLibraryResourcesQueryKey = (params?: { category?: string }) => [`/api/library/resources`, ...(params ? [params] : [])] as const;
+
+export const getListLibraryResourcesQueryOptions = <TData = Awaited<ReturnType<typeof listLibraryResources>>, TError = ErrorType<unknown>>(
+  params?: { category?: string }, options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listLibraryResources>>, TError, TData>; request?: SecondParameter<typeof customFetch> }
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getListLibraryResourcesQueryKey(params);
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listLibraryResources>>> = ({ signal }) =>
+    listLibraryResources(params, { signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof listLibraryResources>>, TError, TData> & { queryKey: QueryKey };
+};
+
+export function useListLibraryResources<TData = Awaited<ReturnType<typeof listLibraryResources>>, TError = ErrorType<unknown>>(
+  params?: { category?: string }, options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listLibraryResources>>, TError, TData>; request?: SecondParameter<typeof customFetch> }
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListLibraryResourcesQueryOptions(params, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getScanLibraryUrl = () => `/api/library/scan`;
+
+export const scanLibrary = async (options?: RequestInit): Promise<ScanLibraryResult> =>
+  customFetch<ScanLibraryResult>(getScanLibraryUrl(), { ...options, method: 'POST' });
+
+export const getScanLibraryMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof scanLibrary>>, TError, void, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof scanLibrary>>, TError, void, TContext> => {
+  const mutationKey = ['scanLibrary'];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof scanLibrary>>, void> = () => scanLibrary(requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useScanLibrary = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof scanLibrary>>, TError, void, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof scanLibrary>>, TError, void, TContext> =>
+  useMutation(getScanLibraryMutationOptions(options));
+
+export const getUpdateLibraryResourceUrl = (id: number) => `/api/library/resources/${id}`;
+
+export const updateLibraryResource = async (id: number, body: UpdateLibraryResourceInput, options?: RequestInit): Promise<LibraryResource> =>
+  customFetch<LibraryResource>(getUpdateLibraryResourceUrl(id), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(body),
+  });
+
+export const getUpdateLibraryResourceMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateLibraryResource>>, TError, { id: number; data: BodyType<UpdateLibraryResourceInput> }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof updateLibraryResource>>, TError, { id: number; data: BodyType<UpdateLibraryResourceInput> }, TContext> => {
+  const mutationKey = ['updateLibraryResource'];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateLibraryResource>>, { id: number; data: BodyType<UpdateLibraryResourceInput> }> = ({ id, data }) =>
+    updateLibraryResource(id, data, requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useUpdateLibraryResource = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateLibraryResource>>, TError, { id: number; data: BodyType<UpdateLibraryResourceInput> }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof updateLibraryResource>>, TError, { id: number; data: BodyType<UpdateLibraryResourceInput> }, TContext> =>
+  useMutation(getUpdateLibraryResourceMutationOptions(options));
+
+export const getDeleteLibraryResourceUrl = (id: number) => `/api/library/resources/${id}`;
+
+export const deleteLibraryResource = async (id: number, options?: RequestInit): Promise<void> =>
+  customFetch<void>(getDeleteLibraryResourceUrl(id), { ...options, method: 'DELETE' });
+
+export const getDeleteLibraryResourceMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteLibraryResource>>, TError, { id: number }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof deleteLibraryResource>>, TError, { id: number }, TContext> => {
+  const mutationKey = ['deleteLibraryResource'];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteLibraryResource>>, { id: number }> = ({ id }) =>
+    deleteLibraryResource(id, requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useDeleteLibraryResource = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteLibraryResource>>, TError, { id: number }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof deleteLibraryResource>>, TError, { id: number }, TContext> =>
+  useMutation(getDeleteLibraryResourceMutationOptions(options));
 

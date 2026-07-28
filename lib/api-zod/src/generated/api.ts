@@ -227,6 +227,8 @@ export const GetSettingsResponse = zod.object({
   "driveFolderName": zod.string().nullish(),
   "youtubePlaylistId": zod.string().nullable(),
   "youtubePlaylistName": zod.string().nullish(),
+  "libraryFolderId": zod.string().nullish(),
+  "libraryFolderName": zod.string().nullish(),
   "autoSync": zod.boolean(),
   "syncIntervalMinutes": zod.number()
 })
@@ -240,6 +242,8 @@ export const UpdateSettingsBody = zod.object({
   "driveFolderName": zod.string().nullish(),
   "youtubePlaylistId": zod.string().nullish(),
   "youtubePlaylistName": zod.string().nullish(),
+  "libraryFolderId": zod.string().nullish(),
+  "libraryFolderName": zod.string().nullish(),
   "autoSync": zod.boolean().optional(),
   "syncIntervalMinutes": zod.number().optional()
 })
@@ -249,8 +253,64 @@ export const UpdateSettingsResponse = zod.object({
   "driveFolderName": zod.string().nullish(),
   "youtubePlaylistId": zod.string().nullable(),
   "youtubePlaylistName": zod.string().nullish(),
+  "libraryFolderId": zod.string().nullish(),
+  "libraryFolderName": zod.string().nullish(),
   "autoSync": zod.boolean(),
   "syncIntervalMinutes": zod.number()
+})
+
+
+/**
+ * @summary Scan the configured library Drive folder and catalog new PDFs
+ */
+export const ScanLibraryResponse = zod.object({
+  "scanned": zod.number(),
+  "inserted": zod.number(),
+  "skipped": zod.number(),
+  "unmappedFolders": zod.array(zod.string())
+})
+
+
+/**
+ * @summary List catalogued library resources
+ */
+export const ListLibraryResourcesQueryParams = zod.object({
+  "category": zod.string().optional()
+})
+
+export const ListLibraryResourcesResponseItem = zod.object({
+  "id": zod.number(),
+  "driveFileId": zod.string(),
+  "driveFileName": zod.string(),
+  "title": zod.string(),
+  "category": zod.string(),
+  "sizeBytes": zod.number().nullish(),
+  "visible": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListLibraryResourcesResponse = zod.array(ListLibraryResourcesResponseItem)
+
+
+/**
+ * @summary Edit a library resource's title, category, or visibility
+ */
+export const PatchLibraryResourceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const PatchLibraryResourceBody = zod.object({
+  "title": zod.string().min(1).optional(),
+  "category": zod.string().min(1).optional(),
+  "visible": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Remove a library resource's catalog entry (does not touch the Drive file)
+ */
+export const DeleteLibraryResourceParams = zod.object({
+  "id": zod.coerce.number()
 })
 
 

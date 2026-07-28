@@ -23,6 +23,20 @@ export interface Lecture {
   progress: ProgressStatus;
 }
 
+export interface LibraryResource {
+  id: number;
+  driveFileId: string;
+  title: string;
+  category: string;
+  sizeBytes: number | null;
+}
+
+export interface LibraryCategoryGroup {
+  code: string;
+  label: string;
+  resources: LibraryResource[];
+}
+
 export interface ClassStudent {
   userId: number;
   displayName: string;
@@ -82,6 +96,13 @@ export function useSubjectLectures(serial: string) {
       customFetch<{ subject: Pick<Subject, "serial" | "nameEn" | "teacherEn">; lectures: Lecture[] }>(
         `/api/student/subjects/${serial}/lectures`,
       ),
+  });
+}
+
+export function useLibrary() {
+  return useQuery({
+    queryKey: ["student", "library"],
+    queryFn: () => customFetch<{ categories: LibraryCategoryGroup[] }>("/api/student/library"),
   });
 }
 

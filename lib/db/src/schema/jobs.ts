@@ -34,6 +34,8 @@ export const settingsTable = pgTable("settings", {
   id: serial("id").primaryKey(),
   driveFolderId: text("drive_folder_id"),
   driveFolderName: text("drive_folder_name"),
+  libraryFolderId: text("library_folder_id"),
+  libraryFolderName: text("library_folder_name"),
   youtubePlaylistId: text("youtube_playlist_id"),
   youtubePlaylistName: text("youtube_playlist_name"),
   autoSync: boolean("auto_sync").notNull().default(false),

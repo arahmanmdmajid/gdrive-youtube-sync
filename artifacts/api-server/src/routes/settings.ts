@@ -37,6 +37,8 @@ function formatSettings(s: typeof settingsTable.$inferSelect | null) {
       driveFolderName: null,
       youtubePlaylistId: null,
       youtubePlaylistName: null,
+      libraryFolderId: null,
+      libraryFolderName: null,
       autoSync: false,
       syncIntervalMinutes: 60,
     };
@@ -46,6 +48,8 @@ function formatSettings(s: typeof settingsTable.$inferSelect | null) {
     driveFolderName: s.driveFolderName ?? null,
     youtubePlaylistId: s.youtubePlaylistId ?? null,
     youtubePlaylistName: s.youtubePlaylistName ?? null,
+    libraryFolderId: s.libraryFolderId ?? null,
+    libraryFolderName: s.libraryFolderName ?? null,
     autoSync: s.autoSync,
     syncIntervalMinutes: s.syncIntervalMinutes,
   };

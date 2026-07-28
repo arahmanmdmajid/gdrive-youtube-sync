@@ -148,6 +148,10 @@ export interface Settings {
   youtubePlaylistId: string | null;
   /** @nullable */
   youtubePlaylistName?: string | null;
+  /** @nullable */
+  libraryFolderId?: string | null;
+  /** @nullable */
+  libraryFolderName?: string | null;
   autoSync: boolean;
   syncIntervalMinutes: number;
 }
@@ -161,8 +165,38 @@ export interface SettingsInput {
   youtubePlaylistId?: string | null;
   /** @nullable */
   youtubePlaylistName?: string | null;
+  /** @nullable */
+  libraryFolderId?: string | null;
+  /** @nullable */
+  libraryFolderName?: string | null;
   autoSync?: boolean;
   syncIntervalMinutes?: number;
+}
+
+export interface LibraryResource {
+  id: number;
+  driveFileId: string;
+  driveFileName: string;
+  title: string;
+  category: string;
+  /** @nullable */
+  sizeBytes?: number | null;
+  visible: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateLibraryResourceInput {
+  title?: string;
+  category?: string;
+  visible?: boolean;
+}
+
+export interface ScanLibraryResult {
+  scanned: number;
+  inserted: number;
+  skipped: number;
+  unmappedFolders: string[];
 }
 
 export type ListJobsParams = {

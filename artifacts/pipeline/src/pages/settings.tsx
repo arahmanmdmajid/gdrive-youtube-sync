@@ -26,6 +26,7 @@ import { Loader2, Save, Plus, Trash2, Pencil, Check, X } from "lucide-react";
 const formSchema = z.object({
   driveFolderId: z.string().min(1, "Drive folder ID is required"),
   youtubePlaylistId: z.string().nullable().optional(),
+  libraryFolderId: z.string().nullable().optional(),
   autoSync: z.boolean().default(false),
   syncIntervalMinutes: z.coerce.number().min(5).max(1440).default(60),
 });
@@ -120,6 +121,7 @@ export default function Settings() {
     defaultValues: {
       driveFolderId: "",
       youtubePlaylistId: null,
+      libraryFolderId: null,
       autoSync: false,
       syncIntervalMinutes: 60,
     },
@@ -130,6 +132,7 @@ export default function Settings() {
       form.reset({
         driveFolderId: settings.driveFolderId || "",
         youtubePlaylistId: settings.youtubePlaylistId,
+        libraryFolderId: settings.libraryFolderId ?? null,
         autoSync: settings.autoSync,
         syncIntervalMinutes: settings.syncIntervalMinutes,
       });
@@ -145,7 +148,8 @@ export default function Settings() {
         ...values,
         youtubePlaylistName: playlistName,
         // Send null if empty string
-        youtubePlaylistId: values.youtubePlaylistId || null
+        youtubePlaylistId: values.youtubePlaylistId || null,
+        libraryFolderId: values.libraryFolderId || null,
       }
     });
   };
@@ -184,6 +188,37 @@ export default function Settings() {
                     </FormControl>
                     <FormDescription>
                       The ID from the Google Drive folder URL.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          <Card className="border-border shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg font-mono">Library Configuration</CardTitle>
+              <CardDescription>Where should the pipeline look for books/PDFs to catalog?</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="libraryFolderId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="font-mono">Books Folder ID</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="e.g. 1a2B3c4D5e6F7g8H9i0J"
+                        className="font-mono text-sm"
+                        {...field}
+                        value={field.value ?? ""}
+                        data-testid="input-library-folder"
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      The Drive folder containing category subfolders of PDFs (books/past papers).
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

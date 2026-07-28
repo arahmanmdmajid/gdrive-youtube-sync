@@ -5,6 +5,7 @@ import driveRouter from "./drive";
 import youtubeRouter from "./youtube";
 import settingsRouter from "./settings";
 import lectureNamesRouter from "./lectureNames";
+import libraryRouter from "./library";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(driveRouter);
 router.use(youtubeRouter);
 router.use(settingsRouter);
 router.use(lectureNamesRouter);
+router.use(libraryRouter);
 
 export default router;
