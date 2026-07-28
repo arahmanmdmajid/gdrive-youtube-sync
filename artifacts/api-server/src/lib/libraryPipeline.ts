@@ -1,39 +1,8 @@
 import { db, libraryResourcesTable, settingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { getDriveClient } from "./driveClient";
+import { getDriveClient, listChildren, FOLDER_MIME_TYPE } from "./driveClient";
 import { FOLDER_NAME_TO_CATEGORY } from "./libraryCategories";
 import { logger } from "./logger";
-
-interface DriveFile {
-  id: string;
-  name: string;
-  mimeType: string;
-  size?: string;
-}
-
-const FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
-
-async function listChildren(
-  drive: NonNullable<ReturnType<typeof getDriveClient>>,
-  folderId: string,
-  mimeTypeFilter: string,
-): Promise<DriveFile[]> {
-  let files: DriveFile[] = [];
-  let pageToken: string | undefined;
-
-  do {
-    const response = await drive.files.list({
-      q: `'${folderId}' in parents and ${mimeTypeFilter} and trashed = false`,
-      fields: "nextPageToken,files(id,name,mimeType,size)",
-      pageSize: 200,
-      ...(pageToken ? { pageToken } : {}),
-    });
-    files = files.concat((response.data.files ?? []) as DriveFile[]);
-    pageToken = response.data.nextPageToken ?? undefined;
-  } while (pageToken);
-
-  return files;
-}
 
 /** Strips the .pdf extension and collapses repeated whitespace/underscores for a cleaner display title. */
 function cleanTitle(fileName: string): string {

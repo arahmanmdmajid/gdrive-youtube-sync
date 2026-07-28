@@ -29,6 +29,13 @@ export const JobSource = {
   manual: 'manual',
 } as const;
 
+export type JobContentType = typeof JobContentType[keyof typeof JobContentType];
+
+export const JobContentType = {
+  video: 'video',
+  audio: 'audio',
+} as const;
+
 export interface Job {
   id: number;
   driveFileId: string;
@@ -39,6 +46,7 @@ export interface Job {
   driveCreatedTime?: string | null;
   status: JobStatus;
   source?: JobSource;
+  contentType: JobContentType;
   /** @nullable */
   proposedTitle?: string | null;
   /** @nullable */
@@ -152,6 +160,10 @@ export interface Settings {
   libraryFolderId?: string | null;
   /** @nullable */
   libraryFolderName?: string | null;
+  /** @nullable */
+  audioFolderId?: string | null;
+  /** @nullable */
+  audioFolderName?: string | null;
   autoSync: boolean;
   syncIntervalMinutes: number;
 }
@@ -169,6 +181,10 @@ export interface SettingsInput {
   libraryFolderId?: string | null;
   /** @nullable */
   libraryFolderName?: string | null;
+  /** @nullable */
+  audioFolderId?: string | null;
+  /** @nullable */
+  audioFolderName?: string | null;
   autoSync?: boolean;
   syncIntervalMinutes?: number;
 }
@@ -197,6 +213,14 @@ export interface ScanLibraryResult {
   inserted: number;
   skipped: number;
   unmappedFolders: string[];
+}
+
+export interface ScanAudioResult {
+  scanned: number;
+  inserted: number;
+  skipped: number;
+  matched: number;
+  unmatched: number;
 }
 
 export type ListJobsParams = {

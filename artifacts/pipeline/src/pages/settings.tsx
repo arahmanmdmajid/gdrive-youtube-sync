@@ -27,6 +27,7 @@ const formSchema = z.object({
   driveFolderId: z.string().min(1, "Drive folder ID is required"),
   youtubePlaylistId: z.string().nullable().optional(),
   libraryFolderId: z.string().nullable().optional(),
+  audioFolderId: z.string().nullable().optional(),
   autoSync: z.boolean().default(false),
   syncIntervalMinutes: z.coerce.number().min(5).max(1440).default(60),
 });
@@ -122,6 +123,7 @@ export default function Settings() {
       driveFolderId: "",
       youtubePlaylistId: null,
       libraryFolderId: null,
+      audioFolderId: null,
       autoSync: false,
       syncIntervalMinutes: 60,
     },
@@ -133,6 +135,7 @@ export default function Settings() {
         driveFolderId: settings.driveFolderId || "",
         youtubePlaylistId: settings.youtubePlaylistId,
         libraryFolderId: settings.libraryFolderId ?? null,
+        audioFolderId: settings.audioFolderId ?? null,
         autoSync: settings.autoSync,
         syncIntervalMinutes: settings.syncIntervalMinutes,
       });
@@ -142,7 +145,7 @@ export default function Settings() {
   const onSubmit = (values: FormValues) => {
     // Find playlist name for the id
     const playlistName = playlists?.find(p => p.id === values.youtubePlaylistId)?.title || null;
-    
+
     updateMutation.mutate({
       data: {
         ...values,
@@ -150,6 +153,7 @@ export default function Settings() {
         // Send null if empty string
         youtubePlaylistId: values.youtubePlaylistId || null,
         libraryFolderId: values.libraryFolderId || null,
+        audioFolderId: values.audioFolderId || null,
       }
     });
   };
@@ -219,6 +223,37 @@ export default function Settings() {
                     </FormControl>
                     <FormDescription>
                       The Drive folder containing category subfolders of PDFs (books/past papers).
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          <Card className="border-border shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg font-mono">Audio Library Configuration</CardTitle>
+              <CardDescription>Where should the pipeline look for audio lectures to catalog?</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="audioFolderId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="font-mono">Recordings Folder ID</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="e.g. 1a2B3c4D5e6F7g8H9i0J"
+                        className="font-mono text-sm"
+                        {...field}
+                        value={field.value ?? ""}
+                        data-testid="input-audio-folder"
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      The Drive folder containing subject-group subfolders of audio (.mp3) lectures.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

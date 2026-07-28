@@ -229,6 +229,8 @@ export const GetSettingsResponse = zod.object({
   "youtubePlaylistName": zod.string().nullish(),
   "libraryFolderId": zod.string().nullish(),
   "libraryFolderName": zod.string().nullish(),
+  "audioFolderId": zod.string().nullish(),
+  "audioFolderName": zod.string().nullish(),
   "autoSync": zod.boolean(),
   "syncIntervalMinutes": zod.number()
 })
@@ -244,6 +246,8 @@ export const UpdateSettingsBody = zod.object({
   "youtubePlaylistName": zod.string().nullish(),
   "libraryFolderId": zod.string().nullish(),
   "libraryFolderName": zod.string().nullish(),
+  "audioFolderId": zod.string().nullish(),
+  "audioFolderName": zod.string().nullish(),
   "autoSync": zod.boolean().optional(),
   "syncIntervalMinutes": zod.number().optional()
 })
@@ -255,6 +259,8 @@ export const UpdateSettingsResponse = zod.object({
   "youtubePlaylistName": zod.string().nullish(),
   "libraryFolderId": zod.string().nullish(),
   "libraryFolderName": zod.string().nullish(),
+  "audioFolderId": zod.string().nullish(),
+  "audioFolderName": zod.string().nullish(),
   "autoSync": zod.boolean(),
   "syncIntervalMinutes": zod.number()
 })

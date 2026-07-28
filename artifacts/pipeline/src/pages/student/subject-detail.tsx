@@ -101,7 +101,7 @@ function LectureRow({
   }
 
   useEffect(() => {
-    if (!open || !lecture.youtubeVideoId) return;
+    if (!open || lecture.contentType !== "video" || !lecture.youtubeVideoId) return;
 
     let cancelled = false;
     let pollId: ReturnType<typeof setInterval> | undefined;
@@ -202,7 +202,7 @@ function LectureRow({
           </Button>
         )}
       </div>
-      {open && lecture.youtubeVideoId && (
+      {open && lecture.contentType === "video" && lecture.youtubeVideoId && (
         <div className="pb-4 space-y-2">
           <div className="aspect-video w-full overflow-hidden rounded-md border border-border bg-black">
             <div id={playerContainerId} className="h-full w-full" />
@@ -218,6 +218,27 @@ function LectureRow({
               Open on YouTube
             </a>
           )}
+        </div>
+      )}
+      {open && lecture.contentType === "audio" && lecture.driveFileId && (
+        <div className="pb-4 space-y-2">
+          <div className="w-full overflow-hidden rounded-md border border-border bg-black">
+            <iframe
+              src={`https://drive.google.com/file/d/${lecture.driveFileId}/preview`}
+              title={lecture.title}
+              className="h-20 w-full"
+              allow="autoplay"
+            />
+          </div>
+          <a
+            href={`https://drive.google.com/file/d/${lecture.driveFileId}/view`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <ExternalLink className="h-3 w-3" />
+            Open in Drive
+          </a>
         </div>
       )}
     </div>
@@ -281,7 +302,7 @@ export default function StudentSubjectDetail() {
                   onToggleOpen={() => setOpenId(openId === lecture.id ? null : lecture.id)}
                   onEnded={() => {
                     const next = lectures[index + 1];
-                    if (next?.youtubeVideoId) setOpenId(next.id);
+                    if (next) setOpenId(next.id);
                   }}
                 />
               ))}

@@ -17,8 +17,10 @@ export type ProgressStatus = "not_started" | "in_progress" | "completed";
 export interface Lecture {
   id: number;
   title: string;
+  contentType: "video" | "audio";
   youtubeVideoId: string | null;
   youtubeUrl: string | null;
+  driveFileId: string;
   driveCreatedTime: string | null;
   progress: ProgressStatus;
 }

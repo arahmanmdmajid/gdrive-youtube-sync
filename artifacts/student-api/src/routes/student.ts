@@ -12,8 +12,10 @@ router.use(requireAuth);
 export interface LectureRow {
   id: number;
   title: string;
+  contentType: "video" | "audio";
   youtubeVideoId: string | null;
   youtubeUrl: string | null;
+  driveFileId: string;
   driveCreatedTime: string | null;
 }
 
@@ -23,8 +25,10 @@ export async function doneLectures(): Promise<LectureRow[]> {
       id: jobsTable.id,
       proposedTitle: jobsTable.proposedTitle,
       youtubeTitle: jobsTable.youtubeTitle,
+      contentType: jobsTable.contentType,
       youtubeVideoId: jobsTable.youtubeVideoId,
       youtubeUrl: jobsTable.youtubeUrl,
+      driveFileId: jobsTable.driveFileId,
       driveCreatedTime: jobsTable.driveCreatedTime,
     })
     .from(jobsTable)
@@ -34,8 +38,10 @@ export async function doneLectures(): Promise<LectureRow[]> {
     .map((row) => ({
       id: row.id,
       title: row.youtubeTitle ?? row.proposedTitle ?? "Untitled lecture",
+      contentType: row.contentType,
       youtubeVideoId: row.youtubeVideoId,
       youtubeUrl: row.youtubeUrl,
+      driveFileId: row.driveFileId,
       driveCreatedTime: row.driveCreatedTime,
     }))
     .sort((a, b) => (a.driveCreatedTime ?? "").localeCompare(b.driveCreatedTime ?? ""));

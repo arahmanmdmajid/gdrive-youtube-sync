@@ -1,6 +1,7 @@
 import {
   useGetPipelineStats,
   useTriggerPipeline,
+  useScanAudioLibrary,
   useTriggerUpload,
   useReconcilePlaylist,
   useListJobs,
@@ -13,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Play, Upload, Activity, Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, ArrowRight, ListVideo } from "lucide-react";
+import { Play, Upload, Activity, Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, ArrowRight, ListVideo, Headphones } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "wouter";
 
@@ -69,6 +70,26 @@ export default function Dashboard() {
     }
   });
 
+  const scanAudioMutation = useScanAudioLibrary({
+    mutation: {
+      onSuccess: (data) => {
+        queryClient.invalidateQueries({ queryKey: getGetPipelineStatsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
+        toast({
+          title: "Audio Scan Complete",
+          description: `Scanned ${data.scanned} files. Catalogued ${data.inserted} new (${data.matched} auto-matched, ${data.unmatched} need manual review). Skipped ${data.skipped} already known.`,
+        });
+      },
+      onError: (err: any) => {
+        toast({
+          title: "Audio Scan Failed",
+          description: err?.message || "An error occurred while scanning the Recordings folder.",
+          variant: "destructive"
+        });
+      }
+    }
+  });
+
   const reconcileMutation = useReconcilePlaylist({
     mutation: {
       onSuccess: (data) => {
@@ -112,6 +133,20 @@ export default function Dashboard() {
               <Play className="h-4 w-4" />
             )}
             Scan Now
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => scanAudioMutation.mutate()}
+            disabled={scanAudioMutation.isPending}
+            data-testid="button-scan-audio"
+            className="gap-2 font-mono font-medium"
+          >
+            {scanAudioMutation.isPending ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <Headphones className="h-4 w-4" />
+            )}
+            Scan Audio Recordings
           </Button>
           <Button
             variant="outline"

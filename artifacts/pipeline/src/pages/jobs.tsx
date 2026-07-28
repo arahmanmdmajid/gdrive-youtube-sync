@@ -78,7 +78,7 @@ export default function Jobs() {
   const [statusFilter, setStatusFilter] = useState<ListJobsStatus | "all">("all");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
-  const [renameState, setRenameState] = useState<{ id: number; value: string; selectedLectureName: string; driveCreatedTime?: string | null } | null>(null);
+  const [renameState, setRenameState] = useState<{ id: number; value: string; selectedLectureName: string; driveCreatedTime?: string | null; contentType?: string } | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const { toast } = useToast();
@@ -130,13 +130,14 @@ export default function Jobs() {
     }
   });
 
-  // Used when editing title of an already-pending job (no status change)
+  // Used when editing title of an already-pending job, or a done audio job (no status change)
   const patchMutation = usePatchJob({
     mutation: {
       onSuccess: () => {
         invalidate();
         toast({ title: "Title updated" });
         setEditState(null);
+        setRenameState(null);
       },
       onError: () => toast({ title: "Failed to update title", variant: "destructive" })
     }
@@ -156,19 +157,26 @@ export default function Jobs() {
     }
   });
 
-  const startRename = (job: { id: number; youtubeTitle?: string | null; driveCreatedTime?: string | null }) => {
-    setRenameState({ id: job.id, value: job.youtubeTitle ?? "", selectedLectureName: "", driveCreatedTime: job.driveCreatedTime });
+  const startRename = (job: { id: number; contentType?: string; youtubeTitle?: string | null; proposedTitle?: string | null; driveCreatedTime?: string | null }) => {
+    // Audio jobs have no YouTube title to sync — their title lives in proposedTitle.
+    const currentTitle = job.contentType === "audio" ? (job.proposedTitle ?? "") : (job.youtubeTitle ?? "");
+    setRenameState({ id: job.id, value: currentTitle, selectedLectureName: "", driveCreatedTime: job.driveCreatedTime, contentType: job.contentType });
     setTimeout(() => renameInputRef.current?.focus(), 0);
   };
   const commitRename = () => {
     if (!renameState) return;
     const trimmed = renameState.value.trim();
     if (!trimmed) return;
-    renameTitleMutation.mutate({ id: renameState.id, data: { title: trimmed } });
+    if (renameState.contentType === "audio") {
+      patchMutation.mutate({ id: renameState.id, data: { proposedTitle: trimmed } });
+    } else {
+      renameTitleMutation.mutate({ id: renameState.id, data: { title: trimmed } });
+    }
   };
   const cancelRename = () => setRenameState(null);
 
   const isSubmitting = approveMutation.isPending || patchMutation.isPending;
+  const renameSubmitting = renameTitleMutation.isPending || patchMutation.isPending;
 
   const openEdit = (job: {
     id: number;
@@ -301,76 +309,74 @@ export default function Jobs() {
                         <div className="truncate text-sm font-medium text-amber-700 dark:text-amber-400 mt-0.5" title={job.proposedTitle}>
                           {job.proposedTitle}
                         </div>
-                      ) : job.youtubeTitle ? (
-                        renameState?.id === job.id ? (
-                          <div className="space-y-1 mt-0.5 max-w-[320px]">
-                            {lectureNames && lectureNames.length > 0 && (
-                              <Select
-                                value={renameState.selectedLectureName || "none"}
-                                onValueChange={(v) => {
-                                  const name = v === "none" ? "" : v;
-                                  const value = name
-                                    ? `${name} | ${previewDate(renameState.driveCreatedTime)}`
-                                    : renameState.value;
-                                  setRenameState({ ...renameState, selectedLectureName: name, value });
-                                  if (name) setTimeout(() => renameInputRef.current?.focus(), 0);
-                                }}
-                              >
-                                <SelectTrigger className="h-7 font-mono text-xs py-0">
-                                  <SelectValue placeholder="Pick a lecture name…" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="none" className="text-muted-foreground">— custom title —</SelectItem>
-                                  {lectureNames.map((ln) => (
-                                    <SelectItem key={ln.id} value={ln.name} className="font-mono">
-                                      {ln.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                            <div className="flex items-center gap-1">
-                              <Input
-                                ref={renameInputRef}
-                                value={renameState.value}
-                                onChange={(e) => setRenameState({ ...renameState, value: e.target.value })}
-                                onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") cancelRename(); }}
-                                placeholder="{serial} {Subject} | {Teacher} | DD-MM-YYYY"
-                                className="flex-1 h-7 font-mono text-sm py-0"
-                              />
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={commitRename}
-                                disabled={!renameState.value.trim() || renameTitleMutation.isPending}
-                                className="h-7 w-7 text-green-600 hover:text-green-700 shrink-0"
-                                title="Save"
-                              >
-                                {renameTitleMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={cancelRename}
-                                className="h-7 w-7 text-muted-foreground hover:text-foreground shrink-0"
-                                title="Cancel"
-                              >
-                                <X className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
+                      ) : renameState?.id === job.id ? (
+                        <div className="space-y-1 mt-0.5 max-w-[320px]">
+                          {lectureNames && lectureNames.length > 0 && (
+                            <Select
+                              value={renameState.selectedLectureName || "none"}
+                              onValueChange={(v) => {
+                                const name = v === "none" ? "" : v;
+                                const value = name
+                                  ? `${name} | ${previewDate(renameState.driveCreatedTime)}`
+                                  : renameState.value;
+                                setRenameState({ ...renameState, selectedLectureName: name, value });
+                                if (name) setTimeout(() => renameInputRef.current?.focus(), 0);
+                              }}
+                            >
+                              <SelectTrigger className="h-7 font-mono text-xs py-0">
+                                <SelectValue placeholder="Pick a lecture name…" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none" className="text-muted-foreground">— custom title —</SelectItem>
+                                {lectureNames.map((ln) => (
+                                  <SelectItem key={ln.id} value={ln.name} className="font-mono">
+                                    {ln.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                          <div className="flex items-center gap-1">
+                            <Input
+                              ref={renameInputRef}
+                              value={renameState.value}
+                              onChange={(e) => setRenameState({ ...renameState, value: e.target.value })}
+                              onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") cancelRename(); }}
+                              placeholder="{serial} {Subject} | {Teacher} | DD-MM-YYYY"
+                              className="flex-1 h-7 font-mono text-sm py-0"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={commitRename}
+                              disabled={!renameState.value.trim() || renameSubmitting}
+                              className="h-7 w-7 text-green-600 hover:text-green-700 shrink-0"
+                              title="Save"
+                            >
+                              {renameSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={cancelRename}
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground shrink-0"
+                              title="Cancel"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
-                        ) : (
-                          <a
-                            href={job.youtubeUrl ?? undefined}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="group/yt inline-flex items-center gap-1 text-sm font-medium hover:text-primary transition-colors mt-0.5"
-                            title={job.youtubeTitle}
-                          >
-                            <span className="truncate max-w-[270px]">{job.youtubeTitle}</span>
-                            <ExternalLink className="h-3 w-3 shrink-0 opacity-0 group-hover/yt:opacity-60 transition-opacity" />
-                          </a>
-                        )
+                        </div>
+                      ) : job.youtubeTitle ? (
+                        <a
+                          href={job.youtubeUrl ?? undefined}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group/yt inline-flex items-center gap-1 text-sm font-medium hover:text-primary transition-colors mt-0.5"
+                          title={job.youtubeTitle}
+                        >
+                          <span className="truncate max-w-[270px]">{job.youtubeTitle}</span>
+                          <ExternalLink className="h-3 w-3 shrink-0 opacity-0 group-hover/yt:opacity-60 transition-opacity" />
+                        </a>
                       ) : job.proposedTitle ? (
                         <div className="truncate text-sm font-medium text-foreground mt-0.5" title={job.proposedTitle}>
                           {job.proposedTitle}
@@ -389,7 +395,14 @@ export default function Jobs() {
                     </TableCell>
 
                     <TableCell>
-                      <JobStatusBadge status={job.status} />
+                      <div className="flex items-center gap-1.5">
+                        <JobStatusBadge status={job.status} />
+                        {job.contentType === "audio" && (
+                          <Badge variant="outline" className="text-[10px] font-mono uppercase tracking-wider">
+                            Audio
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
 
                     <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
@@ -464,7 +477,7 @@ export default function Jobs() {
                             variant="outline"
                             size="icon"
                             onClick={() => startRename(job)}
-                            title="Rename YouTube title"
+                            title={job.contentType === "audio" ? "Rename title" : "Rename YouTube title"}
                             data-testid={`btn-rename-${job.id}`}
                           >
                             <Pencil className="h-4 w-4 text-muted-foreground hover:text-foreground" />

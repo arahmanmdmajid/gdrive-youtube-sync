@@ -12,6 +12,7 @@ import {
   RenameYoutubeTitleBody,
 } from "@workspace/api-zod";
 import { runPipelineScan, processJobById, processAllPendingJobs, reconcilePlaylist } from "../lib/pipeline";
+import { scanAudioLibrary } from "../lib/audioPipeline";
 import { getYoutubeClient } from "../lib/youtubeClient";
 import {
   getPktInfo,
@@ -318,14 +319,17 @@ router.post("/jobs/:id/approve", async (req, res) => {
     res.status(409).json({ error: "Job is not in needs_review status" });
     return;
   }
-  const updates: Record<string, unknown> = { status: "pending", updatedAt: new Date() };
+  // Audio has no upload step — approval is publication. Video still queues for upload.
+  const nextStatus = job.contentType === "audio" ? "done" : "pending";
+  const updates: Record<string, unknown> = { status: nextStatus, updatedAt: new Date() };
   if (bodyParsed.data.proposedDescription !== undefined) updates.proposedDescription = bodyParsed.data.proposedDescription;
 
   if (bodyParsed.data.lectureName) {
     // Build title from lecture name + date, assigning part numbers across sibling jobs
     await buildAndAssignTitle(id, bodyParsed.data.lectureName, job.driveCreatedTime ?? null);
-    // Cascade: update subsequent same-day needs_review jobs with the next schedule slots
-    if (job.driveCreatedTime && job.driveFileName) {
+    // Cascade: update subsequent same-day needs_review jobs with the next schedule slots.
+    // Meaningless for audio (no Meet-schedule slot concept), so only applies to video.
+    if (job.contentType !== "audio" && job.driveCreatedTime && job.driveFileName) {
       await cascadeSlotAssignment(id, bodyParsed.data.lectureName, job.driveCreatedTime, job.driveFileName);
     }
     await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
@@ -355,7 +359,11 @@ router.patch("/jobs/:id", async (req, res) => {
     res.status(404).json({ error: "Not found" });
     return;
   }
-  if (!["needs_review", "pending"].includes(job.status)) {
+  // Audio jobs go straight to "done" on approval (no upload step), so allow
+  // editing a done audio job's title too — video's equivalent is the
+  // YouTube-specific PATCH /jobs/:id/youtube-title route below.
+  const editableStatus = ["needs_review", "pending"].includes(job.status) || (job.status === "done" && job.contentType === "audio");
+  if (!editableStatus) {
     res.status(409).json({ error: "Can only edit jobs with needs_review or pending status" });
     return;
   }
@@ -364,8 +372,9 @@ router.patch("/jobs/:id", async (req, res) => {
 
   if (bodyParsed.data.lectureName) {
     await buildAndAssignTitle(id, bodyParsed.data.lectureName, job.driveCreatedTime ?? null);
-    // Cascade: update subsequent same-day needs_review jobs with the next schedule slots
-    if (job.driveCreatedTime && job.driveFileName) {
+    // Cascade: update subsequent same-day needs_review jobs with the next schedule slots.
+    // Meaningless for audio (no Meet-schedule slot concept), so only applies to video.
+    if (job.contentType !== "audio" && job.driveCreatedTime && job.driveFileName) {
       await cascadeSlotAssignment(id, bodyParsed.data.lectureName, job.driveCreatedTime, job.driveFileName);
     }
     if (Object.keys(updates).length > 1) {
@@ -515,6 +524,15 @@ router.post("/pipeline/trigger", async (req, res) => {
   res.json(result);
 });
 
+router.post("/pipeline/scan-audio", async (req, res) => {
+  try {
+    const result = await scanAudioLibrary();
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Scan failed" });
+  }
+});
+
 // Start uploading all pending jobs in chronological order (runs in background)
 router.post("/pipeline/upload", async (req, res) => {
   const pending = await db
@@ -566,6 +584,7 @@ function formatJob(j: typeof jobsTable.$inferSelect) {
     driveCreatedTime: j.driveCreatedTime ?? null,
     status: j.status,
     source: j.source,
+    contentType: j.contentType,
     proposedTitle: j.proposedTitle ?? null,
     proposedDescription: j.proposedDescription ?? null,
     youtubeVideoId: j.youtubeVideoId ?? null,

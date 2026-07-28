@@ -34,6 +34,7 @@ import type {
   LibraryResource,
   ListJobsParams,
   PipelineStats,
+  ScanAudioResult,
   ScanLibraryResult,
   Settings,
   SettingsInput,
@@ -1383,6 +1384,29 @@ export const useScanLibrary = <TError = ErrorType<unknown>, TContext = unknown>(
   options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof scanLibrary>>, TError, void, TContext>; request?: SecondParameter<typeof customFetch> }
 ): UseMutationResult<Awaited<ReturnType<typeof scanLibrary>>, TError, void, TContext> =>
   useMutation(getScanLibraryMutationOptions(options));
+
+export const getScanAudioLibraryUrl = () => `/api/pipeline/scan-audio`;
+
+export const scanAudioLibrary = async (options?: RequestInit): Promise<ScanAudioResult> =>
+  customFetch<ScanAudioResult>(getScanAudioLibraryUrl(), { ...options, method: 'POST' });
+
+export const getScanAudioLibraryMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof scanAudioLibrary>>, TError, void, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof scanAudioLibrary>>, TError, void, TContext> => {
+  const mutationKey = ['scanAudioLibrary'];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof scanAudioLibrary>>, void> = () => scanAudioLibrary(requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useScanAudioLibrary = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof scanAudioLibrary>>, TError, void, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof scanAudioLibrary>>, TError, void, TContext> =>
+  useMutation(getScanAudioLibraryMutationOptions(options));
 
 export const getUpdateLibraryResourceUrl = (id: number) => `/api/library/resources/${id}`;
 

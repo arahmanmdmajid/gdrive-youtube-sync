@@ -17,6 +17,7 @@ export const SUBJECTS: SubjectInfo[] = [
   { serial: "2.1", nameEn: "Al Fawz ul Kabir", teacherEn: "Ustad Haseeb" },
   { serial: "2.2", nameEn: "Kitab ul Asar", teacherEn: "Ustad Haseeb" },
   { serial: "2.3", nameEn: "Siraji", teacherEn: "Ustad Khalid Zaman" },
+  { serial: "2.4", nameEn: "Khair ul Usool", teacherEn: "Ustad Haseeb" },
   { serial: "3.1", nameEn: "Hidaya Sani Part 1", teacherEn: "Ustad Sirajul Haq" },
   { serial: "3.2", nameEn: "Hidaya Sani Part 2", teacherEn: "Ustad Saeedur Rahman" },
   { serial: "3.3", nameEn: "Hidaya Sani Part 3", teacherEn: "Ustad Aslam Shah" },
