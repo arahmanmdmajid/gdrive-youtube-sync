@@ -59,6 +59,7 @@ export interface Job {
   youtubeTitle?: string | null;
   /** @nullable */
   errorMessage?: string | null;
+  hasCustomThumbnail?: boolean;
   createdAt: string;
   updatedAt?: string;
 }
@@ -233,6 +234,19 @@ export interface ApplyThumbnailsResult {
   applied: number;
   skipped: number;
   failed: number;
+}
+
+export interface SubjectThumbnail {
+  serial: string;
+  label: string;
+  /** @nullable */
+  imageUrl: string | null;
+}
+
+export interface UploadJobThumbnailResult {
+  applied: boolean;
+  jobId: number;
+  custom: boolean;
 }
 
 export type ListJobsParams = {

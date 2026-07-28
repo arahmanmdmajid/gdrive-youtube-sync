@@ -7,8 +7,12 @@ import {
   useCreateLectureName,
   useUpdateLectureName,
   useDeleteLectureName,
+  useListSubjectThumbnails,
+  useUploadSubjectThumbnail,
+  useDeleteSubjectThumbnail,
   getGetSettingsQueryKey,
-  getListLectureNamesQueryKey
+  getListLectureNamesQueryKey,
+  getListSubjectThumbnailsQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -21,7 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Save, Plus, Trash2, Pencil, Check, X } from "lucide-react";
+import { Loader2, Save, Plus, Trash2, Pencil, Check, X, ImageUp, ImageOff } from "lucide-react";
 
 const formSchema = z.object({
   driveFolderId: z.string().min(1, "Drive folder ID is required"),
@@ -41,10 +45,12 @@ export default function Settings() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
+  const thumbnailFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const { data: settings, isLoading: settingsLoading } = useGetSettings();
   const { data: playlists, isLoading: playlistsLoading } = useListYoutubePlaylists();
   const { data: lectureNames } = useListLectureNames();
+  const { data: subjectThumbnails } = useListSubjectThumbnails();
 
   const createLectureNameMutation = useCreateLectureName({
     mutation: {
@@ -79,6 +85,33 @@ export default function Settings() {
       onError: () => toast({ title: "Failed to remove lecture name", variant: "destructive" })
     }
   });
+
+  const uploadThumbnailMutation = useUploadSubjectThumbnail({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListSubjectThumbnailsQueryKey() });
+        toast({ title: "Thumbnail uploaded" });
+      },
+      onError: (err: any) => toast({ title: "Failed to upload thumbnail", description: err?.message, variant: "destructive" })
+    }
+  });
+
+  const deleteThumbnailMutation = useDeleteSubjectThumbnail({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListSubjectThumbnailsQueryKey() });
+        toast({ title: "Thumbnail removed" });
+      },
+      onError: () => toast({ title: "Failed to remove thumbnail", variant: "destructive" })
+    }
+  });
+
+  const handleThumbnailFileSelected = (serial: string, file: File | null) => {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("image", file);
+    uploadThumbnailMutation.mutate({ serial, data: formData });
+  };
 
   const handleAddLectureName = () => {
     const trimmed = newLectureName.trim();
@@ -463,6 +496,81 @@ export default function Settings() {
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Subject Thumbnails — per-subject images used for new uploads and Apply Thumbnails to All */}
+      <Card className="border-border shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-lg font-mono">Subject Thumbnails</CardTitle>
+          <CardDescription>
+            Upload an image per subject to use as its YouTube thumbnail (video) or video frame (audio).
+            Subjects come from the Lecture Names list above.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!subjectThumbnails || subjectThumbnails.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No subjects yet — add some in Lecture Names above first.
+            </p>
+          ) : (
+            <ul className="space-y-1">
+              {subjectThumbnails.map((st) => (
+                <li
+                  key={st.serial}
+                  className="flex items-center gap-3 rounded-md border border-border px-3 py-2 bg-muted/20"
+                >
+                  {st.imageUrl ? (
+                    <img
+                      src={st.imageUrl}
+                      alt={`${st.serial} thumbnail`}
+                      className="h-12 w-20 rounded object-cover border border-border shrink-0"
+                    />
+                  ) : (
+                    <div className="h-12 w-20 rounded border border-dashed border-border flex items-center justify-center shrink-0 text-muted-foreground">
+                      <ImageOff className="h-4 w-4" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <span className="font-mono text-sm">{st.serial}</span>
+                    <span className="ml-2 text-sm text-muted-foreground truncate">{st.label}</span>
+                  </div>
+                  <input
+                    ref={(el) => { thumbnailFileInputRefs.current[st.serial] = el; }}
+                    type="file"
+                    accept="image/jpeg,image/png"
+                    className="hidden"
+                    onChange={(e) => {
+                      handleThumbnailFileSelected(st.serial, e.target.files?.[0] ?? null);
+                      e.target.value = "";
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => thumbnailFileInputRefs.current[st.serial]?.click()}
+                    disabled={uploadThumbnailMutation.isPending}
+                    className="shrink-0 gap-1.5"
+                  >
+                    <ImageUp className="h-3.5 w-3.5" />
+                    {st.imageUrl ? "Replace" : "Upload"}
+                  </Button>
+                  {st.imageUrl && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteThumbnailMutation.mutate({ serial: st.serial })}
+                      disabled={deleteThumbnailMutation.isPending}
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                      title="Remove"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   )}
                 </li>
               ))}

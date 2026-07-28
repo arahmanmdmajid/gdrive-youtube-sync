@@ -9,6 +9,8 @@ import {
   usePatchJob,
   useRenameYoutubeTitle,
   useSetJobThumbnail,
+  useUploadJobThumbnail,
+  useDeleteJobThumbnail,
   useListLectureNames,
   getListJobsQueryKey,
   getGetPipelineStatsQueryKey,
@@ -25,7 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, RefreshCcw, ExternalLink, ClipboardCheck, Pencil, RotateCcw, Check, X, ImageUp } from "lucide-react";
+import { Loader2, Trash2, RefreshCcw, ExternalLink, ClipboardCheck, Pencil, RotateCcw, Check, X, ImageUp, ImageMinus } from "lucide-react";
 import { format } from "date-fns";
 import { JobStatusBadge } from "./dashboard";
 import {
@@ -81,6 +83,9 @@ export default function Jobs() {
   const [editState, setEditState] = useState<EditState | null>(null);
   const [renameState, setRenameState] = useState<{ id: number; value: string; selectedLectureName: string; driveCreatedTime?: string | null } | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const [thumbnailDialogJobId, setThumbnailDialogJobId] = useState<number | null>(null);
+  const thumbnailUploadInputRef = useRef<HTMLInputElement>(null);
+  const useDefaultThumbnailButtonRef = useRef<HTMLButtonElement>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -160,10 +165,31 @@ export default function Jobs() {
 
   const setThumbnailMutation = useSetJobThumbnail({
     mutation: {
-      onSuccess: () => { invalidate(); toast({ title: "Thumbnail applied" }); },
+      onSuccess: () => { invalidate(); toast({ title: "Thumbnail applied" }); setThumbnailDialogJobId(null); },
       onError: (err: any) => toast({ title: "Failed to set thumbnail", description: err?.message, variant: "destructive" })
     }
   });
+
+  const uploadJobThumbnailMutation = useUploadJobThumbnail({
+    mutation: {
+      onSuccess: () => { invalidate(); toast({ title: "Custom thumbnail applied" }); setThumbnailDialogJobId(null); },
+      onError: (err: any) => toast({ title: "Failed to upload thumbnail", description: err?.message, variant: "destructive" })
+    }
+  });
+
+  const deleteJobThumbnailMutation = useDeleteJobThumbnail({
+    mutation: {
+      onSuccess: () => { invalidate(); toast({ title: "Custom thumbnail removed" }); },
+      onError: () => toast({ title: "Failed to remove custom thumbnail", variant: "destructive" })
+    }
+  });
+
+  const handleThumbnailFileSelected = (jobId: number, file: File | null) => {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("image", file);
+    uploadJobThumbnailMutation.mutate({ id: jobId, data: formData });
+  };
 
   const startRename = (job: { id: number; youtubeTitle?: string | null; driveCreatedTime?: string | null }) => {
     setRenameState({ id: job.id, value: job.youtubeTitle ?? "", selectedLectureName: "", driveCreatedTime: job.driveCreatedTime });
@@ -490,9 +516,8 @@ export default function Jobs() {
                           <Button
                             variant="outline"
                             size="icon"
-                            onClick={() => setThumbnailMutation.mutate({ id: job.id })}
-                            disabled={setThumbnailMutation.isPending}
-                            title="Set thumbnail from the subject's configured image"
+                            onClick={() => setThumbnailDialogJobId(job.id)}
+                            title="Set thumbnail"
                             data-testid={`btn-thumbnail-${job.id}`}
                           >
                             <ImageUp className="h-4 w-4 text-muted-foreground hover:text-foreground" />
@@ -639,6 +664,79 @@ export default function Jobs() {
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Set Thumbnail dialog — "Use subject default" is the primary, autofocused
+          action so it stays a single click after opening; custom upload/remove
+          are secondary. */}
+      <Dialog open={thumbnailDialogJobId !== null} onOpenChange={(open) => !open && setThumbnailDialogJobId(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Set Thumbnail</DialogTitle>
+            <DialogDescription>
+              {jobs?.find(j => j.id === thumbnailDialogJobId)?.hasCustomThumbnail
+                ? "This video currently has a custom thumbnail."
+                : "This video is currently using its subject's default thumbnail."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <Button
+              ref={useDefaultThumbnailButtonRef}
+              autoFocus
+              onClick={() => thumbnailDialogJobId && setThumbnailMutation.mutate({ id: thumbnailDialogJobId })}
+              disabled={setThumbnailMutation.isPending}
+              className="w-full gap-2"
+              data-testid="btn-thumbnail-use-default"
+            >
+              {setThumbnailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageUp className="h-4 w-4" />}
+              Use subject default
+            </Button>
+
+            <div className="relative py-1">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">or</span>
+              </div>
+            </div>
+
+            <input
+              ref={thumbnailUploadInputRef}
+              type="file"
+              accept="image/jpeg,image/png"
+              className="hidden"
+              onChange={(e) => {
+                if (thumbnailDialogJobId) handleThumbnailFileSelected(thumbnailDialogJobId, e.target.files?.[0] ?? null);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              variant="outline"
+              onClick={() => thumbnailUploadInputRef.current?.click()}
+              disabled={uploadJobThumbnailMutation.isPending}
+              className="w-full gap-2"
+              data-testid="btn-thumbnail-upload-custom"
+            >
+              {uploadJobThumbnailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageUp className="h-4 w-4" />}
+              Upload custom image for this video
+            </Button>
+
+            {jobs?.find(j => j.id === thumbnailDialogJobId)?.hasCustomThumbnail && (
+              <Button
+                variant="ghost"
+                onClick={() => thumbnailDialogJobId && deleteJobThumbnailMutation.mutate({ id: thumbnailDialogJobId })}
+                disabled={deleteJobThumbnailMutation.isPending}
+                className="w-full gap-2 text-muted-foreground hover:text-destructive"
+                data-testid="btn-thumbnail-remove-custom"
+              >
+                {deleteJobThumbnailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageMinus className="h-4 w-4" />}
+                Remove custom image
+              </Button>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

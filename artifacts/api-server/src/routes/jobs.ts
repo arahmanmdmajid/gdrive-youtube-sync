@@ -1,4 +1,5 @@
 import { Router } from "express";
+import multer from "multer";
 import { db, jobsTable } from "@workspace/db";
 import { eq, desc, like, asc } from "drizzle-orm";
 import fs from "node:fs";
@@ -15,8 +16,27 @@ import {
 import { runPipelineScan, processJobById, processAllPendingJobs, reconcilePlaylist, isQuotaError, isThumbnailRateLimited } from "../lib/pipeline";
 import { scanAudioLibrary } from "../lib/audioPipeline";
 import { getYoutubeClient } from "../lib/youtubeClient";
-import { extractSerial, getSubjectThumbnailPath } from "../lib/thumbnails";
+import {
+  extractSerial,
+  getSubjectThumbnailPath,
+  getJobThumbnailPath,
+  getThumbnailPathForJob,
+  saveJobThumbnail,
+  deleteJobThumbnail,
+} from "../lib/thumbnails";
 import { logger } from "../lib/logger";
+
+const uploadThumbnail = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === "image/jpeg" || file.mimetype === "image/png") {
+      cb(null, true);
+    } else {
+      cb(new Error("Only JPEG and PNG images are supported"));
+    }
+  },
+});
 import {
   getPktInfo,
   extractMeetingCode,
@@ -487,7 +507,62 @@ router.post("/jobs/:id/thumbnail", async (req, res) => {
     res.status(502).json({ error: `Failed to set thumbnail: ${message}` });
     return;
   }
+  // Explicitly choosing the subject default clears any prior per-video
+  // override — otherwise a later bulk apply would silently resurrect it.
+  deleteJobThumbnail(id);
   res.json({ applied: true, jobId: id, serial });
+});
+
+// Upload a one-off custom thumbnail for a single video (takes priority over
+// the subject default, including on future bulk applies).
+router.post("/jobs/:id/thumbnail/upload", uploadThumbnail.single("image"), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  if (!req.file) {
+    res.status(400).json({ error: "No image uploaded" });
+    return;
+  }
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
+  if (!job) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (job.status !== "done" || !job.youtubeVideoId) {
+    res.status(409).json({ error: "Job must be done with a YouTube video to set a thumbnail" });
+    return;
+  }
+  const youtube = getYoutubeClient();
+  if (!youtube) {
+    res.status(503).json({ error: "YouTube not configured" });
+    return;
+  }
+  const thumbPath = saveJobThumbnail(id, req.file.buffer, req.file.mimetype);
+  try {
+    await youtube.thumbnails.set({
+      videoId: job.youtubeVideoId,
+      media: { body: fs.createReadStream(thumbPath) },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(502).json({ error: `Failed to set thumbnail: ${message}` });
+    return;
+  }
+  res.json({ applied: true, jobId: id, custom: true });
+});
+
+// Remove a job's custom thumbnail override (does not re-apply the subject
+// default automatically — use POST /jobs/:id/thumbnail for that).
+router.delete("/jobs/:id/thumbnail/custom", (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  deleteJobThumbnail(id);
+  res.status(204).send();
 });
 
 // Restore a "removed" job back to "done" after the admin manually re-adds the
@@ -593,8 +668,7 @@ router.post("/pipeline/apply-thumbnails", async (req, res) => {
       skipped++;
       continue;
     }
-    const serial = extractSerial(job.proposedTitle ?? "");
-    const thumbPath = serial ? getSubjectThumbnailPath(serial) : null;
+    const thumbPath = getThumbnailPathForJob(job);
     if (!thumbPath) {
       skipped++;
       continue;
@@ -676,6 +750,7 @@ function formatJob(j: typeof jobsTable.$inferSelect) {
     youtubeUrl: j.youtubeUrl ?? null,
     youtubeTitle: j.youtubeTitle ?? null,
     errorMessage: j.errorMessage ?? null,
+    hasCustomThumbnail: getJobThumbnailPath(j.id) !== null,
     createdAt: j.createdAt.toISOString(),
     updatedAt: j.updatedAt.toISOString(),
   };

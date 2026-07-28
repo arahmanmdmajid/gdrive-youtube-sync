@@ -40,8 +40,10 @@ import type {
   SetJobThumbnailResult,
   Settings,
   SettingsInput,
+  SubjectThumbnail,
   TriggerResult,
   UpdateLibraryResourceInput,
+  UploadJobThumbnailResult,
   YoutubePlaylist
 } from './api.schemas';
 
@@ -1518,4 +1520,132 @@ export const useDeleteLibraryResource = <TError = ErrorType<unknown>, TContext =
   options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteLibraryResource>>, TError, { id: number }, TContext>; request?: SecondParameter<typeof customFetch> }
 ): UseMutationResult<Awaited<ReturnType<typeof deleteLibraryResource>>, TError, { id: number }, TContext> =>
   useMutation(getDeleteLibraryResourceMutationOptions(options));
+
+// ── Subject thumbnail management (Settings tab) ────────────────────────────
+
+export const getListSubjectThumbnailsUrl = () => `/api/thumbnails/subjects`;
+
+export const listSubjectThumbnails = async (options?: RequestInit): Promise<SubjectThumbnail[]> =>
+  customFetch<SubjectThumbnail[]>(getListSubjectThumbnailsUrl(), { ...options, method: 'GET' });
+
+export const getListSubjectThumbnailsQueryKey = () => [`/api/thumbnails/subjects`] as const;
+
+export const getListSubjectThumbnailsQueryOptions = <TData = Awaited<ReturnType<typeof listSubjectThumbnails>>, TError = ErrorType<unknown>>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listSubjectThumbnails>>, TError, TData>; request?: SecondParameter<typeof customFetch> }
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getListSubjectThumbnailsQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listSubjectThumbnails>>> = ({ signal }) =>
+    listSubjectThumbnails({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof listSubjectThumbnails>>, TError, TData> & { queryKey: QueryKey };
+};
+
+export function useListSubjectThumbnails<TData = Awaited<ReturnType<typeof listSubjectThumbnails>>, TError = ErrorType<unknown>>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listSubjectThumbnails>>, TError, TData>; request?: SecondParameter<typeof customFetch> }
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSubjectThumbnailsQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getUploadSubjectThumbnailUrl = (serial: string) => `/api/thumbnails/subjects/${serial}`;
+
+// FormData bodies pass through customFetch untouched (its JSON-header
+// auto-detection only triggers for string bodies), so the browser sets the
+// multipart boundary itself — no explicit Content-Type header needed here.
+export const uploadSubjectThumbnail = async (serial: string, data: FormData, options?: RequestInit): Promise<SubjectThumbnail> =>
+  customFetch<SubjectThumbnail>(getUploadSubjectThumbnailUrl(serial), { ...options, method: 'POST', body: data });
+
+export const getUploadSubjectThumbnailMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof uploadSubjectThumbnail>>, TError, { serial: string; data: FormData }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof uploadSubjectThumbnail>>, TError, { serial: string; data: FormData }, TContext> => {
+  const mutationKey = ['uploadSubjectThumbnail'];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadSubjectThumbnail>>, { serial: string; data: FormData }> = ({ serial, data }) =>
+    uploadSubjectThumbnail(serial, data, requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useUploadSubjectThumbnail = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof uploadSubjectThumbnail>>, TError, { serial: string; data: FormData }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof uploadSubjectThumbnail>>, TError, { serial: string; data: FormData }, TContext> =>
+  useMutation(getUploadSubjectThumbnailMutationOptions(options));
+
+export const getDeleteSubjectThumbnailUrl = (serial: string) => `/api/thumbnails/subjects/${serial}`;
+
+export const deleteSubjectThumbnail = async (serial: string, options?: RequestInit): Promise<void> =>
+  customFetch<void>(getDeleteSubjectThumbnailUrl(serial), { ...options, method: 'DELETE' });
+
+export const getDeleteSubjectThumbnailMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteSubjectThumbnail>>, TError, { serial: string }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof deleteSubjectThumbnail>>, TError, { serial: string }, TContext> => {
+  const mutationKey = ['deleteSubjectThumbnail'];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteSubjectThumbnail>>, { serial: string }> = ({ serial }) =>
+    deleteSubjectThumbnail(serial, requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useDeleteSubjectThumbnail = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteSubjectThumbnail>>, TError, { serial: string }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof deleteSubjectThumbnail>>, TError, { serial: string }, TContext> =>
+  useMutation(getDeleteSubjectThumbnailMutationOptions(options));
+
+// ── Per-video custom thumbnail override (Jobs page) ─────────────────────────
+
+export const getUploadJobThumbnailUrl = (id: number) => `/api/jobs/${id}/thumbnail/upload`;
+
+export const uploadJobThumbnail = async (id: number, data: FormData, options?: RequestInit): Promise<UploadJobThumbnailResult> =>
+  customFetch<UploadJobThumbnailResult>(getUploadJobThumbnailUrl(id), { ...options, method: 'POST', body: data });
+
+export const getUploadJobThumbnailMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof uploadJobThumbnail>>, TError, { id: number; data: FormData }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof uploadJobThumbnail>>, TError, { id: number; data: FormData }, TContext> => {
+  const mutationKey = ['uploadJobThumbnail'];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadJobThumbnail>>, { id: number; data: FormData }> = ({ id, data }) =>
+    uploadJobThumbnail(id, data, requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useUploadJobThumbnail = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof uploadJobThumbnail>>, TError, { id: number; data: FormData }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof uploadJobThumbnail>>, TError, { id: number; data: FormData }, TContext> =>
+  useMutation(getUploadJobThumbnailMutationOptions(options));
+
+export const getDeleteJobThumbnailUrl = (id: number) => `/api/jobs/${id}/thumbnail/custom`;
+
+export const deleteJobThumbnail = async (id: number, options?: RequestInit): Promise<void> =>
+  customFetch<void>(getDeleteJobThumbnailUrl(id), { ...options, method: 'DELETE' });
+
+export const getDeleteJobThumbnailMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteJobThumbnail>>, TError, { id: number }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof deleteJobThumbnail>>, TError, { id: number }, TContext> => {
+  const mutationKey = ['deleteJobThumbnail'];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteJobThumbnail>>, { id: number }> = ({ id }) =>
+    deleteJobThumbnail(id, requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useDeleteJobThumbnail = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteJobThumbnail>>, TError, { id: number }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof deleteJobThumbnail>>, TError, { id: number }, TContext> =>
+  useMutation(getDeleteJobThumbnailMutationOptions(options));
 

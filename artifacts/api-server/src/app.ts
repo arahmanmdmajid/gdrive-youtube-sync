@@ -1,3 +1,4 @@
+import path from "node:path";
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
@@ -29,6 +30,10 @@ app.use(
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Local-only admin server, no public exposure — safe to serve thumbnail
+// images (subject-level and per-video overrides) directly for UI previews.
+app.use("/api/thumbnail-files", express.static(path.resolve(process.cwd(), "thumbnails")));
 
 app.use("/api", router);
 

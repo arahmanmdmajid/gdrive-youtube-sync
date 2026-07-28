@@ -6,6 +6,7 @@ import youtubeRouter from "./youtube";
 import settingsRouter from "./settings";
 import lectureNamesRouter from "./lectureNames";
 import libraryRouter from "./library";
+import thumbnailsRouter from "./thumbnails";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(youtubeRouter);
 router.use(settingsRouter);
 router.use(lectureNamesRouter);
 router.use(libraryRouter);
+router.use(thumbnailsRouter);
 
 export default router;
