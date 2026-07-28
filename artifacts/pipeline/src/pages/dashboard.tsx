@@ -4,6 +4,7 @@ import {
   useScanAudioLibrary,
   useTriggerUpload,
   useReconcilePlaylist,
+  useApplyThumbnails,
   useListJobs,
   getGetPipelineStatsQueryKey,
   getListJobsQueryKey
@@ -14,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Play, Upload, Activity, Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, ArrowRight, ListVideo, Headphones } from "lucide-react";
+import { Play, Upload, Activity, Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, ArrowRight, ListVideo, Headphones, ImageUp } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "wouter";
 
@@ -110,6 +111,25 @@ export default function Dashboard() {
     }
   });
 
+  const applyThumbnailsMutation = useApplyThumbnails({
+    mutation: {
+      onSuccess: (data) => {
+        queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
+        toast({
+          title: "Thumbnails Applied",
+          description: `${data.applied} applied, ${data.skipped} skipped (no image configured), ${data.failed} failed.`,
+        });
+      },
+      onError: (err: any) => {
+        toast({
+          title: "Apply Thumbnails Failed",
+          description: err?.message || "An error occurred while applying thumbnails.",
+          variant: "destructive"
+        });
+      }
+    }
+  });
+
   const recentJobs = jobs?.slice(0, 5) || [];
 
   return (
@@ -161,6 +181,20 @@ export default function Dashboard() {
               <ListVideo className="h-4 w-4" />
             )}
             Sync Playlist
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => applyThumbnailsMutation.mutate()}
+            disabled={applyThumbnailsMutation.isPending}
+            data-testid="button-apply-thumbnails"
+            className="gap-2 font-mono font-medium"
+          >
+            {applyThumbnailsMutation.isPending ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <ImageUp className="h-4 w-4" />
+            )}
+            Apply Thumbnails to All
           </Button>
           <Button
             onClick={() => uploadMutation.mutate()}

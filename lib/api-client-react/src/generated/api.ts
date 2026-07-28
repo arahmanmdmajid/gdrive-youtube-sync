@@ -34,8 +34,10 @@ import type {
   LibraryResource,
   ListJobsParams,
   PipelineStats,
+  ApplyThumbnailsResult,
   ScanAudioResult,
   ScanLibraryResult,
+  SetJobThumbnailResult,
   Settings,
   SettingsInput,
   TriggerResult,
@@ -662,6 +664,39 @@ export const useRestoreDoneJob = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof restoreDoneJob>>, TError, {id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationResult<Awaited<ReturnType<typeof restoreDoneJob>>, TError, {id: number}, TContext> => {
   return useMutation(getRestoreDoneJobMutationOptions(options));
+}
+
+
+export const getSetJobThumbnailUrl = (id: number) => {
+  return `/api/jobs/${id}/thumbnail`
+}
+
+export const setJobThumbnail = async (id: number, options?: RequestInit): Promise<SetJobThumbnailResult> => {
+  return customFetch<SetJobThumbnailResult>(getSetJobThumbnailUrl(id), { ...options, method: 'POST' });
+}
+
+export const getSetJobThumbnailMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof setJobThumbnail>>, TError, {id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setJobThumbnail>>, TError, {id: number}, TContext> => {
+  const mutationKey = ['setJobThumbnail'];
+  const {mutation: mutationOptions, request: requestOptions} = options ?
+    options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+    options : {...options, mutation: {...options.mutation, mutationKey}}
+    : {mutation: {mutationKey}, request: undefined};
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof setJobThumbnail>>, {id: number}> = (props) => {
+    const {id} = props ?? {};
+    return setJobThumbnail(id, requestOptions);
+  };
+  return {mutationFn, ...mutationOptions};
+}
+
+export type SetJobThumbnailMutationResult = NonNullable<Awaited<ReturnType<typeof setJobThumbnail>>>
+export type SetJobThumbnailMutationError = ErrorType<unknown>
+
+export const useSetJobThumbnail = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof setJobThumbnail>>, TError, {id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationResult<Awaited<ReturnType<typeof setJobThumbnail>>, TError, {id: number}, TContext> => {
+  return useMutation(getSetJobThumbnailMutationOptions(options));
 }
 
 
@@ -1407,6 +1442,29 @@ export const useScanAudioLibrary = <TError = ErrorType<unknown>, TContext = unkn
   options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof scanAudioLibrary>>, TError, void, TContext>; request?: SecondParameter<typeof customFetch> }
 ): UseMutationResult<Awaited<ReturnType<typeof scanAudioLibrary>>, TError, void, TContext> =>
   useMutation(getScanAudioLibraryMutationOptions(options));
+
+export const getApplyThumbnailsUrl = () => `/api/pipeline/apply-thumbnails`;
+
+export const applyThumbnails = async (options?: RequestInit): Promise<ApplyThumbnailsResult> =>
+  customFetch<ApplyThumbnailsResult>(getApplyThumbnailsUrl(), { ...options, method: 'POST' });
+
+export const getApplyThumbnailsMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof applyThumbnails>>, TError, void, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof applyThumbnails>>, TError, void, TContext> => {
+  const mutationKey = ['applyThumbnails'];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof applyThumbnails>>, void> = () => applyThumbnails(requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useApplyThumbnails = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof applyThumbnails>>, TError, void, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof applyThumbnails>>, TError, void, TContext> =>
+  useMutation(getApplyThumbnailsMutationOptions(options));
 
 export const getUpdateLibraryResourceUrl = (id: number) => `/api/library/resources/${id}`;
 

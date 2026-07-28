@@ -8,6 +8,7 @@ import {
   useApproveJob,
   usePatchJob,
   useRenameYoutubeTitle,
+  useSetJobThumbnail,
   useListLectureNames,
   getListJobsQueryKey,
   getGetPipelineStatsQueryKey,
@@ -24,7 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, RefreshCcw, ExternalLink, ClipboardCheck, Pencil, RotateCcw, Check, X } from "lucide-react";
+import { Loader2, Trash2, RefreshCcw, ExternalLink, ClipboardCheck, Pencil, RotateCcw, Check, X, ImageUp } from "lucide-react";
 import { format } from "date-fns";
 import { JobStatusBadge } from "./dashboard";
 import {
@@ -78,7 +79,7 @@ export default function Jobs() {
   const [statusFilter, setStatusFilter] = useState<ListJobsStatus | "all">("all");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
-  const [renameState, setRenameState] = useState<{ id: number; value: string; selectedLectureName: string; driveCreatedTime?: string | null; contentType?: string } | null>(null);
+  const [renameState, setRenameState] = useState<{ id: number; value: string; selectedLectureName: string; driveCreatedTime?: string | null } | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const { toast } = useToast();
@@ -157,26 +158,27 @@ export default function Jobs() {
     }
   });
 
-  const startRename = (job: { id: number; contentType?: string; youtubeTitle?: string | null; proposedTitle?: string | null; driveCreatedTime?: string | null }) => {
-    // Audio jobs have no YouTube title to sync — their title lives in proposedTitle.
-    const currentTitle = job.contentType === "audio" ? (job.proposedTitle ?? "") : (job.youtubeTitle ?? "");
-    setRenameState({ id: job.id, value: currentTitle, selectedLectureName: "", driveCreatedTime: job.driveCreatedTime, contentType: job.contentType });
+  const setThumbnailMutation = useSetJobThumbnail({
+    mutation: {
+      onSuccess: () => { invalidate(); toast({ title: "Thumbnail applied" }); },
+      onError: (err: any) => toast({ title: "Failed to set thumbnail", description: err?.message, variant: "destructive" })
+    }
+  });
+
+  const startRename = (job: { id: number; youtubeTitle?: string | null; driveCreatedTime?: string | null }) => {
+    setRenameState({ id: job.id, value: job.youtubeTitle ?? "", selectedLectureName: "", driveCreatedTime: job.driveCreatedTime });
     setTimeout(() => renameInputRef.current?.focus(), 0);
   };
   const commitRename = () => {
     if (!renameState) return;
     const trimmed = renameState.value.trim();
     if (!trimmed) return;
-    if (renameState.contentType === "audio") {
-      patchMutation.mutate({ id: renameState.id, data: { proposedTitle: trimmed } });
-    } else {
-      renameTitleMutation.mutate({ id: renameState.id, data: { title: trimmed } });
-    }
+    renameTitleMutation.mutate({ id: renameState.id, data: { title: trimmed } });
   };
   const cancelRename = () => setRenameState(null);
 
   const isSubmitting = approveMutation.isPending || patchMutation.isPending;
-  const renameSubmitting = renameTitleMutation.isPending || patchMutation.isPending;
+  const renameSubmitting = renameTitleMutation.isPending;
 
   const openEdit = (job: {
     id: number;
@@ -477,10 +479,23 @@ export default function Jobs() {
                             variant="outline"
                             size="icon"
                             onClick={() => startRename(job)}
-                            title={job.contentType === "audio" ? "Rename title" : "Rename YouTube title"}
+                            title="Rename YouTube title"
                             data-testid={`btn-rename-${job.id}`}
                           >
                             <Pencil className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                          </Button>
+                        )}
+
+                        {job.status === "done" && job.youtubeVideoId && (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setThumbnailMutation.mutate({ id: job.id })}
+                            disabled={setThumbnailMutation.isPending}
+                            title="Set thumbnail from the subject's configured image"
+                            data-testid={`btn-thumbnail-${job.id}`}
+                          >
+                            <ImageUp className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                           </Button>
                         )}
 

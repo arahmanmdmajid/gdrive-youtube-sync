@@ -223,6 +223,18 @@ export interface ScanAudioResult {
   unmatched: number;
 }
 
+export interface SetJobThumbnailResult {
+  applied: boolean;
+  jobId: number;
+  serial: string;
+}
+
+export interface ApplyThumbnailsResult {
+  applied: number;
+  skipped: number;
+  failed: number;
+}
+
 export type ListJobsParams = {
 status?: ListJobsStatus;
 };

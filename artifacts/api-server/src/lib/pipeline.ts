@@ -1,5 +1,6 @@
 import { db, jobsTable, settingsTable } from "@workspace/db";
 import { eq, asc, isNotNull } from "drizzle-orm";
+import fs from "node:fs";
 import { getDriveClient, streamDriveFile } from "./driveClient";
 import { getYoutubeClient } from "./youtubeClient";
 import {
@@ -12,6 +13,8 @@ import {
   getPktInfo,
 } from "./schedule";
 import { isEligible, BATCH_RECORDING_SIZE_BYTES } from "./filter";
+import { prepareAudioForYoutube } from "./audioMux";
+import { extractSerial, getSubjectThumbnailPath } from "./thumbnails";
 import { logger } from "./logger";
 
 /** Returns true for errors that are worth retrying (DNS blip, socket reset, timeout). */
@@ -27,7 +30,7 @@ function isAuthError(err: unknown): boolean {
 }
 
 /** Returns true if the error is a YouTube quota exceeded error. */
-function isQuotaError(err: unknown): boolean {
+export function isQuotaError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   return /quota exceeded|quotaExceeded|rateLimitExceeded/i.test(msg);
 }
@@ -299,28 +302,43 @@ async function uploadJob(job: typeof jobsTable.$inferSelect): Promise<void> {
       }
     }
 
-    logger.info({ jobId: job.id, title }, "Starting upload to YouTube");
+    logger.info({ jobId: job.id, title, contentType: job.contentType }, "Starting upload to YouTube");
 
-    const fileStream = await streamDriveFile(job.driveFileId);
+    // Audio jobs have no video stream of their own — mux the source audio
+    // with a per-subject thumbnail (or a solid-color fallback frame) into
+    // an mp4 first, since YouTube's upload API doesn't reliably accept
+    // audio-only files.
+    const audioMux = job.contentType === "audio"
+      ? await prepareAudioForYoutube(job.driveFileId, title)
+      : null;
 
-    const uploadResponse = await withRetry(() =>
-      youtube.videos.insert({
-        part: ["snippet", "status"],
-        requestBody: {
-          snippet: { title, description },
-          status: { privacyStatus: "unlisted" },
-        },
-        media: {
-          mimeType: "video/mp4",
-          body: fileStream,
-        },
-      })
-    );
+    let uploadResponse;
+    try {
+      const fileStream = audioMux
+        ? fs.createReadStream(audioMux.mp4Path)
+        : await streamDriveFile(job.driveFileId);
+
+      uploadResponse = await withRetry(() =>
+        youtube.videos.insert({
+          part: ["snippet", "status"],
+          requestBody: {
+            snippet: { title, description },
+            status: { privacyStatus: "unlisted" },
+          },
+          media: {
+            mimeType: "video/mp4",
+            body: fileStream,
+          },
+        })
+      );
+    } finally {
+      if (audioMux) await audioMux.cleanup();
+    }
 
     const videoId = uploadResponse.data.id ?? "";
     const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-    // Save video as done first — playlist insertion is best-effort
+    // Save video as done first — playlist insertion and thumbnail are best-effort
     await db.update(jobsTable)
       .set({
         status: "done",
@@ -348,6 +366,25 @@ async function uploadJob(job: typeof jobsTable.$inferSelect): Promise<void> {
         // Playlist insert failed — video is uploaded but not in playlist.
         // Log as warning but keep job status as "done".
         logger.warn({ jobId: job.id, videoId, playlistErr }, "Video uploaded but playlist insert failed");
+      }
+    }
+
+    // Video jobs get an explicit per-subject thumbnail (audio's frame is
+    // already baked into the muxed mp4, so it doesn't need this step).
+    if (job.contentType !== "audio" && videoId) {
+      const serial = extractSerial(title);
+      const thumbPath = serial ? getSubjectThumbnailPath(serial) : null;
+      if (thumbPath) {
+        try {
+          await withRetry(() =>
+            youtube.thumbnails.set({
+              videoId,
+              media: { body: fs.createReadStream(thumbPath) },
+            })
+          );
+        } catch (thumbErr) {
+          logger.warn({ jobId: job.id, videoId, thumbErr }, "Video uploaded but thumbnail set failed");
+        }
       }
     }
 

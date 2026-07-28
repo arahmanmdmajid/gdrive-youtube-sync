@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db, jobsTable } from "@workspace/db";
 import { eq, desc, like, asc } from "drizzle-orm";
+import fs from "node:fs";
 import {
   ListJobsQueryParams,
   CreateJobBody,
@@ -11,9 +12,11 @@ import {
   PatchJobBody,
   RenameYoutubeTitleBody,
 } from "@workspace/api-zod";
-import { runPipelineScan, processJobById, processAllPendingJobs, reconcilePlaylist } from "../lib/pipeline";
+import { runPipelineScan, processJobById, processAllPendingJobs, reconcilePlaylist, isQuotaError } from "../lib/pipeline";
 import { scanAudioLibrary } from "../lib/audioPipeline";
 import { getYoutubeClient } from "../lib/youtubeClient";
+import { extractSerial, getSubjectThumbnailPath } from "../lib/thumbnails";
+import { logger } from "../lib/logger";
 import {
   getPktInfo,
   extractMeetingCode,
@@ -319,9 +322,7 @@ router.post("/jobs/:id/approve", async (req, res) => {
     res.status(409).json({ error: "Job is not in needs_review status" });
     return;
   }
-  // Audio has no upload step — approval is publication. Video still queues for upload.
-  const nextStatus = job.contentType === "audio" ? "done" : "pending";
-  const updates: Record<string, unknown> = { status: nextStatus, updatedAt: new Date() };
+  const updates: Record<string, unknown> = { status: "pending", updatedAt: new Date() };
   if (bodyParsed.data.proposedDescription !== undefined) updates.proposedDescription = bodyParsed.data.proposedDescription;
 
   if (bodyParsed.data.lectureName) {
@@ -359,11 +360,7 @@ router.patch("/jobs/:id", async (req, res) => {
     res.status(404).json({ error: "Not found" });
     return;
   }
-  // Audio jobs go straight to "done" on approval (no upload step), so allow
-  // editing a done audio job's title too — video's equivalent is the
-  // YouTube-specific PATCH /jobs/:id/youtube-title route below.
-  const editableStatus = ["needs_review", "pending"].includes(job.status) || (job.status === "done" && job.contentType === "audio");
-  if (!editableStatus) {
+  if (!["needs_review", "pending"].includes(job.status)) {
     res.status(409).json({ error: "Can only edit jobs with needs_review or pending status" });
     return;
   }
@@ -453,6 +450,46 @@ router.patch("/jobs/:id/youtube-title", async (req, res) => {
   res.json(formatJob(updated));
 });
 
+// Apply the admin-provided per-subject thumbnail to a single done job's YouTube video
+router.post("/jobs/:id/thumbnail", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
+  if (!job) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (job.status !== "done" || !job.youtubeVideoId) {
+    res.status(409).json({ error: "Job must be done with a YouTube video to set a thumbnail" });
+    return;
+  }
+  const serial = extractSerial(job.proposedTitle ?? "");
+  const thumbPath = serial ? getSubjectThumbnailPath(serial) : null;
+  if (!thumbPath) {
+    res.status(404).json({ error: serial ? `No thumbnail configured for subject ${serial}` : "Could not determine subject serial from title" });
+    return;
+  }
+  const youtube = getYoutubeClient();
+  if (!youtube) {
+    res.status(503).json({ error: "YouTube not configured" });
+    return;
+  }
+  try {
+    await youtube.thumbnails.set({
+      videoId: job.youtubeVideoId,
+      media: { body: fs.createReadStream(thumbPath) },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(502).json({ error: `Failed to set thumbnail: ${message}` });
+    return;
+  }
+  res.json({ applied: true, jobId: id, serial });
+});
+
 // Restore a "removed" job back to "done" after the admin manually re-adds the
 // video to the playlist. DB-only — does not touch YouTube.
 router.post("/jobs/:id/restore-done", async (req, res) => {
@@ -531,6 +568,54 @@ router.post("/pipeline/scan-audio", async (req, res) => {
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : "Scan failed" });
   }
+});
+
+// Apply the admin-provided per-subject thumbnails to every done job (video and
+// audio alike). Idempotent — safe to re-run any time new thumbnails are added.
+router.post("/pipeline/apply-thumbnails", async (req, res) => {
+  const youtube = getYoutubeClient();
+  if (!youtube) {
+    res.status(503).json({ error: "YouTube not configured" });
+    return;
+  }
+
+  const doneJobs = await db
+    .select({ id: jobsTable.id, proposedTitle: jobsTable.proposedTitle, youtubeVideoId: jobsTable.youtubeVideoId })
+    .from(jobsTable)
+    .where(eq(jobsTable.status, "done"));
+
+  let applied = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const job of doneJobs) {
+    if (!job.youtubeVideoId) {
+      skipped++;
+      continue;
+    }
+    const serial = extractSerial(job.proposedTitle ?? "");
+    const thumbPath = serial ? getSubjectThumbnailPath(serial) : null;
+    if (!thumbPath) {
+      skipped++;
+      continue;
+    }
+    try {
+      await youtube.thumbnails.set({
+        videoId: job.youtubeVideoId,
+        media: { body: fs.createReadStream(thumbPath) },
+      });
+      applied++;
+    } catch (err) {
+      if (isQuotaError(err)) {
+        logger.warn({ applied, skipped, failed }, "Bulk thumbnail apply stopped: quota exceeded — re-run later");
+        break;
+      }
+      logger.warn({ jobId: job.id, err }, "Bulk thumbnail apply: failed for job, continuing");
+      failed++;
+    }
+  }
+
+  res.json({ applied, skipped, failed });
 });
 
 // Start uploading all pending jobs in chronological order (runs in background)

@@ -55,3 +55,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Admin-curated per-subject thumbnail images (dropped in locally, not code)
+/artifacts/api-server/thumbnails/*
+!/artifacts/api-server/thumbnails/.gitkeep
