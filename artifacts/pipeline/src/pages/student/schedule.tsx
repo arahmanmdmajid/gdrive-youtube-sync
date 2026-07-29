@@ -1,37 +1,97 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { StudentLayout } from "@/components/student-layout";
 import { useStudentSchedule } from "@/lib/student-api";
+import { getAllTimezones, getBrowserTimezone, getUtcOffsetLabel, convertPktSlot } from "@/lib/timezone";
+import { Check, ChevronsUpDown, Globe } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const DAY_LABELS: Record<number, string> = {
   0: "Sunday", 1: "Monday", 2: "Tuesday", 3: "Wednesday", 4: "Thursday", 5: "Friday", 6: "Saturday",
 };
 
+const STORAGE_KEY = "student-schedule-timezone";
+
 export default function StudentSchedule() {
   const { data: slots, isLoading } = useStudentSchedule();
+  const [timezone, setTimezone] = useState(() => localStorage.getItem(STORAGE_KEY) || getBrowserTimezone());
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const allTimezones = useMemo(() => getAllTimezones(), []);
 
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, timezone);
+  }, [timezone]);
+
+  const isPkt = timezone === "Asia/Karachi";
+
+  // Conversion is a fixed shift applied uniformly to every slot (PKT has no
+  // DST, and the reference week is chosen to avoid the target timezone's own
+  // DST transitions), so it can never map two distinct PKT slots onto the
+  // same converted (day, time) — safe to key a flat map by the result.
   const { days, times, slotMap } = useMemo(() => {
-    const map = new Map<string, NonNullable<typeof slots>[number]>();
+    const map = new Map<string, { dayOfWeek: number; timeSlot: string; pktTimeSlot: string; serial: string; subjectAr: string; teacherAr: string; subjectEn: string; teacherEn: string }>();
     const dayset = new Set<number>();
     const timeset = new Set<string>();
     for (const s of slots ?? []) {
-      map.set(`${s.dayOfWeek}|${s.timeSlot}`, s);
-      dayset.add(s.dayOfWeek);
-      timeset.add(s.timeSlot);
+      const converted = isPkt ? { dayOfWeek: s.dayOfWeek, timeSlot: s.timeSlot } : convertPktSlot(s.dayOfWeek, s.timeSlot, timezone);
+      const key = `${converted.dayOfWeek}|${converted.timeSlot}`;
+      map.set(key, { ...s, dayOfWeek: converted.dayOfWeek, timeSlot: converted.timeSlot, pktTimeSlot: s.timeSlot });
+      dayset.add(converted.dayOfWeek);
+      timeset.add(converted.timeSlot);
     }
     return {
       days: [...dayset].sort((a, b) => a - b),
       times: [...timeset].sort(),
       slotMap: map,
     };
-  }, [slots]);
+  }, [slots, timezone, isPkt]);
+
+  const offsetLabel = getUtcOffsetLabel(timezone);
 
   return (
     <StudentLayout>
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold">Schedule</h1>
-        <p className="text-sm text-muted-foreground mt-1">Weekly class timetable — all times in Pakistan Standard Time (PKT)</p>
+      <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl font-semibold">Schedule</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Weekly class timetable{isPkt ? " — all times in Pakistan Standard Time (PKT)" : " — converted to your selected timezone"}
+          </p>
+        </div>
+
+        <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1.5 shrink-0">
+              <Globe className="h-3.5 w-3.5" />
+              <span className="max-w-[180px] truncate">{timezone}</span>
+              <span className="text-muted-foreground">{offsetLabel}</span>
+              <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-72 p-0" align="end">
+            <Command>
+              <CommandInput placeholder="Search timezone or city…" />
+              <CommandList>
+                <CommandEmpty>No timezone found.</CommandEmpty>
+                <CommandGroup>
+                  {allTimezones.map((tz) => (
+                    <CommandItem
+                      key={tz}
+                      value={tz}
+                      onSelect={() => { setTimezone(tz); setPickerOpen(false); }}
+                    >
+                      <Check className={cn("h-4 w-4", tz === timezone ? "opacity-100" : "opacity-0")} />
+                      <span className="truncate">{tz}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {isLoading ? (
@@ -70,6 +130,9 @@ export default function StudentSchedule() {
                               <div className="text-sm font-medium">{slot.subjectEn}</div>
                               <div className="text-xs text-muted-foreground">{slot.teacherEn}</div>
                               <div className="text-xs text-muted-foreground/70" dir="rtl">{slot.subjectAr} — {slot.teacherAr}</div>
+                              {!isPkt && (
+                                <div className="text-[11px] text-muted-foreground/50">PKT {slot.pktTimeSlot}</div>
+                              )}
                             </div>
                           ) : (
                             <span className="text-muted-foreground/30">—</span>
