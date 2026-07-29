@@ -199,7 +199,7 @@ export async function runPipelineScan(): Promise<{
   // Map driveFileId → { title, description } for every eligible file
   const positionalAssignments = new Map<string, { title: string; description: string }>();
   for (const group of groupMap.values()) {
-    const slots = group.meetingCode ? getOrderedSlotsForDay(group.dayOfWeek) : [];
+    const slots = group.meetingCode ? await getOrderedSlotsForDay(group.dayOfWeek) : [];
     for (let i = 0; i < group.files.length; i++) {
       const file = group.files[i];
       if (!file.id) continue;
@@ -212,8 +212,8 @@ export async function runPipelineScan(): Promise<{
       } else {
         // Overflow (more recordings than schedule slots) or no meeting code
         positionalAssignments.set(file.id, {
-          title: buildYoutubeTitle(file.name ?? "Untitled", file.createdTime),
-          description: buildYoutubeDescription(file.name ?? "Untitled", file.createdTime),
+          title: await buildYoutubeTitle(file.name ?? "Untitled", file.createdTime),
+          description: await buildYoutubeDescription(file.name ?? "Untitled", file.createdTime),
         });
       }
     }
@@ -248,8 +248,8 @@ export async function runPipelineScan(): Promise<{
       const sizeBytes = file.size ? parseInt(file.size, 10) : null;
       const isSuspiciousSize = sizeBytes !== null && sizeBytes > BATCH_RECORDING_SIZE_BYTES;
       const assignment = positionalAssignments.get(file.id) ?? {
-        title: buildYoutubeTitle(file.name ?? "Untitled", file.createdTime ?? null),
-        description: buildYoutubeDescription(file.name ?? "Untitled", file.createdTime ?? null),
+        title: await buildYoutubeTitle(file.name ?? "Untitled", file.createdTime ?? null),
+        description: await buildYoutubeDescription(file.name ?? "Untitled", file.createdTime ?? null),
       };
       let proposedTitle = assignment.title;
       const proposedDescription = assignment.description;
@@ -289,8 +289,8 @@ async function uploadJob(job: typeof jobsTable.$inferSelect): Promise<void> {
       throw new Error("YouTube not configured. Please add OAuth credentials.");
     }
 
-    const title = job.proposedTitle ?? buildYoutubeTitle(job.driveFileName, job.driveCreatedTime);
-    const description = job.proposedDescription ?? buildYoutubeDescription(job.driveFileName, job.driveCreatedTime);
+    const title = job.proposedTitle ?? (await buildYoutubeTitle(job.driveFileName, job.driveCreatedTime));
+    const description = job.proposedDescription ?? (await buildYoutubeDescription(job.driveFileName, job.driveCreatedTime));
 
     // ── Dedup check ──────────────────────────────────────────────────────────
     // If this job previously failed with a network/auth error, the video may
@@ -421,7 +421,7 @@ async function uploadJob(job: typeof jobsTable.$inferSelect): Promise<void> {
       try {
         const youtube = getYoutubeClient();
         const title =
-          job.proposedTitle ?? buildYoutubeTitle(job.driveFileName, job.driveCreatedTime);
+          job.proposedTitle ?? (await buildYoutubeTitle(job.driveFileName, job.driveCreatedTime));
         const existingId = await findVideoOnYoutube(youtube, title);
         if (existingId) {
           logger.info({ jobId: job.id, existingId }, "Video found on YouTube after error — recovering as done");

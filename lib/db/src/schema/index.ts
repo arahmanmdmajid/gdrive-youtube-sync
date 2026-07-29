@@ -19,4 +19,5 @@
 
 export * from "./jobs";
 export * from "./library";
+export * from "./schedule";
 export * from "./users";

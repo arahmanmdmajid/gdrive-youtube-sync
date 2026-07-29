@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Library, Users, UserCog, LogOut, GraduationCap, Sun, Moon } from "lucide-react";
+import { BookOpen, Library, Users, UserCog, LogOut, GraduationCap, Sun, Moon, CalendarDays } from "lucide-react";
 import { getStoredUser } from "@/lib/auth";
 import { logout } from "@/lib/student-api";
 import { useTheme } from "@/lib/theme";
@@ -16,12 +16,14 @@ export function StudentLayout({ children }: { children: ReactNode }) {
       ? [
           { name: "Subjects", href: "/", icon: BookOpen },
           { name: "Library", href: "/library", icon: Library },
+          { name: "Schedule", href: "/schedule", icon: CalendarDays },
           { name: "Class progress", href: "/class", icon: Users },
           { name: "Manage students", href: "/admin/students", icon: UserCog },
         ]
       : [
           { name: "Subjects", href: "/", icon: BookOpen },
           { name: "Library", href: "/library", icon: Library },
+          { name: "Schedule", href: "/schedule", icon: CalendarDays },
         ];
 
   return (

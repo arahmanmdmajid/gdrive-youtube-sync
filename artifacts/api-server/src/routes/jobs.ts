@@ -143,7 +143,7 @@ async function cascadeSlotAssignment(
 ): Promise<void> {
   const { dateStr, dayOfWeek } = getPktInfo(driveCreatedTime);
   const meetingCode = extractMeetingCode(driveFileName);
-  const slots = getOrderedSlotsForDay(dayOfWeek);
+  const slots = await getOrderedSlotsForDay(dayOfWeek);
   if (slots.length === 0) return;
 
   // Match the selected lecture name back to a slot by subjectEn.

@@ -39,6 +39,17 @@ export interface LibraryCategoryGroup {
   resources: LibraryResource[];
 }
 
+export interface ScheduleSlot {
+  id: number;
+  dayOfWeek: number;
+  timeSlot: string;
+  serial: string;
+  subjectAr: string;
+  teacherAr: string;
+  subjectEn: string;
+  teacherEn: string;
+}
+
 export interface ClassStudent {
   userId: number;
   displayName: string;
@@ -98,6 +109,13 @@ export function useSubjectLectures(serial: string) {
       customFetch<{ subject: Pick<Subject, "serial" | "nameEn" | "teacherEn">; lectures: Lecture[] }>(
         `/api/student/subjects/${serial}/lectures`,
       ),
+  });
+}
+
+export function useStudentSchedule() {
+  return useQuery({
+    queryKey: ["student", "schedule"],
+    queryFn: () => customFetch<ScheduleSlot[]>("/api/student/schedule"),
   });
 }
 

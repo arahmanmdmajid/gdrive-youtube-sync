@@ -37,6 +37,7 @@ import type {
   ApplyThumbnailsResult,
   ScanAudioResult,
   ScanLibraryResult,
+  ScheduleSlot,
   SetJobThumbnailResult,
   Settings,
   SettingsInput,
@@ -44,6 +45,7 @@ import type {
   TriggerResult,
   UpdateLibraryResourceInput,
   UploadJobThumbnailResult,
+  UpsertScheduleSlotInput,
   YoutubePlaylist
 } from './api.schemas';
 
@@ -1648,4 +1650,84 @@ export const useDeleteJobThumbnail = <TError = ErrorType<unknown>, TContext = un
   options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteJobThumbnail>>, TError, { id: number }, TContext>; request?: SecondParameter<typeof customFetch> }
 ): UseMutationResult<Awaited<ReturnType<typeof deleteJobThumbnail>>, TError, { id: number }, TContext> =>
   useMutation(getDeleteJobThumbnailMutationOptions(options));
+
+// ─── Schedule (admin) ───────────────────────────────────────────────────────
+
+export const getListScheduleUrl = () => `/api/schedule`;
+
+export const listSchedule = async (options?: RequestInit): Promise<ScheduleSlot[]> =>
+  customFetch<ScheduleSlot[]>(getListScheduleUrl(), { ...options, method: 'GET' });
+
+export const getListScheduleQueryKey = () => [`/api/schedule`] as const;
+
+export const getListScheduleQueryOptions = <TData = Awaited<ReturnType<typeof listSchedule>>, TError = ErrorType<unknown>>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listSchedule>>, TError, TData>; request?: SecondParameter<typeof customFetch> }
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getListScheduleQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listSchedule>>> = ({ signal }) =>
+    listSchedule({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof listSchedule>>, TError, TData> & { queryKey: QueryKey };
+};
+
+export function useListSchedule<TData = Awaited<ReturnType<typeof listSchedule>>, TError = ErrorType<unknown>>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listSchedule>>, TError, TData>; request?: SecondParameter<typeof customFetch> }
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListScheduleQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getUpsertScheduleSlotUrl = (dayOfWeek: number, timeSlot: string) => `/api/schedule/${dayOfWeek}/${timeSlot}`;
+
+export const upsertScheduleSlot = async (dayOfWeek: number, timeSlot: string, body: UpsertScheduleSlotInput, options?: RequestInit): Promise<ScheduleSlot> =>
+  customFetch<ScheduleSlot>(getUpsertScheduleSlotUrl(dayOfWeek, timeSlot), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(body),
+  });
+
+export const getUpsertScheduleSlotMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof upsertScheduleSlot>>, TError, { dayOfWeek: number; timeSlot: string; data: BodyType<UpsertScheduleSlotInput> }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof upsertScheduleSlot>>, TError, { dayOfWeek: number; timeSlot: string; data: BodyType<UpsertScheduleSlotInput> }, TContext> => {
+  const mutationKey = ['upsertScheduleSlot'];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertScheduleSlot>>, { dayOfWeek: number; timeSlot: string; data: BodyType<UpsertScheduleSlotInput> }> = ({ dayOfWeek, timeSlot, data }) =>
+    upsertScheduleSlot(dayOfWeek, timeSlot, data, requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useUpsertScheduleSlot = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof upsertScheduleSlot>>, TError, { dayOfWeek: number; timeSlot: string; data: BodyType<UpsertScheduleSlotInput> }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof upsertScheduleSlot>>, TError, { dayOfWeek: number; timeSlot: string; data: BodyType<UpsertScheduleSlotInput> }, TContext> =>
+  useMutation(getUpsertScheduleSlotMutationOptions(options));
+
+export const getDeleteScheduleSlotUrl = (dayOfWeek: number, timeSlot: string) => `/api/schedule/${dayOfWeek}/${timeSlot}`;
+
+export const deleteScheduleSlot = async (dayOfWeek: number, timeSlot: string, options?: RequestInit): Promise<void> =>
+  customFetch<void>(getDeleteScheduleSlotUrl(dayOfWeek, timeSlot), { ...options, method: 'DELETE' });
+
+export const getDeleteScheduleSlotMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteScheduleSlot>>, TError, { dayOfWeek: number; timeSlot: string }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof deleteScheduleSlot>>, TError, { dayOfWeek: number; timeSlot: string }, TContext> => {
+  const mutationKey = ['deleteScheduleSlot'];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteScheduleSlot>>, { dayOfWeek: number; timeSlot: string }> = ({ dayOfWeek, timeSlot }) =>
+    deleteScheduleSlot(dayOfWeek, timeSlot, requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useDeleteScheduleSlot = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteScheduleSlot>>, TError, { dayOfWeek: number; timeSlot: string }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof deleteScheduleSlot>>, TError, { dayOfWeek: number; timeSlot: string }, TContext> =>
+  useMutation(getDeleteScheduleSlotMutationOptions(options));
 

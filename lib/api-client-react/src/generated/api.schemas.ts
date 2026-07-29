@@ -102,6 +102,27 @@ export interface UpdateLectureNameInput {
   name: string;
 }
 
+export interface ScheduleSlot {
+  id: number;
+  dayOfWeek: number;
+  timeSlot: string;
+  serial: string;
+  subjectAr: string;
+  teacherAr: string;
+  subjectEn: string;
+  teacherEn: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertScheduleSlotInput {
+  serial: string;
+  subjectAr: string;
+  teacherAr: string;
+  subjectEn: string;
+  teacherEn: string;
+}
+
 export interface ApproveJobInput {
   lectureName?: string;
   proposedTitle?: string;
