@@ -3,16 +3,32 @@ import {
   useListSchedule,
   useUpsertScheduleSlot,
   useDeleteScheduleSlot,
+  upsertScheduleSlot,
   getListScheduleQueryKey,
+  type ScheduleSlot,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { GripVertical, Loader2, Plus, Trash2 } from "lucide-react";
 
 const DAY_LABELS: Record<number, string> = {
   0: "Sunday", 1: "Monday", 2: "Tuesday", 3: "Wednesday", 4: "Thursday", 5: "Friday", 6: "Saturday",
@@ -29,11 +45,51 @@ type EditState = {
   teacherEn: string;
 };
 
+function cardId(dayOfWeek: number, timeSlot: string) {
+  return `${dayOfWeek}:${timeSlot}`;
+}
+
+function DraggableCard({ slot, onOpen }: { slot: ScheduleSlot; onOpen: () => void }) {
+  const id = cardId(slot.dayOfWeek, slot.timeSlot);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="rounded-md border border-border bg-card hover:border-primary/50 transition-colors">
+      <div className="flex items-start gap-1 p-2">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="shrink-0 mt-0.5 cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground touch-none"
+          title="Drag to reorder"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <button type="button" onClick={onOpen} className="flex-1 min-w-0 text-left space-y-0.5">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-xs font-mono text-muted-foreground">{slot.timeSlot}</span>
+            <span className="text-xs font-mono text-muted-foreground/70">{slot.serial}</span>
+          </div>
+          <div className="text-sm font-medium truncate">{slot.subjectEn}</div>
+          <div className="text-xs text-muted-foreground truncate">{slot.teacherEn}</div>
+          <div className="text-xs text-muted-foreground/70 truncate" dir="rtl">{slot.subjectAr} — {slot.teacherAr}</div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Schedule() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: slots, isLoading } = useListSchedule();
   const [editState, setEditState] = useState<EditState | null>(null);
+  const [reordering, setReordering] = useState(false);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getListScheduleQueryKey() });
 
@@ -51,24 +107,63 @@ export default function Schedule() {
     },
   });
 
-  const { days, times, slotMap } = useMemo(() => {
-    const map = new Map<string, NonNullable<typeof slots>[number]>();
+  const { days, byDay } = useMemo(() => {
     const dayset = new Set<number>();
-    const timeset = new Set<string>();
+    const grouped = new Map<number, ScheduleSlot[]>();
     for (const s of slots ?? []) {
-      map.set(`${s.dayOfWeek}|${s.timeSlot}`, s);
       dayset.add(s.dayOfWeek);
-      timeset.add(s.timeSlot);
+      const bucket = grouped.get(s.dayOfWeek) ?? [];
+      bucket.push(s);
+      grouped.set(s.dayOfWeek, bucket);
     }
-    return {
-      days: [...dayset].sort((a, b) => a - b),
-      times: [...timeset].sort(),
-      slotMap: map,
-    };
+    for (const bucket of grouped.values()) bucket.sort((a, b) => a.timeSlot.localeCompare(b.timeSlot));
+    return { days: [...dayset].sort((a, b) => a - b), byDay: grouped };
   }, [slots]);
 
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const [activeDay] = String(active.id).split(":");
+    const [overDay] = String(over.id).split(":");
+    if (activeDay !== overDay) return; // reordering is only within the same day's column
+
+    const dayOfWeek = Number(activeDay);
+    const daySlots = byDay.get(dayOfWeek);
+    if (!daySlots) return;
+
+    const oldIndex = daySlots.findIndex((s) => cardId(s.dayOfWeek, s.timeSlot) === active.id);
+    const newIndex = daySlots.findIndex((s) => cardId(s.dayOfWeek, s.timeSlot) === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const times = daySlots.map((s) => s.timeSlot);
+    const reordered = arrayMove(daySlots, oldIndex, newIndex);
+
+    setReordering(true);
+    try {
+      await Promise.all(
+        reordered.map((slotContent, i) =>
+          upsertScheduleSlot(dayOfWeek, times[i], {
+            serial: slotContent.serial,
+            subjectAr: slotContent.subjectAr,
+            teacherAr: slotContent.teacherAr,
+            subjectEn: slotContent.subjectEn,
+            teacherEn: slotContent.teacherEn,
+          }),
+        ),
+      );
+      invalidate();
+    } catch (err: any) {
+      toast({ title: "Failed to reorder", description: err?.message, variant: "destructive" });
+    } finally {
+      setReordering(false);
+    }
+  };
+
   const openCell = (dayOfWeek: number, timeSlot: string) => {
-    const existing = slotMap.get(`${dayOfWeek}|${timeSlot}`);
+    const existing = byDay.get(dayOfWeek)?.find((s) => s.timeSlot === timeSlot);
     setEditState({
       dayOfWeek,
       timeSlot,
@@ -81,6 +176,7 @@ export default function Schedule() {
     });
   };
 
+  const [addingForDay, setAddingForDay] = useState<number | null>(null);
   const [newTimeSlot, setNewTimeSlot] = useState("");
 
   const handleSave = () => {
@@ -108,91 +204,85 @@ export default function Schedule() {
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold font-mono tracking-tight text-foreground">Class Schedule</h1>
-          <p className="text-muted-foreground mt-1">Weekly timetable — drives automatic video title generation (times in PKT)</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="HH:MM"
-            value={newTimeSlot}
-            onChange={(e) => setNewTimeSlot(e.target.value)}
-            className="w-24 font-mono text-sm"
-          />
-          <Button
-            variant="outline"
-            disabled={!/^\d{2}:\d{2}$/.test(newTimeSlot)}
-            onClick={() => {
-              openCell(days[0] ?? 1, newTimeSlot);
-              setNewTimeSlot("");
-            }}
-            className="gap-1.5 shrink-0"
-          >
-            <Plus className="h-4 w-4" />
-            Add Time Slot
-          </Button>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold font-mono tracking-tight text-foreground">Class Schedule</h1>
+        <p className="text-muted-foreground mt-1">
+          Weekly timetable — drives automatic video title generation (times in PKT). Drag a card up or down within its day to reorder.
+        </p>
       </div>
 
-      <Card className="border-border bg-card shadow-sm overflow-x-auto">
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="flex justify-center p-12 text-muted-foreground">
-              <Loader2 className="h-8 w-8 animate-spin" />
-            </div>
-          ) : times.length === 0 ? (
-            <div className="text-center p-12 bg-muted/20">
-              <p className="text-muted-foreground">No schedule slots yet. Use "Add Time Slot" above to create the first one.</p>
-            </div>
-          ) : (
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left p-3 font-mono text-xs text-muted-foreground w-20">TIME</th>
-                  {days.map((d) => (
-                    <th key={d} className="text-left p-3 font-mono text-xs text-muted-foreground">
-                      {DAY_LABELS[d] ?? d}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {times.map((t) => (
-                  <tr key={t} className="border-b border-border last:border-b-0">
-                    <td className="p-3 font-mono text-sm text-muted-foreground whitespace-nowrap">{t}</td>
-                    {days.map((d) => {
-                      const slot = slotMap.get(`${d}|${t}`);
-                      return (
-                        <td key={d} className="p-2 align-top">
-                          <button
-                            type="button"
-                            onClick={() => openCell(d, t)}
-                            className="w-full h-full min-h-[3.5rem] rounded-md border border-border hover:border-primary/50 hover:bg-muted/30 transition-colors p-2 text-left"
-                          >
-                            {slot ? (
-                              <div className="space-y-0.5">
-                                <div className="text-xs font-mono text-muted-foreground">{slot.serial}</div>
-                                <div className="text-sm font-medium">{slot.subjectEn}</div>
-                                <div className="text-xs text-muted-foreground">{slot.teacherEn}</div>
-                                <div className="text-xs text-muted-foreground/70" dir="rtl">{slot.subjectAr} — {slot.teacherAr}</div>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-center h-full text-muted-foreground/40">
-                                <Plus className="h-4 w-4" />
-                              </div>
-                            )}
-                          </button>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </CardContent>
-      </Card>
+      {isLoading ? (
+        <div className="flex justify-center p-12 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      ) : (
+        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+          <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${Math.max(days.length, 1)}, minmax(0, 1fr))` }}>
+            {days.map((d) => {
+              const daySlots = byDay.get(d) ?? [];
+              return (
+                <Card key={d} className="border-border bg-card shadow-sm">
+                  <CardHeader className="py-3 px-3">
+                    <CardTitle className="text-sm font-mono">{DAY_LABELS[d] ?? d}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-2 space-y-2">
+                    <SortableContext
+                      items={daySlots.map((s) => cardId(s.dayOfWeek, s.timeSlot))}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {daySlots.map((slot) => (
+                        <DraggableCard key={cardId(slot.dayOfWeek, slot.timeSlot)} slot={slot} onOpen={() => openCell(slot.dayOfWeek, slot.timeSlot)} />
+                      ))}
+                    </SortableContext>
+
+                    {addingForDay === d ? (
+                      <div className="flex items-center gap-1.5 p-1">
+                        <Input
+                          autoFocus
+                          placeholder="HH:MM"
+                          value={newTimeSlot}
+                          onChange={(e) => setNewTimeSlot(e.target.value)}
+                          className="h-8 font-mono text-xs"
+                        />
+                        <Button
+                          size="sm"
+                          disabled={!/^\d{2}:\d{2}$/.test(newTimeSlot)}
+                          onClick={() => {
+                            openCell(d, newTimeSlot);
+                            setNewTimeSlot("");
+                            setAddingForDay(null);
+                          }}
+                        >
+                          Add
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => { setAddingForDay(null); setNewTimeSlot(""); }}>
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setAddingForDay(d)}
+                        className="w-full flex items-center justify-center gap-1.5 rounded-md border border-dashed border-border p-2 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:border-primary/40 transition-colors"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add class
+                      </button>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </DndContext>
+      )}
+
+      {reordering && (
+        <div className="fixed bottom-6 right-6 flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 shadow-md text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Saving new order…
+        </div>
+      )}
 
       <Dialog open={editState !== null} onOpenChange={(open) => !open && setEditState(null)}>
         <DialogContent className="max-w-md">
