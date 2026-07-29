@@ -681,7 +681,8 @@ router.post("/pipeline/apply-thumbnails", async (req, res) => {
       applied++;
     } catch (err) {
       if (isQuotaError(err) || isThumbnailRateLimited(err)) {
-        logger.warn({ applied, skipped, failed }, "Bulk thumbnail apply stopped: rate-limited — re-run later");
+        const message = err instanceof Error ? err.message : String(err);
+        logger.warn({ applied, skipped, failed, message }, "Bulk thumbnail apply stopped: rate-limited — re-run later");
         break;
       }
       logger.warn({ jobId: job.id, err }, "Bulk thumbnail apply: failed for job, continuing");
