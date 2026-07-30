@@ -52,7 +52,12 @@ router.post("/thumbnails/subjects/:serial", upload.single("image"), (req, res) =
 });
 
 router.delete("/thumbnails/subjects/:serial", (req, res) => {
-  deleteSubjectThumbnail(String(req.params.serial));
+  const serial = String(req.params.serial);
+  if (!/^\d+\.\d+$/.test(serial)) {
+    res.status(400).json({ error: "Invalid serial" });
+    return;
+  }
+  deleteSubjectThumbnail(serial);
   res.status(204).send();
 });
 

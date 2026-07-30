@@ -24,10 +24,17 @@ export function extractSerial(title: string): string | null {
   return title.match(SERIAL_RE)?.[1] ?? null;
 }
 
+/** Resolves {dir}/{key}{ext} and rejects any result that escapes dir (e.g. via "../" in key). */
+function safeJoin(dir: string, key: string, ext: string): string | null {
+  const candidate = path.resolve(dir, `${key}${ext}`);
+  const dirWithSep = dir.endsWith(path.sep) ? dir : dir + path.sep;
+  return candidate.startsWith(dirWithSep) ? candidate : null;
+}
+
 function findByKey(dir: string, key: string): string | null {
   for (const ext of EXTENSIONS) {
-    const candidate = path.join(dir, `${key}${ext}`);
-    if (fs.existsSync(candidate)) return candidate;
+    const candidate = safeJoin(dir, key, ext);
+    if (candidate && fs.existsSync(candidate)) return candidate;
   }
   return null;
 }
@@ -73,11 +80,12 @@ export function saveUploadedImage(dir: string, key: string, buffer: Buffer, mime
   ensureDir(dir);
   for (const existingExt of EXTENSIONS) {
     if (existingExt === ext) continue;
-    const stale = path.join(dir, `${key}${existingExt}`);
-    if (fs.existsSync(stale)) fs.rmSync(stale);
+    const stale = safeJoin(dir, key, existingExt);
+    if (stale && fs.existsSync(stale)) fs.rmSync(stale);
   }
 
-  const dest = path.join(dir, `${key}${ext}`);
+  const dest = safeJoin(dir, key, ext);
+  if (!dest) throw new Error(`Invalid key: ${key}`);
   fs.writeFileSync(dest, buffer);
   return dest;
 }
@@ -92,8 +100,8 @@ export function saveJobThumbnail(jobId: number, buffer: Buffer, mimeType: string
 
 function deleteByKey(dir: string, key: string): void {
   for (const ext of EXTENSIONS) {
-    const candidate = path.join(dir, `${key}${ext}`);
-    if (fs.existsSync(candidate)) fs.rmSync(candidate);
+    const candidate = safeJoin(dir, key, ext);
+    if (candidate && fs.existsSync(candidate)) fs.rmSync(candidate);
   }
 }
 
