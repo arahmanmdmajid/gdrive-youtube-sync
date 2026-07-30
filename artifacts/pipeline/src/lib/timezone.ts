@@ -77,6 +77,15 @@ export function convertPktSlot(dayOfWeek: number, timeSlot: string, targetTz: st
   };
 }
 
+/** Formats a "HH:MM" 24h time as either "8:00 AM" or leaves it as "08:00", per the caller's preference. */
+export function formatTimeLabel(timeSlot: string, use24Hour: boolean): string {
+  if (use24Hour) return timeSlot;
+  const [hours, minutes] = timeSlot.split(":").map(Number);
+  const period = hours >= 12 ? "PM" : "AM";
+  const hour12 = hours % 12 || 12;
+  return `${hour12}:${String(minutes).padStart(2, "0")} ${period}`;
+}
+
 /** Current UTC offset label for a timezone, e.g. "GMT+5". */
 export function getUtcOffsetLabel(tz: string): string {
   try {
