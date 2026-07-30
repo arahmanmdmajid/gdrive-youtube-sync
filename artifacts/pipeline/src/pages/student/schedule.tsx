@@ -20,7 +20,10 @@ export default function StudentSchedule() {
   const { data: slots, isLoading } = useStudentSchedule();
   const [timezone, setTimezone] = useState(() => localStorage.getItem(STORAGE_KEY) || getBrowserTimezone());
   const [pickerOpen, setPickerOpen] = useState(false);
-  const allTimezones = useMemo(() => getAllTimezones(), []);
+  const allTimezones = useMemo(
+    () => getAllTimezones().map((tz) => ({ tz, offset: getUtcOffsetLabel(tz) })),
+    [],
+  );
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, timezone);
@@ -77,14 +80,15 @@ export default function StudentSchedule() {
               <CommandList>
                 <CommandEmpty>No timezone found.</CommandEmpty>
                 <CommandGroup>
-                  {allTimezones.map((tz) => (
+                  {allTimezones.map(({ tz, offset }) => (
                     <CommandItem
                       key={tz}
                       value={tz}
                       onSelect={() => { setTimezone(tz); setPickerOpen(false); }}
                     >
                       <Check className={cn("h-4 w-4", tz === timezone ? "opacity-100" : "opacity-0")} />
-                      <span className="truncate">{tz}</span>
+                      <span className="truncate flex-1">{tz}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{offset}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
