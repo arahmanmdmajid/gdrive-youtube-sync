@@ -66,7 +66,7 @@ export default function StudentSchedule() {
   return (
     <StudentLayout>
       <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="text-xl font-semibold">Schedule</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Weekly class timetable{isPkt ? " — all times in Pakistan Standard Time (PKT)" : " — converted to your selected timezone"}
@@ -81,11 +81,11 @@ export default function StudentSchedule() {
 
           <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5 shrink-0">
-                <Globe className="h-3.5 w-3.5" />
-                <span className="max-w-[180px] truncate">{timezone}</span>
-                <span className="text-muted-foreground">{offsetLabel}</span>
-                <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
+              <Button variant="outline" size="sm" className="gap-1.5 shrink-0 w-[220px] justify-start">
+                <Globe className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate flex-1 text-left">{timezone}</span>
+                <span className="text-muted-foreground shrink-0">{offsetLabel}</span>
+                <ChevronsUpDown className="h-3.5 w-3.5 opacity-50 shrink-0" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-72 p-0" align="end">
