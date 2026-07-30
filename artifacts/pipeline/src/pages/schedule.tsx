@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useListSchedule,
   useUpsertScheduleSlot,
@@ -27,8 +27,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { formatTimeLabel } from "@/lib/timezone";
 import { GripVertical, Loader2, Plus, Trash2 } from "lucide-react";
+
+const HOUR_FORMAT_STORAGE_KEY = "admin-schedule-24h";
 
 const DAY_LABELS: Record<number, string> = {
   0: "Sunday", 1: "Monday", 2: "Tuesday", 3: "Wednesday", 4: "Thursday", 5: "Friday", 6: "Saturday",
@@ -49,7 +53,7 @@ function cardId(dayOfWeek: number, timeSlot: string) {
   return `${dayOfWeek}:${timeSlot}`;
 }
 
-function DraggableCard({ slot, onOpen }: { slot: ScheduleSlot; onOpen: () => void }) {
+function DraggableCard({ slot, onOpen, use24Hour }: { slot: ScheduleSlot; onOpen: () => void; use24Hour: boolean }) {
   const id = cardId(slot.dayOfWeek, slot.timeSlot);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = {
@@ -72,7 +76,7 @@ function DraggableCard({ slot, onOpen }: { slot: ScheduleSlot; onOpen: () => voi
         </button>
         <button type="button" onClick={onOpen} className="flex-1 min-w-0 text-left space-y-0.5">
           <div className="flex items-baseline gap-1.5">
-            <span className="text-xs font-mono text-muted-foreground">{slot.timeSlot}</span>
+            <span className="text-xs font-mono text-muted-foreground">{formatTimeLabel(slot.timeSlot, use24Hour)}</span>
             <span className="text-xs font-mono text-muted-foreground/70">{slot.serial}</span>
           </div>
           <div className="text-sm font-medium truncate">{slot.subjectEn}</div>
@@ -90,6 +94,11 @@ export default function Schedule() {
   const { data: slots, isLoading } = useListSchedule();
   const [editState, setEditState] = useState<EditState | null>(null);
   const [reordering, setReordering] = useState(false);
+  const [use24Hour, setUse24Hour] = useState(() => localStorage.getItem(HOUR_FORMAT_STORAGE_KEY) === "true");
+
+  useEffect(() => {
+    localStorage.setItem(HOUR_FORMAT_STORAGE_KEY, String(use24Hour));
+  }, [use24Hour]);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getListScheduleQueryKey() });
 
@@ -204,11 +213,17 @@ export default function Schedule() {
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold font-mono tracking-tight text-foreground">Class Schedule</h1>
-        <p className="text-muted-foreground mt-1">
-          Weekly timetable — drives automatic video title generation (times in PKT). Drag a card up or down within its day to reorder.
-        </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold font-mono tracking-tight text-foreground">Class Schedule</h1>
+          <p className="text-muted-foreground mt-1">
+            Weekly timetable — drives automatic video title generation (times in PKT). Drag a card up or down within its day to reorder.
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Label htmlFor="hour-format-switch" className="text-xs text-muted-foreground">24h</Label>
+          <Switch id="hour-format-switch" checked={use24Hour} onCheckedChange={setUse24Hour} />
+        </div>
       </div>
 
       {isLoading ? (
@@ -231,7 +246,7 @@ export default function Schedule() {
                       strategy={verticalListSortingStrategy}
                     >
                       {daySlots.map((slot) => (
-                        <DraggableCard key={cardId(slot.dayOfWeek, slot.timeSlot)} slot={slot} onOpen={() => openCell(slot.dayOfWeek, slot.timeSlot)} />
+                        <DraggableCard key={cardId(slot.dayOfWeek, slot.timeSlot)} slot={slot} onOpen={() => openCell(slot.dayOfWeek, slot.timeSlot)} use24Hour={use24Hour} />
                       ))}
                     </SortableContext>
 
@@ -289,7 +304,7 @@ export default function Schedule() {
           <DialogHeader>
             <DialogTitle>{editState?.isNew ? "Add Class" : "Edit Class"}</DialogTitle>
             <DialogDescription>
-              {editState && `${DAY_LABELS[editState.dayOfWeek] ?? editState.dayOfWeek} at ${editState.timeSlot} (PKT)`}
+              {editState && `${DAY_LABELS[editState.dayOfWeek] ?? editState.dayOfWeek} at ${formatTimeLabel(editState.timeSlot, use24Hour)} (PKT)`}
             </DialogDescription>
           </DialogHeader>
 
