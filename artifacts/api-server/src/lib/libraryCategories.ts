@@ -21,6 +21,7 @@ export const FOLDER_NAME_TO_CATEGORY: Record<string, string> = {
   "6.5 العقائد و الفلكيات": "6.5",
   "6.6 اللغة العربية و العروض": "6.6",
   "متفرق": "misc",
+  Misc_Results_Notifications: "misc",
 };
 
 export const CATEGORY_ORDER = ["6.1", "6.2", "6.3", "6.4", "6.5", "6.6", "misc"];
