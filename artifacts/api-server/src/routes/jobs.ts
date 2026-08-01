@@ -128,30 +128,39 @@ async function buildAndAssignTitle(
 }
 
 /**
- * When a user manually assigns a lecture name to a job, cascade the change to
- * all subsequent needs_review jobs for the same PKT date + meeting code.
+ * When a user manually assigns a lecture name to a job, retitle every needs_review
+ * sibling for the same PKT date + meeting code — including the job itself — based
+ * on its chronological offset from the corrected job's chosen slot, in both
+ * directions.
  *
- * Example: schedule has slots [A, B, C, D]. B wasn't recorded, so the pipeline
- * assigned [A, B, C] to the 3 recordings. User changes job[1] from B → C.
- * This function then updates job[2] to D automatically.
+ * Example: schedule has slots [A, B, C, D]. Recording chunks finished uploading to
+ * Drive out of order, so the pipeline's createdTime-based positional assignment
+ * mislabeled them as [B, A, C]. User corrects job[0] (wrongly labeled B) to A.
+ * This function then retitles job[0] to A, job[1] to B, and job[2] to C —
+ * anchored on the corrected job rather than raw upload order.
+ *
+ * Returns true if the lecture name matched a schedule subject and titles were
+ * assigned; false if it doesn't correspond to any schedule slot (e.g. audio-only
+ * subjects, or a custom name), in which case the caller should fall back to
+ * buildAndAssignTitle's Part-N naming instead.
  */
 async function cascadeSlotAssignment(
   currentJobId: number,
   selectedLectureName: string,
   driveCreatedTime: string,
   driveFileName: string,
-): Promise<void> {
+): Promise<boolean> {
   const { dateStr, dayOfWeek } = getPktInfo(driveCreatedTime);
   const meetingCode = extractMeetingCode(driveFileName);
   const slots = await getOrderedSlotsForDay(dayOfWeek);
-  if (slots.length === 0) return;
+  if (slots.length === 0) return false;
 
   // Match the selected lecture name back to a slot by subjectEn.
   // Lecture name format: "X.X SubjectEn | TeacherEn"
   const nameWithoutSerial = selectedLectureName.replace(/^\d+\.\d+\s+/, "");
   const subjectEn = nameWithoutSerial.split(" | ")[0]?.trim() ?? "";
   const selectedSlotIdx = slots.findIndex(s => s.subjectEn === subjectEn);
-  if (selectedSlotIdx < 0) return;
+  if (selectedSlotIdx < 0) return false;
 
   // Find all needs_review siblings for the same PKT date + meeting code
   const allNeedsReview = await db
@@ -177,19 +186,23 @@ async function cascadeSlotAssignment(
     .sort((a, b) => (a.driveCreatedTime ?? "").localeCompare(b.driveCreatedTime ?? ""));
 
   const currentPos = siblings.findIndex(j => j.id === currentJobId);
-  if (currentPos < 0) return;
+  if (currentPos < 0) return false;
 
-  // Assign the next slots to each subsequent sibling
-  for (let i = currentPos + 1; i < siblings.length; i++) {
-    const nextSlotIdx = selectedSlotIdx + (i - currentPos);
-    if (nextSlotIdx >= slots.length) break;
-    const slot = slots[nextSlotIdx];
+  // Retitle every sibling — including the corrected job itself — based on its
+  // offset from the chosen slot. Overflow/underflow past the day's schedule is
+  // left untouched (no curriculum slot to assign).
+  for (let i = 0; i < siblings.length; i++) {
+    const slotIdx = selectedSlotIdx + (i - currentPos);
+    if (slotIdx < 0 || slotIdx >= slots.length) continue;
+    const slot = slots[slotIdx];
     const title = buildYoutubeTitleFromSlot(slot, dateStr);
     const description = buildYoutubeDescriptionFromSlot(slot, dateStr, siblings[i].driveFileName ?? "");
     await db.update(jobsTable)
       .set({ proposedTitle: title, proposedDescription: description, updatedAt: new Date() })
       .where(eq(jobsTable.id, siblings[i].id));
   }
+
+  return true;
 }
 
 const router = Router();
@@ -346,12 +359,16 @@ router.post("/jobs/:id/approve", async (req, res) => {
   if (bodyParsed.data.proposedDescription !== undefined) updates.proposedDescription = bodyParsed.data.proposedDescription;
 
   if (bodyParsed.data.lectureName) {
-    // Build title from lecture name + date, assigning part numbers across sibling jobs
-    await buildAndAssignTitle(id, bodyParsed.data.lectureName, job.driveCreatedTime ?? null);
-    // Cascade: update subsequent same-day needs_review jobs with the next schedule slots.
-    // Meaningless for audio (no Meet-schedule slot concept), so only applies to video.
+    // Retitle the whole same-day/meeting-code group anchored on this job's corrected
+    // slot (both directions). Meaningless for audio (no Meet-schedule slot concept),
+    // so only attempted for video; falls back to Part-N naming if the lecture name
+    // doesn't match any schedule subject.
+    let cascaded = false;
     if (job.contentType !== "audio" && job.driveCreatedTime && job.driveFileName) {
-      await cascadeSlotAssignment(id, bodyParsed.data.lectureName, job.driveCreatedTime, job.driveFileName);
+      cascaded = await cascadeSlotAssignment(id, bodyParsed.data.lectureName, job.driveCreatedTime, job.driveFileName);
+    }
+    if (!cascaded) {
+      await buildAndAssignTitle(id, bodyParsed.data.lectureName, job.driveCreatedTime ?? null);
     }
     await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
   } else {
@@ -388,11 +405,16 @@ router.patch("/jobs/:id", async (req, res) => {
   if (bodyParsed.data.proposedDescription !== undefined) updates.proposedDescription = bodyParsed.data.proposedDescription;
 
   if (bodyParsed.data.lectureName) {
-    await buildAndAssignTitle(id, bodyParsed.data.lectureName, job.driveCreatedTime ?? null);
-    // Cascade: update subsequent same-day needs_review jobs with the next schedule slots.
-    // Meaningless for audio (no Meet-schedule slot concept), so only applies to video.
+    // Retitle the whole same-day/meeting-code group anchored on this job's corrected
+    // slot (both directions). Meaningless for audio (no Meet-schedule slot concept),
+    // so only attempted for video; falls back to Part-N naming if the lecture name
+    // doesn't match any schedule subject.
+    let cascaded = false;
     if (job.contentType !== "audio" && job.driveCreatedTime && job.driveFileName) {
-      await cascadeSlotAssignment(id, bodyParsed.data.lectureName, job.driveCreatedTime, job.driveFileName);
+      cascaded = await cascadeSlotAssignment(id, bodyParsed.data.lectureName, job.driveCreatedTime, job.driveFileName);
+    }
+    if (!cascaded) {
+      await buildAndAssignTitle(id, bodyParsed.data.lectureName, job.driveCreatedTime ?? null);
     }
     if (Object.keys(updates).length > 1) {
       await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
