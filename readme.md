@@ -15,4 +15,13 @@
 
 ---
 
+## Automation
+
+Class recordings from this schedule are auto-uploaded to YouTube by a Drive-to-Tube pipeline. See how it works:
+
+- **Live diagram**: https://arahmanmdmajid.github.io/gdrive-youtube-sync/app-flow.html
+- **Source**: [`docs/app-flow.html`](docs/app-flow.html) · [`docs/agent-context.json`](docs/agent-context.json)
+
+---
+
 > *Hidayah Academy for Islamic Education · hidayah.edu.pk*

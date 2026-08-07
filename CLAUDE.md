@@ -58,6 +58,14 @@ API: http://localhost:5000
 
 ---
 
+## Diagrams & agent context
+
+- `docs/app-flow.html` — interactive node/edge diagram of the pipeline (Drive scan → YouTube upload), the job-status lifecycle, and every dashboard page, with click-through detail and hover-to-isolate connections. Live at https://arahmanmdmajid.github.io/gdrive-youtube-sync/app-flow.html (served via GitHub Pages from `main` /docs)
+- `docs/agent-context.json` — machine-readable companion covering the same system (nodes, edges, full API route list, job lifecycle, diagram routing model) for AI agents to load as fast context
+- Keep both in sync with this file and with the actual pipeline/route code when any of them change
+
+---
+
 ## Domain context
 
 - **Institute**: madrasa in Pakistan, PKT timezone (UTC+5)
