@@ -1,0 +1,222 @@
+{
+  "meta": {
+    "project": "Drive-To-Tube",
+    "oneLiner": "Auto-uploads Google Drive class recordings from a madrasa in Pakistan to YouTube, titled from a fixed weekly schedule, with a human review step before anything goes live.",
+    "repo": "https://github.com/arahmanmdmajid/gdrive-youtube-sync.git",
+    "workingDirectory": "artifacts/api-server (API + worker) and artifacts/pipeline (dashboard) under the repo root",
+    "generated": "2026-08-07",
+    "purpose": "Machine-readable map of this app's pipeline flow, UI screens, job-status lifecycle and API surface. Intended for AI coding agents to load as fast, accurate context before making changes. Companion to CLAUDE.md (prose) and docs/app-flow.html (interactive diagram) — all three describe the same system and should be kept in sync."
+  },
+
+  "diagramImplementation": {
+    "file": "docs/app-flow.html",
+    "note": "Documents how the interactive diagram lays out and routes its own SVG connectors — not app behavior. Read this before editing app-flow.html's pathFor()/computeLanes() so a routing tweak doesn't reintroduce a line-crosses-card regression.",
+    "layout": {
+      "layers": ["pages", "main", "branch"],
+      "layerOrder": { "pages": 0, "main": 1, "branch": 2 },
+      "description": "Three stacked CSS grid rows, 9 columns each. 'pages' = dashboard screens (control layer, top). 'main' = the 9 pipeline stages/statuses (flow layer, middle). 'branch' = side-effect/off-path statuses: cascade, rejected, failed, removed (bottom). Node→layer/column assignment lives in the LAYOUT constant in app-flow.html."
+    },
+    "routing": {
+      "rule": "Edge routing is chosen by which layers the two endpoints belong to, never by raw pixel distance (dx/dy) — comparing distance directly was the original bug: a wide same-row-looking gap could route straight through an unrelated card sitting between two far-apart columns.",
+      "sameLayer": "Direct cubic-bezier curve at each node's own edge (e.g. done→playlist-sync). Backward same-row edges (e.g. playlist-sync→done restore) dodge through the main/branch gap lane instead of bulging over neighboring cards.",
+      "crossLayerOneHop": "page↔main or main↔branch edges travel through 'lanes' — Y coordinates computed live each redraw as the midpoint of the measured empty gap between the two rows (computeLanes(): pageMainLane, mainBranchLane). A small ±9px x-nudge keeps a round-trip pair (e.g. needs_review↔cascade) visually distinct instead of perfectly overlapping.",
+      "crossLayerTwoHop": "page→branch edges (job-queue→rejected, job-queue→failed) skip the main row entirely. safeGapX() finds an x position in a gap between main-row columns (or past the outer edge) closest to the edge's natural path, and the SVG path holds that x constant for the full vertical span of the main row (an 'L' segment, not a curve) before resuming the bezier — guarantees the line's x is already safe before it enters the row's y-range, not mid-transition.",
+      "verification": "Checked by sampling ~40-60 points along every rendered path and asserting none fall inside an unrelated node's bounding box; 0 violations across all 32 edges as of this write-up."
+    },
+    "stackingOrderGotchas": [
+      "SVG lines are positioned but z-index:auto by default, which paints them above any non-positioned in-flow content regardless of DOM order (CSS stacking spec: in-flow content paints before z-index:auto/0 positioned elements). Any text or card meant to sit visually 'above' the lines needs position + z-index, not just later DOM order.",
+      "A translucent/transparent node background does not block a line drawn behind it — the fix used here was giving .node.type-page an opaque background (was transparent, letting lines show through the page cards).",
+      "Row-label captions (e.g. 'Pipeline · job status') are plain non-positioned <p> text sitting inside the lane gap — they needed position:relative + z-index and an opaque <span> background chip behind the text, or lines crossing that gap render on top of the caption."
+    ],
+    "edgeStyle": {
+      "flow":    { "color": "--accent",    "strokeWidth": 2.25, "dashArray": [10, 5],  "baseOpacity": 0.85, "animDuration": "0.9s" },
+      "control": { "color": "--c-control", "strokeWidth": 2,    "dashArray": [1.6, 7], "baseOpacity": 0.65, "animDuration": "1.4s" },
+      "retry":   { "color": "--c-failed",  "strokeWidth": 2,    "dashArray": [8, 6],   "baseOpacity": 0.78, "animDuration": "1.3s" },
+      "restore": { "color": "--c-done",    "strokeWidth": 2,    "dashArray": [8, 6],   "baseOpacity": 0.78, "animDuration": "1.3s" },
+      "animation": "Each path has an SVG <animate> child looping stroke-dashoffset from 0 to -(dash[0]+dash[1]), giving the dash pattern the appearance of flowing from source to target. Skipped when prefers-reduced-motion is set."
+    },
+    "interaction": {
+      "hover": "Hovering (or keyboard-focusing) any node sets it as the focus target: connected edges jump to full opacity and +0.75 stroke-width, everything else drops to 0.08 opacity, and unconnected nodes get .is-dim (28% opacity) — isolates one node's connections at a time without losing the rest of the diagram for context.",
+      "click": "Opens the detail side panel and pins the same focus/dim treatment (currentSelection) until closed or another node is clicked.",
+      "toggleControlLines": "Checkbox hides all kind:control edges entirely (not just dims them) for a decluttered pipeline-only view."
+    }
+  },
+
+  "techStack": {
+    "frontend": "React 19 + Vite, port 5173",
+    "backend": "Express 5 API + background pipeline worker (Node.js), port 5000",
+    "database": "PostgreSQL via Drizzle ORM (@workspace/db)",
+    "apiClient": "Generated React Query hooks (@workspace/api-client-react), manually extended",
+    "integrations": ["Google Drive API (scan/read files)", "YouTube Data API (upload, playlist management)", "OAuth2 (cached, auto-refresh singleton)"],
+    "processManager": "PM2 (ecosystem.config.cjs runs both servers)"
+  },
+
+  "domain": {
+    "institute": "Madrasa in Pakistan",
+    "timezone": "PKT (UTC+5)",
+    "cutoffDate": "2026-05-17 (files created on/after this date are scanned; earlier files are skipped)",
+    "meetingCodeDayMap": {
+      "uys-vqbk-mnn": ["Monday", "Tuesday"],
+      "zeo-iaqz-qqu": ["Friday", "Saturday"]
+    },
+    "titleFormat": "{serial} {subjectEn} | {teacherEn} | {DD-MM-YYYY}",
+    "titleExample": "1.2 Jalalain Part 2 | Ustad Haseeb | 18-05-2026",
+    "titleNotes": "All left-to-right — English names only, no Arabic bidi text in titles.",
+    "serialMap": [
+      "1.1 Jalalain Part 1", "1.2 Jalalain Part 2", "1.3 Jalalain Part 3",
+      "2.1 Al Fawz ul Kabir", "2.2 Kitab ul Asar", "2.3 Siraji", "2.4 Khair ul Usool",
+      "3.1 Hidaya Sani Part 1", "3.2 Hidaya Sani Part 2", "3.3 Hidaya Sani Part 3",
+      "4.1 Tawzeeh Part 1", "4.2 Tawzeeh Part 2",
+      "5.1 Sharah Aqaid", "5.2 Falakiyat",
+      "6.1 Matan ul Kafi", "6.2 Dewan Hamasa"
+    ],
+    "youtubeUpload": "Videos are uploaded unlisted and added to a single configured playlist."
+  },
+
+  "jobLifecycle": {
+    "table": "lib/db/src/schema/jobs.ts",
+    "statuses": [
+      { "id": "needs_review", "meaning": "Matched to a schedule slot but not yet confirmed by a human. Sits in the Job Queue for review." },
+      { "id": "pending", "meaning": "Approved and waiting for the worker to upload it." },
+      { "id": "processing", "meaning": "Upload to YouTube is actively running." },
+      { "id": "done", "meaning": "Uploaded (unlisted) and present in the target YouTube playlist." },
+      { "id": "failed", "meaning": "Upload errored. Retryable — sends the job back to pending." },
+      { "id": "rejected", "meaning": "Soft-deleted from needs_review (e.g. wrong file, duplicate). driveFileId is kept so the scanner won't re-queue it. Restorable back to needs_review." },
+      { "id": "removed", "meaning": "Was done, but the video is no longer in the YouTube playlist (detected by playlist reconciliation). Can self-heal back to done if the video reappears, or be manually restored (DB-only) via restore-done after an admin re-adds it." }
+    ],
+    "transitions": [
+      { "from": "needs_review", "to": "pending", "via": "POST /jobs/:id/approve", "trigger": "human approves in Job Queue, optionally editing title/lecture name" },
+      { "from": "needs_review", "to": "rejected", "via": "DELETE /jobs/:id", "trigger": "human rejects/deletes a needs_review job (soft delete)" },
+      { "from": "rejected", "to": "needs_review", "via": "POST /jobs/:id/restore", "trigger": "human clicks Restore" },
+      { "from": "pending", "to": "processing", "via": "POST /jobs/:id/process (or worker auto-pick)", "trigger": "worker tick or Upload Pending button" },
+      { "from": "processing", "to": "done", "via": "internal", "trigger": "YouTube upload succeeds" },
+      { "from": "processing", "to": "failed", "via": "internal", "trigger": "YouTube upload throws" },
+      { "from": "failed", "to": "pending", "via": "POST /jobs/:id/retry", "trigger": "human clicks Retry" },
+      { "from": "done", "to": "removed", "via": "POST /pipeline/reconcile-playlist", "trigger": "reconciliation finds the video missing from the playlist" },
+      { "from": "removed", "to": "done", "via": "POST /pipeline/reconcile-playlist (self-heal) or POST /jobs/:id/restore-done (manual, DB-only)", "trigger": "video reappears in playlist, or admin manually re-adds it and confirms" },
+      { "from": "any (non needs_review)", "to": "deleted (hard)", "via": "DELETE /jobs/:id or DELETE /jobs/:id/youtube", "trigger": "human deletes a job outright; /youtube variant also deletes the uploaded YouTube video" }
+    ]
+  },
+
+  "pipelineSteps": [
+    { "step": 1, "name": "Drive Scan", "description": "Lists video files in the configured Drive folder.", "trigger": "Automatic: worker setInterval, default every 60s (WORKER_TICK_MS), only when settings.autoSync is true. Manual: 'Scan Now' / 'Scan Audio Recordings' buttons on the Dashboard.", "files": ["artifacts/api-server/src/lib/pipeline.ts", "artifacts/api-server/src/routes/drive.ts"] },
+    { "step": 2, "name": "Filter & Group", "description": "Drops files before the cutoff date or with an unrecognized/wrong-day meeting code; groups the remainder by (PKT date, meeting code).", "files": ["artifacts/api-server/src/lib/filter.ts"] },
+    { "step": 3, "name": "Schedule Match", "description": "Sorts each day's group by createdTime ascending and assigns files to that day's schedule slots by position (not literal timestamp) — so a late-starting recording still lands in the right slot.", "files": ["artifacts/api-server/src/lib/schedule.ts"] },
+    { "step": 4, "name": "Job Created", "description": "A DB row is created per matched recording with a proposed title/description. Unambiguous matches can be auto-proposed; anything uncertain starts in needs_review.", "files": ["lib/db/src/schema/jobs.ts", "artifacts/api-server/src/routes/jobs.ts"] },
+    { "step": 5, "name": "Human Review", "description": "Staff reviews the Job Queue: confirm/edit the title or lecture name, set a thumbnail, approve, or reject.", "ui": "artifacts/pipeline/src/pages/jobs.tsx" },
+    { "step": 6, "name": "Cascade Reassign", "description": "If a reviewer changes a job's lecture name (e.g. a class was skipped that week), every later needs_review job for the same day+meeting-code is automatically resequenced to the next correct slot.", "files": ["artifacts/api-server/src/routes/jobs.ts (cascadeSlotAssignment)"] },
+    { "step": 7, "name": "Upload", "description": "Approved (pending) jobs are picked up and uploaded to YouTube as unlisted videos.", "files": ["artifacts/api-server/src/lib/youtubeClient.ts"] },
+    { "step": 8, "name": "Playlist Sync", "description": "Reconciliation keeps the YouTube playlist in sync with job state: marks done jobs removed if their video left the playlist, self-heals removed jobs whose video reappeared, and backfills jobs for playlist videos that have none.", "routes": ["POST /pipeline/reconcile-playlist"] }
+  ],
+
+  "nodes": [
+    { "id": "drive-scan", "type": "stage", "label": "Drive Scan", "description": "Lists video files in the configured Google Drive folder. Runs automatically on a timer when auto-sync is on, or on demand.", "functionality": ["Auto: worker tick every 60s (WORKER_TICK_MS) if settings.autoSync", "Manual: Dashboard 'Scan Now' / 'Scan Audio Recordings' buttons", "Also browsable read-only via the Drive Browser page"], "files": ["artifacts/api-server/src/lib/pipeline.ts", "artifacts/api-server/src/routes/drive.ts"], "routes": ["POST /pipeline/trigger", "POST /pipeline/scan-audio", "GET /drive/files"] },
+    { "id": "filter-group", "type": "stage", "label": "Filter & Group", "description": "Drops ineligible files, groups the rest by (PKT date, meeting code).", "functionality": ["Skips files before cutoff 2026-05-17", "Skips unrecognized or wrong-day meeting codes", "Flags files over 500MB as likely batch recordings"], "files": ["artifacts/api-server/src/lib/filter.ts"] },
+    { "id": "schedule-match", "type": "stage", "label": "Schedule Match", "description": "Positionally matches each day's grouped files to that day's fixed schedule slots and builds the proposed title.", "functionality": ["Sort group by createdTime ascending", "Assign by position index, not clock time (handles late starts)", "Look up serial/subject/teacher from the schedule table"], "files": ["artifacts/api-server/src/lib/schedule.ts"] },
+    { "id": "job-created", "type": "stage", "label": "Job Created", "description": "A job row is created per matched recording with a proposed title/description.", "functionality": ["Unambiguous matches can be auto-proposed", "Uncertain matches start in needs_review", "Files can also be queued manually from the Drive Browser"], "files": ["lib/db/src/schema/jobs.ts"], "routes": ["POST /jobs"] },
+    { "id": "needs_review", "type": "status", "label": "Needs Review", "description": "Waiting in the Job Queue for a human to confirm or correct before anything is uploaded.", "functionality": ["Editable: title, lecture name, thumbnail", "Approve → pending", "Reject → rejected (soft delete)"], "routes": ["GET /jobs", "PATCH /jobs/:id"] },
+    { "id": "cascade", "type": "effect", "label": "Cascade Reassign", "description": "Side-effect of correcting a job's lecture name: resequences every later needs_review job that day/meeting-code to the next correct slot.", "functionality": ["Triggered by editing lecture name during approve", "Avoids manually relabeling the rest of the day's queue", "Falls back to Part-N naming if no schedule subject matches"], "files": ["artifacts/api-server/src/routes/jobs.ts"] },
+    { "id": "rejected", "type": "status", "label": "Rejected", "description": "Soft-deleted job. driveFileId is retained so the scanner won't re-queue the same file.", "functionality": ["Restore → back to needs_review", "Hard delete removes it permanently"], "routes": ["DELETE /jobs/:id", "POST /jobs/:id/restore"] },
+    { "id": "pending", "type": "status", "label": "Pending", "description": "Approved, waiting for the worker to upload it to YouTube.", "functionality": ["Picked up by worker tick or Upload Pending button", "Failed jobs return here via Retry"], "routes": ["POST /jobs/:id/process", "POST /pipeline/upload"] },
+    { "id": "processing", "type": "status", "label": "Processing", "description": "Upload to YouTube is actively running for this job.", "functionality": ["Succeeds → done", "Errors → failed (with errorMessage stored)"] },
+    { "id": "done", "type": "status", "label": "Done", "description": "Uploaded as an unlisted YouTube video and present in the target playlist.", "functionality": ["Thumbnail can still be changed after upload", "Reconciliation may flip this to removed if it leaves the playlist"], "routes": ["PATCH /jobs/:id/youtube-title", "POST /jobs/:id/thumbnail"] },
+    { "id": "failed", "type": "status", "label": "Failed", "description": "Upload errored; retryable.", "functionality": ["Retry → back to pending, clears errorMessage"], "routes": ["POST /jobs/:id/retry"] },
+    { "id": "removed", "type": "status", "label": "Removed", "description": "Was done, but the video is no longer found in the YouTube playlist.", "functionality": ["Self-heals to done if the video reappears during reconciliation", "Or manually restored (DB-only) after an admin re-adds it to the playlist"], "routes": ["POST /jobs/:id/restore-done"] },
+    { "id": "playlist-sync", "type": "stage", "label": "Playlist Sync", "description": "Reconciles YouTube playlist membership against job state.", "functionality": ["done ↔ removed based on playlist membership", "Backfills jobs for playlist videos that have none", "Runs on the same worker tick as scanning, or via Dashboard 'Sync Playlist'"], "routes": ["POST /pipeline/reconcile-playlist"] },
+
+    { "id": "dashboard", "type": "page", "label": "Dashboard", "description": "\"Mission Control\" home screen.", "functionality": ["Stat cards per job status (needs_review count highlighted)", "Recent-activity table with status badges", "Buttons: Scan Now, Scan Audio Recordings, Sync Playlist, Apply Thumbnails to All, Upload Pending (with live count badge)"], "files": ["artifacts/pipeline/src/pages/dashboard.tsx"] },
+    { "id": "job-queue", "type": "page", "label": "Job Queue", "description": "Main review/approve screen — the human checkpoint of the whole pipeline.", "functionality": ["Status filter dropdown across all 7 statuses", "Inline rename with lecture-name preset dropdown + auto title/description builder", "Per-row actions: approve, retry, restore, restore-done, rename, set thumbnail, delete (with confirmation)", "Badges for 'manually added' and 'audio' jobs"], "files": ["artifacts/pipeline/src/pages/jobs.tsx"] },
+    { "id": "drive-browser", "type": "page", "label": "Drive Browser", "description": "Read-only view of raw files sitting in the Drive folder, with a manual escape hatch.", "functionality": ["Shows eligible vs. skipped files with the skip reason", "'Queue as Job' for files the automatic scan missed or excluded"], "files": ["artifacts/pipeline/src/pages/drive.tsx"] },
+    { "id": "schedule-editor", "type": "page", "label": "Schedule Editor", "description": "Weekly class-schedule grid that Schedule Match reads from.", "functionality": ["Drag-and-drop slot reordering (dnd-kit)", "Edit teacher, subject, serial number, time slot per day"], "files": ["artifacts/pipeline/src/pages/schedule.tsx"], "routes": ["GET /schedule", "PUT /schedule/:dayOfWeek/:timeSlot", "DELETE /schedule/:dayOfWeek/:timeSlot"] },
+    { "id": "settings", "type": "page", "label": "Settings", "description": "Global pipeline configuration.", "functionality": ["Drive source folder ID, YouTube destination playlist ID", "Auto-sync on/off toggle (drives the worker tick)", "Lecture-name presets used by the title builder", "Default thumbnails per subject"], "files": ["artifacts/pipeline/src/pages/settings.tsx"], "routes": ["GET /settings", "PUT /settings", "GET /lecture-names", "POST /lecture-names", "PATCH /lecture-names/:id", "DELETE /lecture-names/:id", "GET /thumbnails/subjects", "POST /thumbnails/subjects/:serial", "DELETE /thumbnails/subjects/:serial"] },
+    { "id": "library", "type": "page", "label": "Library", "description": "Independent module for the institute's scanned book/PDF resources, organized by subject category (Tafseer, Fiqh, etc.). Not part of the video upload pipeline — shares the dashboard shell only.", "functionality": ["Scan for new library resources", "List/patch/delete resources, categorized by subject"], "files": ["artifacts/pipeline/src/pages/library.tsx"], "routes": ["POST /library/scan", "GET /library/resources", "PATCH /library/resources/:id", "DELETE /library/resources/:id"] }
+  ],
+
+  "edges": [
+    { "from": "drive-scan", "to": "filter-group", "kind": "flow" },
+    { "from": "filter-group", "to": "schedule-match", "kind": "flow" },
+    { "from": "schedule-match", "to": "job-created", "kind": "flow" },
+    { "from": "job-created", "to": "needs_review", "kind": "flow" },
+    { "from": "needs_review", "to": "cascade", "kind": "flow", "label": "edit lecture name" },
+    { "from": "cascade", "to": "needs_review", "kind": "flow", "label": "resequences siblings" },
+    { "from": "needs_review", "to": "pending", "kind": "flow", "label": "approve" },
+    { "from": "needs_review", "to": "rejected", "kind": "flow", "label": "reject / delete" },
+    { "from": "rejected", "to": "needs_review", "kind": "restore", "label": "restore" },
+    { "from": "pending", "to": "processing", "kind": "flow", "label": "worker picks up" },
+    { "from": "processing", "to": "done", "kind": "flow", "label": "upload succeeds" },
+    { "from": "processing", "to": "failed", "kind": "flow", "label": "upload errors" },
+    { "from": "failed", "to": "pending", "kind": "retry", "label": "retry" },
+    { "from": "done", "to": "playlist-sync", "kind": "flow" },
+    { "from": "playlist-sync", "to": "removed", "kind": "flow", "label": "video left playlist" },
+    { "from": "removed", "to": "playlist-sync", "kind": "flow", "label": "recheck" },
+    { "from": "playlist-sync", "to": "done", "kind": "restore", "label": "self-heal / restore-done" },
+    { "from": "rejected", "to": "playlist-sync", "kind": "flow", "label": "excluded from playlist" },
+
+    { "from": "dashboard", "to": "drive-scan", "kind": "control", "label": "Scan Now / Scan Audio" },
+    { "from": "dashboard", "to": "playlist-sync", "kind": "control", "label": "Sync Playlist" },
+    { "from": "dashboard", "to": "job-created", "kind": "control", "label": "Apply Thumbnails to All" },
+    { "from": "dashboard", "to": "processing", "kind": "control", "label": "Upload Pending" },
+    { "from": "job-queue", "to": "needs_review", "kind": "control", "label": "reviews" },
+    { "from": "job-queue", "to": "rejected", "kind": "control", "label": "reject" },
+    { "from": "job-queue", "to": "pending", "kind": "control", "label": "approve" },
+    { "from": "job-queue", "to": "failed", "kind": "control", "label": "retry" },
+    { "from": "drive-browser", "to": "drive-scan", "kind": "control", "label": "reads same listing" },
+    { "from": "drive-browser", "to": "job-created", "kind": "control", "label": "Queue as Job" },
+    { "from": "schedule-editor", "to": "schedule-match", "kind": "control", "label": "defines slots" },
+    { "from": "settings", "to": "drive-scan", "kind": "control", "label": "source folder ID" },
+    { "from": "settings", "to": "playlist-sync", "kind": "control", "label": "target playlist ID" },
+    { "from": "settings", "to": "job-created", "kind": "control", "label": "lecture-name presets" }
+  ],
+
+  "apiRoutes": [
+    { "method": "GET", "path": "/healthz", "purpose": "Health check", "file": "routes/health.ts" },
+    { "method": "GET", "path": "/jobs", "purpose": "List jobs (filterable by status)", "file": "routes/jobs.ts" },
+    { "method": "POST", "path": "/jobs", "purpose": "Manually create a job", "file": "routes/jobs.ts" },
+    { "method": "GET", "path": "/jobs/:id", "purpose": "Get one job", "file": "routes/jobs.ts" },
+    { "method": "DELETE", "path": "/jobs/:id", "purpose": "Soft-delete (needs_review → rejected) or hard-delete otherwise", "file": "routes/jobs.ts" },
+    { "method": "POST", "path": "/jobs/:id/restore", "purpose": "rejected → needs_review", "file": "routes/jobs.ts" },
+    { "method": "DELETE", "path": "/jobs/:id/youtube", "purpose": "Delete the uploaded YouTube video and hard-delete the job", "file": "routes/jobs.ts" },
+    { "method": "POST", "path": "/jobs/:id/approve", "purpose": "needs_review → pending, optionally retitling/cascading", "file": "routes/jobs.ts" },
+    { "method": "PATCH", "path": "/jobs/:id", "purpose": "Edit proposed title/description without changing status", "file": "routes/jobs.ts" },
+    { "method": "PATCH", "path": "/jobs/:id/youtube-title", "purpose": "Update the title on an already-uploaded video", "file": "routes/jobs.ts" },
+    { "method": "POST", "path": "/jobs/:id/thumbnail", "purpose": "Assign a subject-default thumbnail to a job", "file": "routes/jobs.ts" },
+    { "method": "POST", "path": "/jobs/:id/thumbnail/upload", "purpose": "Upload a custom thumbnail for a job", "file": "routes/jobs.ts" },
+    { "method": "DELETE", "path": "/jobs/:id/thumbnail/custom", "purpose": "Remove a job's custom thumbnail", "file": "routes/jobs.ts" },
+    { "method": "POST", "path": "/jobs/:id/restore-done", "purpose": "removed → done (DB-only, after manual playlist re-add)", "file": "routes/jobs.ts" },
+    { "method": "POST", "path": "/jobs/:id/process", "purpose": "Trigger upload for a specific pending job", "file": "routes/jobs.ts" },
+    { "method": "POST", "path": "/jobs/:id/retry", "purpose": "failed → pending", "file": "routes/jobs.ts" },
+    { "method": "DELETE", "path": "/jobs", "purpose": "Bulk delete", "file": "routes/jobs.ts" },
+    { "method": "POST", "path": "/pipeline/trigger", "purpose": "Run a Drive scan now", "file": "routes/jobs.ts" },
+    { "method": "POST", "path": "/pipeline/scan-audio", "purpose": "Scan for audio-only recordings", "file": "routes/jobs.ts" },
+    { "method": "POST", "path": "/pipeline/apply-thumbnails", "purpose": "Apply subject-default thumbnails to all jobs missing one", "file": "routes/jobs.ts" },
+    { "method": "POST", "path": "/pipeline/upload", "purpose": "Process all pending jobs", "file": "routes/jobs.ts" },
+    { "method": "POST", "path": "/pipeline/reconcile-playlist", "purpose": "Sync playlist membership with job state (done/removed/backfill)", "file": "routes/jobs.ts" },
+    { "method": "GET", "path": "/pipeline/stats", "purpose": "Status counts for the Dashboard", "file": "routes/jobs.ts" },
+    { "method": "GET", "path": "/schedule", "purpose": "List weekly schedule slots", "file": "routes/schedule.ts" },
+    { "method": "PUT", "path": "/schedule/:dayOfWeek/:timeSlot", "purpose": "Upsert a schedule slot", "file": "routes/schedule.ts" },
+    { "method": "DELETE", "path": "/schedule/:dayOfWeek/:timeSlot", "purpose": "Delete a schedule slot", "file": "routes/schedule.ts" },
+    { "method": "GET", "path": "/lecture-names", "purpose": "List lecture-name presets", "file": "routes/lectureNames.ts" },
+    { "method": "POST", "path": "/lecture-names", "purpose": "Create a preset", "file": "routes/lectureNames.ts" },
+    { "method": "PATCH", "path": "/lecture-names/:id", "purpose": "Edit a preset", "file": "routes/lectureNames.ts" },
+    { "method": "DELETE", "path": "/lecture-names/:id", "purpose": "Delete a preset", "file": "routes/lectureNames.ts" },
+    { "method": "GET", "path": "/settings", "purpose": "Read global settings", "file": "routes/settings.ts" },
+    { "method": "PUT", "path": "/settings", "purpose": "Update global settings (folders, playlist, auto-sync)", "file": "routes/settings.ts" },
+    { "method": "GET", "path": "/drive/files", "purpose": "List Drive folder contents with eligibility flags", "file": "routes/drive.ts" },
+    { "method": "POST", "path": "/library/scan", "purpose": "Scan for new library resources", "file": "routes/library.ts" },
+    { "method": "GET", "path": "/library/resources", "purpose": "List library resources", "file": "routes/library.ts" },
+    { "method": "PATCH", "path": "/library/resources/:id", "purpose": "Edit a library resource", "file": "routes/library.ts" },
+    { "method": "DELETE", "path": "/library/resources/:id", "purpose": "Delete a library resource", "file": "routes/library.ts" },
+    { "method": "GET", "path": "/youtube/playlists", "purpose": "List the channel's YouTube playlists", "file": "routes/youtube.ts" },
+    { "method": "GET", "path": "/thumbnails/subjects", "purpose": "List default thumbnails per subject", "file": "routes/thumbnails.ts" },
+    { "method": "POST", "path": "/thumbnails/subjects/:serial", "purpose": "Upload a subject's default thumbnail", "file": "routes/thumbnails.ts" },
+    { "method": "DELETE", "path": "/thumbnails/subjects/:serial", "purpose": "Delete a subject's default thumbnail", "file": "routes/thumbnails.ts" }
+  ],
+
+  "importantRules": [
+    "Never mock the DB — real Drizzle + PostgreSQL only.",
+    "After schema changes, rebuild lib/db with `npx tsc -p tsconfig.json` from lib/db/.",
+    "Frontend is artifacts/pipeline — artifacts/mockup-sandbox is a separate component-preview server, not the app.",
+    "API client hooks in lib/api-client-react/src/generated/api.ts are manually extended, not auto-generated.",
+    "invalid_grant OAuth error means the refresh token expired — redo the OAuth Playground flow and update GOOGLE_OAUTH_REFRESH_TOKEN in .env."
+  ]
+}

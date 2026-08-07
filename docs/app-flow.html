@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Drive-To-Tube — Application Flow</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root{
+    --bg:#f2f5f4;
+    --grid-dot: rgba(18,28,28,.06);
+    --surface:#ffffff;
+    --surface-2:#eaf0ee;
+    --border:#d7dfdd;
+    --border-strong:#b7c6c2;
+    --text:#12191a;
+    --text-dim:#57706c;
+    --text-faint:#8a9895;
+    --accent:#0d8a7c;
+    --accent-ink:#ffffff;
+    --accent-soft:rgba(13,138,124,.12);
+    --shadow-card: 0 1px 2px rgba(14,26,25,.05), 0 10px 24px -16px rgba(14,26,25,.28);
+    --shadow-panel: -18px 0 40px -20px rgba(10,20,20,.35);
+
+    --c-review:#9a6a08;
+    --c-pending:#2a55c7;
+    --c-processing:#7133c9;
+    --c-done:#1a7c44;
+    --c-failed:#bd332e;
+    --c-rejected:#65706e;
+    --c-removed:#a15915;
+    --c-control:#4a568f;
+    --c-control-soft:rgba(74,86,143,.10);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#090f11;
+      --grid-dot: rgba(255,255,255,.05);
+      --surface:#121a1c;
+      --surface-2:#172123;
+      --border:#243030;
+      --border-strong:#32413f;
+      --text:#e7efed;
+      --text-dim:#9db2ae;
+      --text-faint:#68807c;
+      --accent:#33d8c1;
+      --accent-ink:#06201c;
+      --accent-soft:rgba(51,216,193,.14);
+      --shadow-card: 0 1px 2px rgba(0,0,0,.35), 0 14px 30px -16px rgba(0,0,0,.55);
+      --shadow-panel: -18px 0 40px -20px rgba(0,0,0,.6);
+
+      --c-review:#f2b93f;
+      --c-pending:#7fa8ff;
+      --c-processing:#bd9dff;
+      --c-done:#5fdd93;
+      --c-failed:#ff8b85;
+      --c-rejected:#a7b3b0;
+      --c-removed:#e79a57;
+      --c-control:#a9b3ec;
+      --c-control-soft:rgba(169,179,236,.14);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#090f11; --grid-dot: rgba(255,255,255,.05); --surface:#121a1c; --surface-2:#172123;
+    --border:#243030; --border-strong:#32413f; --text:#e7efed; --text-dim:#9db2ae; --text-faint:#68807c;
+    --accent:#33d8c1; --accent-ink:#06201c; --accent-soft:rgba(51,216,193,.14);
+    --shadow-card: 0 1px 2px rgba(0,0,0,.35), 0 14px 30px -16px rgba(0,0,0,.55);
+    --shadow-panel: -18px 0 40px -20px rgba(0,0,0,.6);
+    --c-review:#f2b93f; --c-pending:#7fa8ff; --c-processing:#bd9dff; --c-done:#5fdd93;
+    --c-failed:#ff8b85; --c-rejected:#a7b3b0; --c-removed:#e79a57;
+    --c-control:#a9b3ec; --c-control-soft:rgba(169,179,236,.14);
+  }
+  :root[data-theme="light"]{
+    --bg:#f2f5f4; --grid-dot: rgba(18,28,28,.06); --surface:#ffffff; --surface-2:#eaf0ee;
+    --border:#d7dfdd; --border-strong:#b7c6c2; --text:#12191a; --text-dim:#57706c; --text-faint:#8a9895;
+    --accent:#0d8a7c; --accent-ink:#ffffff; --accent-soft:rgba(13,138,124,.12);
+    --shadow-card: 0 1px 2px rgba(14,26,25,.05), 0 10px 24px -16px rgba(14,26,25,.28);
+    --shadow-panel: -18px 0 40px -20px rgba(10,20,20,.35);
+    --c-review:#9a6a08; --c-pending:#2a55c7; --c-processing:#7133c9; --c-done:#1a7c44;
+    --c-failed:#bd332e; --c-rejected:#65706e; --c-removed:#a15915;
+    --c-control:#4a568f; --c-control-soft:rgba(74,86,143,.10);
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:
+      radial-gradient(var(--grid-dot) 1px, transparent 1px) 0 0/22px 22px,
+      var(--bg);
+    color:var(--text);
+    font-family:"Segoe UI","Helvetica Neue",Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  ::selection{ background:var(--accent-soft); }
+  :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+
+  .mono{ font-family:"Cascadia Mono","Cascadia Code",Consolas,"SF Mono",ui-monospace,monospace; }
+
+  .wrap{ max-width:1400px; margin:0 auto; padding:28px 28px 64px; }
+
+  header.top{
+    display:flex; flex-wrap:wrap; gap:20px 40px; justify-content:space-between; align-items:flex-end;
+    padding-bottom:20px; border-bottom:1px solid var(--border); margin-bottom:22px;
+  }
+  .top-title .eyebrow{
+    font-family:"Bahnschrift","Segoe UI Semibold","Segoe UI",Arial,sans-serif;
+    font-weight:600; text-transform:uppercase; letter-spacing:.14em; font-size:11.5px;
+    color:var(--accent); margin:0 0 6px;
+  }
+  h1{
+    font-family:"Bahnschrift","Segoe UI Semibold","Segoe UI",Arial,sans-serif;
+    font-weight:600; font-size:clamp(22px,3vw,30px); letter-spacing:-.01em; margin:0 0 8px;
+    text-wrap:balance;
+  }
+  .top-title p{ margin:0; color:var(--text-dim); font-size:14.5px; max-width:56ch; line-height:1.5; }
+  .stat-row{ display:flex; gap:22px; flex-wrap:wrap; }
+  .stat{ text-align:right; }
+  .stat b{ display:block; font-size:20px; font-variant-numeric:tabular-nums; font-family:"Bahnschrift","Segoe UI",sans-serif; }
+  .stat span{ font-size:11px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.08em; }
+
+  /* ---- legend / controls ---- */
+  .toolbar{
+    display:flex; flex-wrap:wrap; align-items:center; gap:18px 28px;
+    background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    padding:12px 16px; margin-bottom:18px; box-shadow:var(--shadow-card);
+  }
+  .legend-group{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .legend-label{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint); margin-right:2px; }
+  .swatch{ display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--text-dim); }
+  .swatch i{ width:12px; height:12px; border-radius:3px; display:inline-block; flex:none; }
+  .swatch i.stage{ background:var(--surface-2); border:1.5px solid var(--accent); }
+  .swatch i.page{ background:transparent; border:1.5px dashed var(--text-faint); }
+  .swatch i.effect{ background:var(--surface-2); border:1.5px dashed var(--accent); transform:rotate(45deg); border-radius:2px; }
+  .swatch i.dot{ border-radius:50%; border:none; }
+  .line-sample{ display:inline-block; width:26px; height:0; border-top:2px solid var(--accent); vertical-align:middle; }
+  .line-sample.control{ border-top-width:2.5px; border-top-style:dotted; border-top-color:var(--c-control); }
+  .line-sample.retry{ border-top-style:dashed; border-top-color:var(--c-failed); }
+  .line-sample.restore{ border-top-style:dashed; border-top-color:var(--c-done); }
+
+  .toggle{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-dim); cursor:pointer; margin-left:auto; user-select:none; }
+  .toggle input{ accent-color:var(--accent); width:15px; height:15px; }
+  p.hint{ font-size:12px; color:var(--text-faint); margin:0 0 14px 2px; }
+
+  /* ---- canvas ---- */
+  .canvas-shell{ overflow-x:auto; border-radius:12px; border:1px solid var(--border); background:var(--surface); box-shadow:var(--shadow-card); }
+  .canvas{ position:relative; min-width:1760px; padding:44px 40px 40px; }
+  .canvas svg{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
+
+  .row-label{ position:relative; z-index:2; font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--text-faint); margin:0 0 14px 2px; display:flex; align-items:center; gap:10px; }
+  .row-label span{ background:var(--surface); padding:2px 8px 2px 0; }
+  .row-label::after{ content:""; flex:1; height:1px; background:var(--border); }
+  .layer{ position:relative; display:grid; grid-template-columns:repeat(9,minmax(150px,1fr)); gap:22px 20px; z-index:2; }
+  .layer-pages{ padding-bottom:96px; }
+  .layer + .row-label{ margin-top:0; }
+  .layer.layer-branch{ margin-top:60px; }
+
+  .node{
+    position:relative; background:var(--surface); border:1.5px solid var(--border-strong); border-radius:8px;
+    padding:16px 18px; min-height:74px; cursor:pointer;
+    transition:border-color .15s, box-shadow .15s, transform .1s, opacity .18s;
+    box-shadow:var(--shadow-card);
+  }
+  .node:hover, .node:focus-visible{ border-color:var(--accent); transform:translateY(-1px); }
+  .node.is-selected{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .node.is-dim{ opacity:.28; }
+  .node.is-focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .node .n-eyebrow{ font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-faint); margin-bottom:5px; }
+  .node .n-label{ font-size:15px; font-weight:600; line-height:1.28; }
+  .node .n-sub{ font-size:11.5px; color:var(--text-faint); margin-top:5px; }
+
+  .node.type-stage{ background:var(--surface-2); }
+  .node.type-page{ border-style:dashed; background:var(--surface); }
+  .node.type-page .n-eyebrow{ color:var(--c-control); }
+
+  .node.type-status{ padding-left:22px; }
+  .node.type-status::before{
+    content:""; position:absolute; left:0; top:0; bottom:0; width:6px; border-radius:8px 0 0 8px; background:var(--dot,var(--accent));
+  }
+  .node[data-status="review"]{ --dot:var(--c-review); } .node[data-status="pending"]{ --dot:var(--c-pending); }
+  .node[data-status="processing"]{ --dot:var(--c-processing); } .node[data-status="done"]{ --dot:var(--c-done); }
+  .node[data-status="failed"]{ --dot:var(--c-failed); } .node[data-status="rejected"]{ --dot:var(--c-rejected); }
+  .node[data-status="removed"]{ --dot:var(--c-removed); }
+
+  .node.type-effect{ border-style:dashed; text-align:center; }
+  .node.type-effect .n-label{ font-size:13px; }
+
+  .node.n-library{ opacity:.75; }
+  .node.n-library.is-focus, .node.n-library.is-dim{ opacity:1; }
+  .node.n-library.is-dim{ opacity:.28; }
+  .node.n-library .n-sub{ font-style:italic; }
+
+  /* ---- detail panel ---- */
+  .scrim{ position:fixed; inset:0; background:rgba(5,10,10,.35); opacity:0; pointer-events:none; transition:opacity .18s; z-index:10; }
+  .scrim.open{ opacity:1; pointer-events:auto; }
+
+  #panel{
+    position:fixed; top:0; right:0; height:100%; width:380px; max-width:92vw;
+    background:var(--surface); border-left:1px solid var(--border); box-shadow:var(--shadow-panel);
+    transform:translateX(100%); transition:transform .2s ease; z-index:11; display:flex; flex-direction:column;
+  }
+  #panel.open{ transform:translateX(0); }
+  .panel-head{ padding:20px 20px 14px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+  .panel-type{ font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:var(--accent); margin:0 0 6px; }
+  .panel-head h2{ margin:0; font-family:"Bahnschrift","Segoe UI Semibold","Segoe UI",sans-serif; font-weight:600; font-size:19px; }
+  .panel-close{ background:none; border:1px solid var(--border-strong); color:var(--text-dim); width:28px; height:28px; border-radius:6px; cursor:pointer; font-size:15px; line-height:1; flex:none; }
+  .panel-close:hover{ border-color:var(--accent); color:var(--accent); }
+  .panel-body{ padding:16px 20px 28px; overflow-y:auto; }
+  .panel-body p.desc{ font-size:13.5px; line-height:1.55; color:var(--text); margin:0 0 18px; }
+  .panel-section h3{ font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-faint); margin:0 0 8px; }
+  .panel-section{ margin-bottom:20px; }
+  .panel-section ul{ margin:0; padding-left:18px; font-size:13px; color:var(--text-dim); line-height:1.6; }
+  .chiprow{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{ font-size:11.5px; padding:3px 8px; border-radius:5px; background:var(--surface-2); border:1px solid var(--border); color:var(--text-dim); }
+  .chip.method{ font-weight:700; color:var(--accent-ink); background:var(--accent); border-color:transparent; }
+  .route-row{ display:flex; gap:8px; align-items:baseline; font-size:12.5px; margin-bottom:5px; }
+  .conn-row{ font-size:12.5px; color:var(--text-dim); display:flex; gap:6px; margin-bottom:6px; align-items:baseline; }
+  .conn-row .arrow{ color:var(--text-faint); }
+  .conn-row.kind-control{ color:var(--text-faint); }
+  .conn-row.kind-retry b, .conn-row.kind-restore b{ font-weight:600; }
+  .conn-row.kind-retry b{ color:var(--c-failed); }
+  .conn-row.kind-restore b{ color:var(--c-done); }
+  .empty-hint{ padding:40px 20px; color:var(--text-faint); font-size:13px; text-align:center; }
+
+  /* ---- API reference ---- */
+  details.api-ref{ margin-top:26px; background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow-card); }
+  details.api-ref > summary{ cursor:pointer; list-style:none; padding:14px 18px; font-weight:600; font-size:13.5px; display:flex; justify-content:space-between; align-items:center; }
+  details.api-ref > summary::-webkit-details-marker{ display:none; }
+  details.api-ref > summary::after{ content:"+"; color:var(--text-faint); font-size:16px; }
+  details.api-ref[open] > summary::after{ content:"–"; }
+  .api-body{ padding:0 18px 18px; }
+  #apiFilter{
+    width:100%; padding:9px 12px; font-size:13px; border-radius:7px; border:1px solid var(--border);
+    background:var(--surface-2); color:var(--text); margin-bottom:12px; font-family:inherit;
+  }
+  .api-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  .api-table th{ text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint); padding:6px 8px; border-bottom:1px solid var(--border); }
+  .api-table td{ padding:7px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+  .api-table tr:last-child td{ border-bottom:none; }
+  .api-table td.path{ white-space:nowrap; }
+  .api-table td.purpose{ color:var(--text-dim); }
+  .m{ display:inline-block; min-width:44px; text-align:center; padding:2px 6px; border-radius:4px; font-size:10.5px; font-weight:700; }
+  .m-GET{ background:var(--accent-soft); color:var(--accent); }
+  .m-POST{ background:rgba(42,85,199,.14); color:var(--c-pending); }
+  .m-PATCH{ background:rgba(154,106,8,.14); color:var(--c-review); }
+  .m-PUT{ background:rgba(113,51,201,.14); color:var(--c-processing); }
+  .m-DELETE{ background:rgba(189,51,46,.14); color:var(--c-failed); }
+
+  footer{ margin-top:30px; font-size:12px; color:var(--text-faint); text-align:center; }
+  footer .mono{ color:var(--text-dim); }
+
+  @media (max-width:800px){
+    .wrap{ padding:18px 14px 40px; }
+    header.top{ align-items:flex-start; }
+    .stat-row{ display:none; }
+    #panel{ top:auto; bottom:0; left:0; right:0; width:100%; max-width:100%; height:auto; max-height:78vh;
+      border-left:none; border-top:1px solid var(--border); border-radius:14px 14px 0 0; transform:translateY(100%); }
+    #panel.open{ transform:translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .node, #panel, .scrim{ transition:none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="top-title">
+      <p class="eyebrow">Drive-To-Tube · Interactive System Map</p>
+      <h1>How a class recording becomes a YouTube upload</h1>
+      <p>Every stage the pipeline runs, every status a job can hold, and every dashboard screen that reads or drives it. Click any node for its detail. Data mirrors <span class="mono">docs/agent-context.json</span>.</p>
+    </div>
+    <div class="stat-row" id="statRow"></div>
+  </header>
+
+  <div class="toolbar">
+    <div class="legend-group">
+      <span class="legend-label">Node</span>
+      <span class="swatch"><i class="stage"></i>Pipeline stage</span>
+      <span class="swatch"><i class="dot" style="background:var(--c-review)"></i>Job status</span>
+      <span class="swatch"><i class="effect"></i>Side effect</span>
+      <span class="swatch"><i class="page"></i>Dashboard page</span>
+    </div>
+    <div class="legend-group">
+      <span class="legend-label">Line</span>
+      <span class="swatch"><span class="line-sample"></span>Flow</span>
+      <span class="swatch"><span class="line-sample control"></span>UI control</span>
+      <span class="swatch"><span class="line-sample retry"></span>Retry</span>
+      <span class="swatch"><span class="line-sample restore"></span>Restore</span>
+    </div>
+    <label class="toggle">
+      <input type="checkbox" id="toggleControl" checked />
+      Show UI control lines
+    </label>
+  </div>
+  <p class="hint">Hover any node to trace just its connections — the rest of the diagram dims so a single line is easy to follow.</p>
+
+  <div class="canvas-shell">
+    <div class="canvas" id="canvas">
+      <svg id="edgeSvg"></svg>
+      <p class="row-label"><span>Dashboard pages (control layer)</span></p>
+      <div class="layer layer-pages" id="layerPages"></div>
+      <p class="row-label"><span>Pipeline · job status (flow layer)</span></p>
+      <div class="layer layer-main" id="layerMain"></div>
+      <div class="layer layer-branch" id="layerBranch"></div>
+    </div>
+  </div>
+
+  <details class="api-ref">
+    <summary>API reference — every route in the app <span class="mono" id="apiCount"></span></summary>
+    <div class="api-body">
+      <input id="apiFilter" type="text" placeholder="Filter by path, method or purpose…" />
+      <div style="overflow-x:auto">
+        <table class="api-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
+          <tbody id="apiBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </details>
+
+  <footer>Generated from the live codebase (artifacts/api-server, artifacts/pipeline) · companion to <span class="mono">CLAUDE.md</span> and <span class="mono">docs/agent-context.json</span></footer>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside id="panel" aria-hidden="true">
+  <div class="panel-head">
+    <div>
+      <p class="panel-type" id="panelType">—</p>
+      <h2 id="panelLabel">Select a node</h2>
+    </div>
+    <button class="panel-close" id="panelClose" aria-label="Close">✕</button>
+  </div>
+  <div class="panel-body" id="panelBody">
+    <p class="empty-hint">Click any node in the diagram to see what it does, which files implement it, and how it connects to the rest of the app.</p>
+  </div>
+</aside>
+
+<script>
+const DATA = {
+  nodes: [
+    { id:"drive-scan", type:"stage", label:"Drive Scan", sub:"auto · manual", description:"Lists video files in the configured Google Drive folder.", functionality:["Auto: worker tick every 60s (WORKER_TICK_MS) when settings.autoSync is on","Manual: Dashboard ‘Scan Now’ / ‘Scan Audio Recordings’ buttons","Also browsable read-only via the Drive Browser page"], files:["api-server/src/lib/pipeline.ts","api-server/src/routes/drive.ts"], routes:[["POST","/pipeline/trigger"],["POST","/pipeline/scan-audio"],["GET","/drive/files"]] },
+    { id:"filter-group", type:"stage", label:"Filter & Group", sub:"cutoff · meeting code", description:"Drops ineligible files, groups the rest by (PKT date, meeting code).", functionality:["Skips files created before cutoff 2026-05-17","Skips unrecognized or wrong-day meeting codes","Flags files over 500MB as likely batch recordings"], files:["api-server/src/lib/filter.ts"], routes:[] },
+    { id:"schedule-match", type:"stage", label:"Schedule Match", sub:"positional", description:"Positionally matches each day's grouped files to that day's fixed schedule slots and builds the proposed title.", functionality:["Sorts each group by createdTime ascending","Assigns by position index, not clock time — handles late starts","Looks up serial / subject / teacher from the schedule table"], files:["api-server/src/lib/schedule.ts"], routes:[] },
+    { id:"job-created", type:"stage", label:"Job Created", sub:"DB row", description:"A job row is created per matched recording with a proposed title/description.", functionality:["Unambiguous matches can be auto-proposed","Uncertain matches start in needs_review","Files can also be queued manually from the Drive Browser"], files:["lib/db/src/schema/jobs.ts"], routes:[["POST","/jobs"]] },
+    { id:"needs_review", type:"status", status:"review", label:"Needs Review", sub:"human checkpoint", description:"Waiting in the Job Queue for a human to confirm or correct before anything is uploaded.", functionality:["Editable: title, lecture name, thumbnail","Approve → pending","Reject → rejected (soft delete)"], files:[], routes:[["GET","/jobs"],["PATCH","/jobs/:id"]] },
+    { id:"cascade", type:"effect", label:"Cascade Reassign", sub:"side-effect", description:"Correcting a job's lecture name resequences every later needs_review job that day/meeting-code to the next correct slot.", functionality:["Triggered by editing lecture name during approve","Avoids manually relabeling the rest of the day's queue","Falls back to Part-N naming if no schedule subject matches"], files:["api-server/src/routes/jobs.ts (cascadeSlotAssignment)"], routes:[] },
+    { id:"rejected", type:"status", status:"rejected", label:"Rejected", sub:"soft delete", description:"Soft-deleted job. driveFileId is kept so the scanner won't re-queue the same file.", functionality:["Restore → back to needs_review","Hard delete removes it permanently"], files:[], routes:[["DELETE","/jobs/:id"],["POST","/jobs/:id/restore"]] },
+    { id:"pending", type:"status", status:"pending", label:"Pending", sub:"approved, queued", description:"Approved, waiting for the worker to upload it to YouTube.", functionality:["Picked up by worker tick or Upload Pending button","Failed jobs return here via Retry"], files:[], routes:[["POST","/jobs/:id/process"],["POST","/pipeline/upload"]] },
+    { id:"processing", type:"status", status:"processing", label:"Processing", sub:"uploading", description:"Upload to YouTube is actively running for this job.", functionality:["Succeeds → done","Errors → failed (errorMessage stored)"], files:["api-server/src/lib/youtubeClient.ts"], routes:[] },
+    { id:"done", type:"status", status:"done", label:"Done", sub:"unlisted · in playlist", description:"Uploaded as an unlisted YouTube video and present in the target playlist.", functionality:["Thumbnail can still be changed after upload","May flip to removed if it leaves the playlist"], files:[], routes:[["PATCH","/jobs/:id/youtube-title"],["POST","/jobs/:id/thumbnail"]] },
+    { id:"failed", type:"status", status:"failed", label:"Failed", sub:"retryable", description:"Upload errored; retryable.", functionality:["Retry → back to pending, clears errorMessage"], files:[], routes:[["POST","/jobs/:id/retry"]] },
+    { id:"removed", type:"status", status:"removed", label:"Removed", sub:"missing from playlist", description:"Was done, but the video is no longer found in the YouTube playlist.", functionality:["Self-heals to done if the video reappears during reconciliation","Or manually restored (DB-only) after an admin re-adds it"], files:[], routes:[["POST","/jobs/:id/restore-done"]] },
+    { id:"playlist-sync", type:"stage", label:"Playlist Sync", sub:"reconciliation", description:"Reconciles YouTube playlist membership against job state.", functionality:["done ↔ removed based on playlist membership","Backfills jobs for playlist videos that have none","Runs on the worker tick, or via Dashboard ‘Sync Playlist’"], files:[], routes:[["POST","/pipeline/reconcile-playlist"]] },
+
+    { id:"dashboard", type:"page", label:"Dashboard", sub:"“Mission Control”", description:"The home screen: at-a-glance status and one-click pipeline actions.", functionality:["Stat cards per job status (needs_review highlighted)","Recent-activity table with status badges","Buttons: Scan Now, Scan Audio, Sync Playlist, Apply Thumbnails to All, Upload Pending"], files:["pipeline/src/pages/dashboard.tsx"], routes:[] },
+    { id:"drive-browser", type:"page", label:"Drive Browser", sub:"manual escape hatch", description:"Read-only view of raw files sitting in the Drive folder.", functionality:["Shows eligible vs. skipped files with the skip reason","‘Queue as Job’ for files the automatic scan missed or excluded"], files:["pipeline/src/pages/drive.tsx"], routes:[] },
+    { id:"schedule-editor", type:"page", label:"Schedule Editor", sub:"weekly grid", description:"Weekly class-schedule grid that Schedule Match reads from.", functionality:["Drag-and-drop slot reordering (dnd-kit)","Edit teacher, subject, serial number, time slot per day"], files:["pipeline/src/pages/schedule.tsx"], routes:[["GET","/schedule"],["PUT","/schedule/:day/:slot"]] },
+    { id:"job-queue", type:"page", label:"Job Queue", sub:"the review screen", description:"Main review/approve screen — the human checkpoint of the whole pipeline.", functionality:["Status filter across all 7 statuses","Inline rename with lecture-name preset dropdown","Per-row: approve, retry, restore, rename, set thumbnail, delete"], files:["pipeline/src/pages/jobs.tsx"], routes:[] },
+    { id:"settings", type:"page", label:"Settings", sub:"global config", description:"Global pipeline configuration.", functionality:["Drive source folder ID, YouTube destination playlist ID","Auto-sync on/off toggle (drives the worker tick)","Lecture-name presets and default thumbnails per subject"], files:["pipeline/src/pages/settings.tsx"], routes:[["GET","/settings"],["PUT","/settings"]] },
+    { id:"library", type:"page", label:"Library", sub:"independent module", description:"Manages the institute's scanned book/PDF resources by subject category. Not part of the video upload pipeline — shares the dashboard shell only.", functionality:["Scan for new library resources","List / patch / delete resources, categorized by subject"], files:["pipeline/src/pages/library.tsx"], routes:[["POST","/library/scan"],["GET","/library/resources"]], standalone:true }
+  ],
+  edges: [
+    { from:"drive-scan", to:"filter-group", kind:"flow" },
+    { from:"filter-group", to:"schedule-match", kind:"flow" },
+    { from:"schedule-match", to:"job-created", kind:"flow" },
+    { from:"job-created", to:"needs_review", kind:"flow" },
+    { from:"needs_review", to:"cascade", kind:"flow", label:"edit lecture" },
+    { from:"cascade", to:"needs_review", kind:"flow", label:"resequences" },
+    { from:"needs_review", to:"pending", kind:"flow", label:"approve" },
+    { from:"needs_review", to:"rejected", kind:"flow", label:"reject" },
+    { from:"rejected", to:"needs_review", kind:"restore", label:"restore" },
+    { from:"pending", to:"processing", kind:"flow", label:"worker" },
+    { from:"processing", to:"done", kind:"flow", label:"success" },
+    { from:"processing", to:"failed", kind:"flow", label:"error" },
+    { from:"failed", to:"pending", kind:"retry", label:"retry" },
+    { from:"done", to:"playlist-sync", kind:"flow" },
+    { from:"playlist-sync", to:"removed", kind:"flow", label:"video missing" },
+    { from:"removed", to:"playlist-sync", kind:"flow", label:"recheck" },
+    { from:"playlist-sync", to:"done", kind:"restore", label:"self-heal" },
+    { from:"rejected", to:"playlist-sync", kind:"flow", label:"excluded" },
+
+    { from:"dashboard", to:"drive-scan", kind:"control", label:"Scan Now" },
+    { from:"dashboard", to:"playlist-sync", kind:"control", label:"Sync Playlist" },
+    { from:"dashboard", to:"job-created", kind:"control", label:"Apply Thumbnails" },
+    { from:"dashboard", to:"processing", kind:"control", label:"Upload Pending" },
+    { from:"job-queue", to:"needs_review", kind:"control", label:"reviews" },
+    { from:"job-queue", to:"rejected", kind:"control", label:"reject" },
+    { from:"job-queue", to:"pending", kind:"control", label:"approve" },
+    { from:"job-queue", to:"failed", kind:"control", label:"retry" },
+    { from:"drive-browser", to:"drive-scan", kind:"control", label:"reads listing" },
+    { from:"drive-browser", to:"job-created", kind:"control", label:"Queue as Job" },
+    { from:"schedule-editor", to:"schedule-match", kind:"control", label:"defines slots" },
+    { from:"settings", to:"drive-scan", kind:"control", label:"folder ID" },
+    { from:"settings", to:"playlist-sync", kind:"control", label:"playlist ID" },
+    { from:"settings", to:"job-created", kind:"control", label:"lecture presets" }
+  ],
+  apiRoutes: [
+    ["GET","/healthz","Health check"],
+    ["GET","/jobs","List jobs (filterable by status)"],
+    ["POST","/jobs","Manually create a job"],
+    ["GET","/jobs/:id","Get one job"],
+    ["DELETE","/jobs/:id","Soft-delete (needs_review → rejected) or hard-delete otherwise"],
+    ["POST","/jobs/:id/restore","rejected → needs_review"],
+    ["DELETE","/jobs/:id/youtube","Delete the uploaded video and hard-delete the job"],
+    ["POST","/jobs/:id/approve","needs_review → pending, optionally retitling/cascading"],
+    ["PATCH","/jobs/:id","Edit proposed title/description without changing status"],
+    ["PATCH","/jobs/:id/youtube-title","Update the title on an already-uploaded video"],
+    ["POST","/jobs/:id/thumbnail","Assign a subject-default thumbnail"],
+    ["POST","/jobs/:id/thumbnail/upload","Upload a custom thumbnail"],
+    ["DELETE","/jobs/:id/thumbnail/custom","Remove a job's custom thumbnail"],
+    ["POST","/jobs/:id/restore-done","removed → done (DB-only)"],
+    ["POST","/jobs/:id/process","Trigger upload for a specific pending job"],
+    ["POST","/jobs/:id/retry","failed → pending"],
+    ["DELETE","/jobs","Bulk delete"],
+    ["POST","/pipeline/trigger","Run a Drive scan now"],
+    ["POST","/pipeline/scan-audio","Scan for audio-only recordings"],
+    ["POST","/pipeline/apply-thumbnails","Apply subject-default thumbnails to jobs missing one"],
+    ["POST","/pipeline/upload","Process all pending jobs"],
+    ["POST","/pipeline/reconcile-playlist","Sync playlist membership with job state"],
+    ["GET","/pipeline/stats","Status counts for the Dashboard"],
+    ["GET","/schedule","List weekly schedule slots"],
+    ["PUT","/schedule/:dayOfWeek/:timeSlot","Upsert a schedule slot"],
+    ["DELETE","/schedule/:dayOfWeek/:timeSlot","Delete a schedule slot"],
+    ["GET","/lecture-names","List lecture-name presets"],
+    ["POST","/lecture-names","Create a preset"],
+    ["PATCH","/lecture-names/:id","Edit a preset"],
+    ["DELETE","/lecture-names/:id","Delete a preset"],
+    ["GET","/settings","Read global settings"],
+    ["PUT","/settings","Update global settings"],
+    ["GET","/drive/files","List Drive folder contents with eligibility flags"],
+    ["POST","/library/scan","Scan for new library resources"],
+    ["GET","/library/resources","List library resources"],
+    ["PATCH","/library/resources/:id","Edit a library resource"],
+    ["DELETE","/library/resources/:id","Delete a library resource"],
+    ["GET","/youtube/playlists","List the channel's YouTube playlists"],
+    ["GET","/thumbnails/subjects","List default thumbnails per subject"],
+    ["POST","/thumbnails/subjects/:serial","Upload a subject's default thumbnail"],
+    ["DELETE","/thumbnails/subjects/:serial","Delete a subject's default thumbnail"]
+  ]
+};
+
+const LAYOUT = {
+  pages:  [["dashboard",1],["drive-browser",2],["schedule-editor",3],["job-queue",5],["settings",7],["library",9]],
+  main:   [["drive-scan",1],["filter-group",2],["schedule-match",3],["job-created",4],["needs_review",5],["pending",6],["processing",7],["done",8],["playlist-sync",9]],
+  branch: [["cascade",5],["rejected",6],["failed",7],["removed",9]]
+};
+
+const byId = Object.fromEntries(DATA.nodes.map(n => [n.id, n]));
+const LAYER_OF = {};
+Object.entries(LAYOUT).forEach(([layer, list]) => list.forEach(([id]) => { LAYER_OF[id] = layer; }));
+
+function nodeCard(node){
+  const div = document.createElement("div");
+  div.className = "node type-" + node.type + (node.id === "library" ? " n-library" : "");
+  if (node.status) { div.classList.add("type-status"); div.dataset.status = node.status; }
+  div.dataset.id = node.id;
+  div.tabIndex = 0;
+  div.innerHTML =
+    '<div class="n-eyebrow">' + (node.standalone ? "page · standalone" : node.type) + '</div>' +
+    '<div class="n-label">' + node.label + '</div>' +
+    (node.sub ? '<div class="n-sub">' + node.sub + '</div>' : '');
+  return div;
+}
+
+function buildLayer(containerId, list){
+  const el = document.getElementById(containerId);
+  list.forEach(([id, col]) => {
+    const card = nodeCard(byId[id]);
+    card.style.gridColumn = String(col);
+    el.appendChild(card);
+  });
+}
+buildLayer("layerPages", LAYOUT.pages);
+buildLayer("layerMain", LAYOUT.main);
+buildLayer("layerBranch", LAYOUT.branch);
+
+// ---- stat row ----
+const statuses = DATA.nodes.filter(n => n.type === "status").length;
+const pages = DATA.nodes.filter(n => n.type === "page").length;
+document.getElementById("statRow").innerHTML = [
+  [DATA.nodes.filter(n=>n.type==="stage").length, "stages"],
+  [statuses, "statuses"],
+  [pages, "pages"],
+  [DATA.apiRoutes.length, "routes"]
+].map(([n,l]) => '<div class="stat"><b class="mono">'+n+'</b><span>'+l+'</span></div>').join("");
+
+// ---- edges (SVG) ----
+const svg = document.getElementById("edgeSvg");
+const canvas = document.getElementById("canvas");
+let defsWritten = false;
+
+function ensureDefs(){
+  if (defsWritten) return;
+  const ns = "http://www.w3.org/2000/svg";
+  const defs = document.createElementNS(ns, "defs");
+  const makeMarker = (id, color) => {
+    const m = document.createElementNS(ns, "marker");
+    m.setAttribute("id", id); m.setAttribute("viewBox","0 0 10 10");
+    m.setAttribute("refX","8"); m.setAttribute("refY","5");
+    m.setAttribute("markerWidth","7"); m.setAttribute("markerHeight","7");
+    m.setAttribute("orient","auto-start-reverse");
+    const p = document.createElementNS(ns, "path");
+    p.setAttribute("d","M0,0 L10,5 L0,10 Z"); p.setAttribute("fill", color);
+    m.appendChild(p); defs.appendChild(m);
+  };
+  makeMarker("arrow-flow", "var(--accent)");
+  makeMarker("arrow-control", "var(--c-control)");
+  makeMarker("arrow-retry", "var(--c-failed)");
+  makeMarker("arrow-restore", "var(--c-done)");
+  svg.insertBefore(defs, svg.firstChild);
+  defsWritten = true;
+}
+
+function rectOf(id){
+  const el = canvas.querySelector('.node[data-id="'+id+'"]');
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  const c = canvas.getBoundingClientRect();
+  return { left:r.left-c.left, top:r.top-c.top, right:r.right-c.left, bottom:r.bottom-c.top,
+           cx:(r.left+r.right)/2-c.left, cy:(r.top+r.bottom)/2-c.top, w:r.width, h:r.height };
+}
+
+function computeLanes(){
+  const rows = { pages: [], main: [], branch: [] };
+  document.querySelectorAll(".node").forEach(n => rows[LAYER_OF[n.dataset.id]].push(rectOf(n.dataset.id)));
+  const pagesBottom = Math.max(...rows.pages.map(r => r.bottom));
+  const mainTop = Math.min(...rows.main.map(r => r.top));
+  const mainBottom = Math.max(...rows.main.map(r => r.bottom));
+  const branchTop = Math.min(...rows.branch.map(r => r.top));
+  return {
+    pageMainLane: (pagesBottom + mainTop) / 2,
+    mainBranchLane: (mainBottom + branchTop) / 2,
+    mainTop, mainBottom,
+    mainRects: rows.main
+  };
+}
+
+// Finds an x position that falls in a gap between main-row columns (or past their
+// outer edge), closest to targetX — used to thread a page→branch edge past the main
+// row without cutting across whichever stage/status card sits at that column.
+function safeGapX(targetX, mainRects){
+  const sorted = [...mainRects].sort((a, b) => a.left - b.left);
+  const gaps = [sorted[0].left - 30];
+  for (let i = 0; i < sorted.length - 1; i++) gaps.push((sorted[i].right + sorted[i+1].left) / 2);
+  gaps.push(sorted[sorted.length-1].right + 30);
+  return gaps.reduce((best, g) => Math.abs(g - targetX) < Math.abs(best - targetX) ? g : best, gaps[0]);
+}
+
+const LAYER_ORDER = { pages: 0, main: 1, branch: 2 };
+
+// Cross-layer edges (page↔main, main↔branch) always travel through the empty gap
+// between rows, so a line never has to cut across a sibling card to reach its target.
+// A page→branch edge skips two rows, so it gets a second waypoint threaded through a
+// safe gap in the main row on its way down. Same-layer edges (adjacent pipeline
+// columns) get a short direct curve — nothing to dodge.
+function pathFor(a, b, fromId, toId, lanes){
+  const layerA = LAYER_OF[fromId], layerB = LAYER_OF[toId];
+  if (layerA !== layerB){
+    const aAbove = a.cy < b.cy;
+    const sx = a.cx, sy = aAbove ? a.bottom : a.top;
+    const ex = b.cx, ey = aAbove ? b.top : b.bottom;
+    if (Math.abs(LAYER_ORDER[layerA] - LAYER_ORDER[layerB]) === 2){
+      // Transition x to a safe gap entirely above the main row, hold it constant
+      // through the row's full height, then transition again entirely below it —
+      // so the line is never mid-transition while crossing a main-row card.
+      const passX = safeGapX((sx + ex) / 2, lanes.mainRects);
+      return 'M '+sx+' '+sy+' C '+sx+' '+lanes.pageMainLane+', '+passX+' '+lanes.pageMainLane+', '+passX+' '+lanes.mainTop+
+             ' L '+passX+' '+lanes.mainBottom+
+             ' C '+passX+' '+lanes.mainBranchLane+', '+ex+' '+lanes.mainBranchLane+', '+ex+' '+ey;
+    }
+    const laneY = (layerA === "pages" || layerB === "pages") ? lanes.pageMainLane : lanes.mainBranchLane;
+    const nudge = aAbove ? -9 : 9;
+    return 'M '+sx+' '+sy+' C '+(sx+nudge)+' '+laneY+', '+(ex+nudge)+' '+laneY+', '+ex+' '+ey;
+  }
+  const dx = b.cx - a.cx;
+  const forward = dx >= 0;
+  const sx = forward ? a.right : a.left, sy = a.cy;
+  const ex = forward ? b.left : b.right, ey = b.cy;
+  if (forward){
+    const c1x = sx + (ex-sx)*0.5, c2x = ex - (ex-sx)*0.5;
+    return 'M '+sx+' '+sy+' C '+c1x+' '+sy+', '+c2x+' '+ey+', '+ex+' '+ey;
+  }
+  const laneY = lanes.mainBranchLane;
+  return 'M '+sx+' '+sy+' C '+sx+' '+laneY+', '+ex+' '+laneY+', '+ex+' '+ey;
+}
+
+const EDGE_STYLE = {
+  flow:    { color:"var(--accent)",    width:2.25, dash:[10,5],  baseOp:0.85 },
+  control: { color:"var(--c-control)", width:2,    dash:[1.6,7], baseOp:0.65 },
+  retry:   { color:"var(--c-failed)",  width:2,    dash:[8,6],   baseOp:0.78 },
+  restore: { color:"var(--c-done)",    width:2,    dash:[8,6],   baseOp:0.78 }
+};
+const EDGE_DUR = { flow:"0.9s", control:"1.4s", retry:"1.3s", restore:"1.3s" };
+const KIND_VERB = { flow:"flows into", control:"controls", retry:"retries into", restore:"restores into" };
+const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+let currentSelection = null;
+let hoverFocus = null;
+
+function drawEdges(){
+  ensureDefs();
+  [...svg.querySelectorAll("path.edge")].forEach(p => p.remove());
+  const ns = "http://www.w3.org/2000/svg";
+  const showControl = document.getElementById("toggleControl").checked;
+  const focus = hoverFocus || currentSelection;
+  const lanes = computeLanes();
+
+  DATA.edges.forEach(e => {
+    if (e.kind === "control" && !showControl) return;
+    const a = rectOf(e.from), b = rectOf(e.to);
+    if (!a || !b) return;
+    const style = EDGE_STYLE[e.kind];
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("class", "edge");
+    path.setAttribute("d", pathFor(a, b, e.from, e.to, lanes));
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke-linecap", "round");
+    path.dataset.from = e.from; path.dataset.to = e.to; path.dataset.kind = e.kind;
+
+    path.setAttribute("stroke", style.color);
+    const related = focus && (e.from === focus || e.to === focus);
+    const width = related ? style.width + 0.75 : style.width;
+    path.setAttribute("stroke-width", String(width));
+    path.setAttribute("stroke-dasharray", style.dash.join(" "));
+    path.setAttribute("marker-end", "url(#arrow-" + e.kind + ")");
+    path.style.opacity = focus ? (related ? "1" : "0.08") : String(style.baseOp);
+
+    if (!reduceMotion){
+      const unit = style.dash[0] + style.dash[1];
+      const anim = document.createElementNS(ns, "animate");
+      anim.setAttribute("attributeName", "stroke-dashoffset");
+      anim.setAttribute("from", "0");
+      anim.setAttribute("to", String(-unit));
+      anim.setAttribute("dur", EDGE_DUR[e.kind]);
+      anim.setAttribute("repeatCount", "indefinite");
+      anim.setAttribute("calcMode", "linear");
+      path.appendChild(anim);
+    }
+
+    const title = document.createElementNS(ns, "title");
+    title.textContent = byId[e.from].label + " " + KIND_VERB[e.kind] + " " + byId[e.to].label + (e.label ? " (" + e.label + ")" : "");
+    path.appendChild(title);
+
+    svg.appendChild(path);
+  });
+}
+
+function applyNodeDim(){
+  const focus = hoverFocus || currentSelection;
+  const connected = new Set();
+  if (focus){
+    connected.add(focus);
+    DATA.edges.forEach(e => {
+      if (e.from === focus) connected.add(e.to);
+      if (e.to === focus) connected.add(e.from);
+    });
+  }
+  document.querySelectorAll(".node").forEach(n => {
+    const id = n.dataset.id;
+    n.classList.toggle("is-focus", focus === id);
+    n.classList.toggle("is-dim", !!focus && !connected.has(id));
+  });
+}
+
+function refresh(){ applyNodeDim(); drawEdges(); }
+
+window.addEventListener("resize", () => requestAnimationFrame(drawEdges));
+document.getElementById("toggleControl").addEventListener("change", drawEdges);
+new ResizeObserver(() => drawEdges()).observe(canvas);
+
+document.querySelectorAll(".node").forEach(n => {
+  n.addEventListener("mouseenter", () => { hoverFocus = n.dataset.id; refresh(); });
+  n.addEventListener("mouseleave", () => { hoverFocus = null; refresh(); });
+  n.addEventListener("focus", () => { hoverFocus = n.dataset.id; refresh(); });
+  n.addEventListener("blur", () => { hoverFocus = null; refresh(); });
+});
+
+// ---- detail panel ----
+const panel = document.getElementById("panel");
+const scrim = document.getElementById("scrim");
+
+function openPanel(id){
+  const node = byId[id];
+  currentSelection = id;
+  document.querySelectorAll(".node").forEach(n => n.classList.toggle("is-selected", n.dataset.id === id));
+  refresh();
+
+  document.getElementById("panelType").textContent = node.type + (node.standalone ? " · standalone" : "");
+  document.getElementById("panelLabel").textContent = node.label;
+
+  const out = DATA.edges.filter(e => e.from === id);
+  const inc = DATA.edges.filter(e => e.to === id);
+
+  let html = '<p class="desc">' + node.description + '</p>';
+
+  if (node.functionality && node.functionality.length){
+    html += '<div class="panel-section"><h3>Functionality</h3><ul>' +
+      node.functionality.map(f => '<li>'+f+'</li>').join("") + '</ul></div>';
+  }
+  if (node.files && node.files.length){
+    html += '<div class="panel-section"><h3>Files</h3><div class="chiprow">' +
+      node.files.map(f => '<span class="chip mono">'+f+'</span>').join("") + '</div></div>';
+  }
+  if (node.routes && node.routes.length){
+    html += '<div class="panel-section"><h3>Routes</h3>' +
+      node.routes.map(([m,p]) => '<div class="route-row"><span class="chip method mono">'+m+'</span><span class="mono">'+p+'</span></div>').join("") + '</div>';
+  }
+  if (out.length || inc.length){
+    html += '<div class="panel-section"><h3>Connections</h3>';
+    out.forEach(e => html += '<div class="conn-row kind-'+e.kind+'"><b>'+KIND_VERB[e.kind]+'</b> '+byId[e.to].label+(e.label?' <span class="mono" style="color:var(--text-faint)">('+e.label+')</span>':'')+'</div>');
+    inc.forEach(e => html += '<div class="conn-row kind-'+e.kind+'">'+byId[e.from].label+' <b>'+KIND_VERB[e.kind]+'</b> this'+(e.label?' <span class="mono" style="color:var(--text-faint)">('+e.label+')</span>':'')+'</div>');
+    html += '</div>';
+  }
+  if (node.standalone){
+    html += '<div class="panel-section"><h3>Note</h3><p class="desc" style="margin:0">Independent of the upload pipeline — no automatic connections to the flow above.</p></div>';
+  }
+
+  document.getElementById("panelBody").innerHTML = html;
+  panel.classList.add("open"); panel.setAttribute("aria-hidden","false");
+  scrim.classList.add("open");
+}
+
+function closePanel(){
+  currentSelection = null;
+  document.querySelectorAll(".node").forEach(n => n.classList.remove("is-selected"));
+  panel.classList.remove("open"); panel.setAttribute("aria-hidden","true");
+  scrim.classList.remove("open");
+  refresh();
+}
+
+canvas.addEventListener("click", e => {
+  const card = e.target.closest(".node");
+  if (card) openPanel(card.dataset.id);
+});
+canvas.addEventListener("keydown", e => {
+  if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("node")){
+    e.preventDefault(); openPanel(e.target.dataset.id);
+  }
+});
+document.getElementById("panelClose").addEventListener("click", closePanel);
+scrim.addEventListener("click", closePanel);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closePanel(); });
+
+// ---- API reference table ----
+const apiBody = document.getElementById("apiBody");
+document.getElementById("apiCount").textContent = "(" + DATA.apiRoutes.length + ")";
+function renderApi(filter){
+  const f = (filter || "").toLowerCase();
+  apiBody.innerHTML = DATA.apiRoutes
+    .filter(([m,p,d]) => !f || (m+" "+p+" "+d).toLowerCase().includes(f))
+    .map(([m,p,d]) => '<tr><td><span class="m m-'+m+'">'+m+'</span></td><td class="path mono">'+p+'</td><td class="purpose">'+d+'</td></tr>')
+    .join("");
+}
+renderApi("");
+document.getElementById("apiFilter").addEventListener("input", e => renderApi(e.target.value));
+
+// initial draw (after layout settles)
+requestAnimationFrame(() => requestAnimationFrame(drawEdges));
+</script>
+</body>
+</html>
