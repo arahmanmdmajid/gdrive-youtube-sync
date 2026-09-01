@@ -1,9 +1,11 @@
 import { lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from "@tanstack/react-query";
+import { ApiError } from "@workspace/api-client-react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { isLoggedIn, getStoredUser } from "@/lib/auth";
+import { logout } from "@/lib/student-api";
 import { ThemeProvider } from "@/lib/theme";
 import StudentLogin from "@/pages/student/login";
 import StudentRegister from "@/pages/student/register";
@@ -25,7 +27,20 @@ const Library = lazy(() => import("@/pages/library"));
 const Schedule = lazy(() => import("@/pages/schedule"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
-const queryClient = new QueryClient();
+// A stale/invalid JWT (expired, or issued before a secret rotation) makes every
+// student-api call 401 forever with no visible error — queries just settle into
+// an empty state. Force a clean logout+redirect-to-login on any 401 in student
+// mode so the user gets a working re-auth prompt instead of a silently blank page.
+function handlePossibleAuthError(error: unknown) {
+  if (import.meta.env.VITE_APP_MODE === "student" && error instanceof ApiError && error.status === 401) {
+    logout();
+  }
+}
+
+const queryClient = new QueryClient({
+  queryCache: new QueryCache({ onError: handlePossibleAuthError }),
+  mutationCache: new MutationCache({ onError: handlePossibleAuthError }),
+});
 
 /** Admin accounts have full access, including student routes. */
 function RequireStudent({ children }: { children: React.ReactNode }) {
