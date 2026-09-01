@@ -1,7 +1,7 @@
-import { db, jobsTable, settingsTable } from "@workspace/db";
+import { db, jobsTable, settingsTable, driveSourceFoldersTable } from "@workspace/db";
 import { eq, asc, isNotNull } from "drizzle-orm";
 import fs from "node:fs";
-import { getDriveClient, streamDriveFile } from "./driveClient";
+import { getDriveClient, streamDriveFile, listChildren, FOLDER_MIME_TYPE, type DriveChildFile } from "./driveClient";
 import { getYoutubeClient } from "./youtubeClient";
 import {
   buildYoutubeTitle,
@@ -126,14 +126,37 @@ async function withRetry<T>(
   throw lastErr;
 }
 
+/**
+ * Collects candidate video files from a Drive source folder, handling both
+ * layouts Google Meet has used: files landing directly in the folder (flat),
+ * and — more recently — one subfolder per persistent meeting code (nested),
+ * which also mixes in "Notes by Gemini" docs and chat-transcript text files
+ * alongside the recordings (harmless — the video mimeType filter excludes
+ * them). Only descends into subfolders whose name starts with a known class
+ * meeting code; every other subfolder is an unrelated Meet call swept into
+ * the same account-wide auto-save folder and is left alone.
+ */
+async function collectVideoFiles(
+  drive: NonNullable<ReturnType<typeof getDriveClient>>,
+  folderId: string,
+): Promise<DriveChildFile[]> {
+  const direct = await listChildren(drive, folderId, "mimeType contains 'video/'");
+  const subfolders = await listChildren(drive, folderId, `mimeType = '${FOLDER_MIME_TYPE}'`);
+  const matched = subfolders.filter((f) => extractMeetingCode(f.name) !== null);
+  const nested = await Promise.all(
+    matched.map((f) => listChildren(drive, f.id, "mimeType contains 'video/'")),
+  );
+  return [...direct, ...nested.flat()];
+}
+
 export async function runPipelineScan(): Promise<{
   newJobsCreated: number;
   alreadyQueued: number;
   totalScanned: number;
   filtered: number;
 }> {
-  const [settings] = await db.select().from(settingsTable).limit(1);
-  if (!settings?.driveFolderId) {
+  const sourceFolders = await db.select().from(driveSourceFoldersTable);
+  if (sourceFolders.length === 0) {
     return { newJobsCreated: 0, alreadyQueued: 0, totalScanned: 0, filtered: 0 };
   }
 
@@ -142,21 +165,10 @@ export async function runPipelineScan(): Promise<{
     return { newJobsCreated: 0, alreadyQueued: 0, totalScanned: 0, filtered: 0 };
   }
 
-  let allFiles: Array<{ id: string; name: string; mimeType: string; size: string; createdTime: string }> = [];
-  let pageToken: string | undefined;
-
-  do {
-    const response = await drive.files.list({
-      q: `'${settings.driveFolderId}' in parents and mimeType contains 'video/' and trashed = false`,
-      fields: "nextPageToken,files(id,name,mimeType,size,createdTime)",
-      orderBy: "createdTime asc",
-      pageSize: 100,
-      ...(pageToken ? { pageToken } : {}),
-    });
-    const page = (response.data.files ?? []) as typeof allFiles;
-    allFiles = allFiles.concat(page);
-    pageToken = response.data.nextPageToken ?? undefined;
-  } while (pageToken);
+  let allFiles: DriveChildFile[] = [];
+  for (const folder of sourceFolders) {
+    allFiles = allFiles.concat(await collectVideoFiles(drive, folder.folderId));
+  }
 
   const totalScanned = allFiles.length;
 
@@ -192,7 +204,7 @@ export async function runPipelineScan(): Promise<{
   }
   for (const group of groupMap.values()) {
     group.files.sort(
-      (a, b) => new Date(a.createdTime).getTime() - new Date(b.createdTime).getTime()
+      (a, b) => new Date(a.createdTime ?? 0).getTime() - new Date(b.createdTime ?? 0).getTime()
     );
   }
 

@@ -46,7 +46,9 @@ import type {
   UpdateLibraryResourceInput,
   UploadJobThumbnailResult,
   UpsertScheduleSlotInput,
-  YoutubePlaylist
+  YoutubePlaylist,
+  DriveSourceFolder,
+  AddDriveFolderInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -1730,4 +1732,84 @@ export const useDeleteScheduleSlot = <TError = ErrorType<unknown>, TContext = un
   options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteScheduleSlot>>, TError, { dayOfWeek: number; timeSlot: string }, TContext>; request?: SecondParameter<typeof customFetch> }
 ): UseMutationResult<Awaited<ReturnType<typeof deleteScheduleSlot>>, TError, { dayOfWeek: number; timeSlot: string }, TContext> =>
   useMutation(getDeleteScheduleSlotMutationOptions(options));
+
+// ─── Drive source folders (admin) ───────────────────────────────────────────
+
+export const getListDriveFoldersUrl = () => `/api/drive-folders`;
+
+export const listDriveFolders = async (options?: RequestInit): Promise<DriveSourceFolder[]> =>
+  customFetch<DriveSourceFolder[]>(getListDriveFoldersUrl(), { ...options, method: 'GET' });
+
+export const getListDriveFoldersQueryKey = () => [`/api/drive-folders`] as const;
+
+export const getListDriveFoldersQueryOptions = <TData = Awaited<ReturnType<typeof listDriveFolders>>, TError = ErrorType<unknown>>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listDriveFolders>>, TError, TData>; request?: SecondParameter<typeof customFetch> }
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getListDriveFoldersQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listDriveFolders>>> = ({ signal }) =>
+    listDriveFolders({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof listDriveFolders>>, TError, TData> & { queryKey: QueryKey };
+};
+
+export function useListDriveFolders<TData = Awaited<ReturnType<typeof listDriveFolders>>, TError = ErrorType<unknown>>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listDriveFolders>>, TError, TData>; request?: SecondParameter<typeof customFetch> }
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListDriveFoldersQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getAddDriveFolderUrl = () => `/api/drive-folders`;
+
+export const addDriveFolder = async (body: AddDriveFolderInput, options?: RequestInit): Promise<DriveSourceFolder> =>
+  customFetch<DriveSourceFolder>(getAddDriveFolderUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(body),
+  });
+
+export const getAddDriveFolderMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof addDriveFolder>>, TError, { data: BodyType<AddDriveFolderInput> }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof addDriveFolder>>, TError, { data: BodyType<AddDriveFolderInput> }, TContext> => {
+  const mutationKey = ['addDriveFolder'];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof addDriveFolder>>, { data: BodyType<AddDriveFolderInput> }> = ({ data }) =>
+    addDriveFolder(data, requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useAddDriveFolder = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof addDriveFolder>>, TError, { data: BodyType<AddDriveFolderInput> }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof addDriveFolder>>, TError, { data: BodyType<AddDriveFolderInput> }, TContext> =>
+  useMutation(getAddDriveFolderMutationOptions(options));
+
+export const getDeleteDriveFolderUrl = (id: number) => `/api/drive-folders/${id}`;
+
+export const deleteDriveFolder = async (id: number, options?: RequestInit): Promise<void> =>
+  customFetch<void>(getDeleteDriveFolderUrl(id), { ...options, method: 'DELETE' });
+
+export const getDeleteDriveFolderMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteDriveFolder>>, TError, { id: number }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof deleteDriveFolder>>, TError, { id: number }, TContext> => {
+  const mutationKey = ['deleteDriveFolder'];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteDriveFolder>>, { id: number }> = ({ id }) =>
+    deleteDriveFolder(id, requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useDeleteDriveFolder = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteDriveFolder>>, TError, { id: number }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof deleteDriveFolder>>, TError, { id: number }, TContext> =>
+  useMutation(getDeleteDriveFolderMutationOptions(options));
 

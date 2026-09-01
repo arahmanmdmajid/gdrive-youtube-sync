@@ -10,9 +10,13 @@ import {
   useListSubjectThumbnails,
   useUploadSubjectThumbnail,
   useDeleteSubjectThumbnail,
+  useListDriveFolders,
+  useAddDriveFolder,
+  useDeleteDriveFolder,
   getGetSettingsQueryKey,
   getListLectureNamesQueryKey,
-  getListSubjectThumbnailsQueryKey
+  getListSubjectThumbnailsQueryKey,
+  getListDriveFoldersQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -28,7 +32,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Save, Plus, Trash2, Pencil, Check, X, ImageUp, ImageOff } from "lucide-react";
 
 const formSchema = z.object({
-  driveFolderId: z.string().min(1, "Drive folder ID is required"),
   youtubePlaylistId: z.string().nullable().optional(),
   libraryFolderId: z.string().nullable().optional(),
   audioFolderId: z.string().nullable().optional(),
@@ -44,6 +47,7 @@ export default function Settings() {
   const [newLectureName, setNewLectureName] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
+  const [newFolderInput, setNewFolderInput] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
   const thumbnailFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -51,6 +55,34 @@ export default function Settings() {
   const { data: playlists, isLoading: playlistsLoading } = useListYoutubePlaylists();
   const { data: lectureNames } = useListLectureNames();
   const { data: subjectThumbnails } = useListSubjectThumbnails();
+  const { data: driveFolders } = useListDriveFolders();
+
+  const addDriveFolderMutation = useAddDriveFolder({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListDriveFoldersQueryKey() });
+        setNewFolderInput("");
+        toast({ title: "Folder added" });
+      },
+      onError: (err: any) => toast({ title: "Failed to add folder", description: err?.message, variant: "destructive" }),
+    },
+  });
+
+  const deleteDriveFolderMutation = useDeleteDriveFolder({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListDriveFoldersQueryKey() });
+        toast({ title: "Folder removed" });
+      },
+      onError: () => toast({ title: "Failed to remove folder", variant: "destructive" }),
+    },
+  });
+
+  const handleAddDriveFolder = () => {
+    const trimmed = newFolderInput.trim();
+    if (!trimmed) return;
+    addDriveFolderMutation.mutate({ data: { folderId: trimmed } });
+  };
 
   const createLectureNameMutation = useCreateLectureName({
     mutation: {
@@ -153,7 +185,6 @@ export default function Settings() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      driveFolderId: "",
       youtubePlaylistId: null,
       libraryFolderId: null,
       audioFolderId: null,
@@ -165,7 +196,6 @@ export default function Settings() {
   useEffect(() => {
     if (settings) {
       form.reset({
-        driveFolderId: settings.driveFolderId || "",
         youtubePlaylistId: settings.youtubePlaylistId,
         libraryFolderId: settings.libraryFolderId ?? null,
         audioFolderId: settings.audioFolderId ?? null,
@@ -206,33 +236,67 @@ export default function Settings() {
         <p className="text-muted-foreground mt-1">Configure sources, destinations, and automation</p>
       </div>
 
+      <Card className="border-border shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-lg font-mono">Source Folders</CardTitle>
+          <CardDescription>
+            Drive folders the pipeline scans for new videos. Add as many as needed — each is scanned for both files directly in it and, if present, subfolders matching a known class meeting code.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              value={newFolderInput}
+              onChange={(e) => setNewFolderInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleAddDriveFolder()}
+              placeholder="Folder ID or full Drive folder URL"
+              className="font-mono text-sm"
+              data-testid="input-drive-folder"
+            />
+            <Button
+              onClick={handleAddDriveFolder}
+              disabled={!newFolderInput.trim() || addDriveFolderMutation.isPending}
+              className="shrink-0"
+              data-testid="btn-add-drive-folder"
+            >
+              {addDriveFolderMutation.isPending
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <Plus className="h-4 w-4" />}
+              Add
+            </Button>
+          </div>
+
+          {!driveFolders || driveFolders.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No source folders configured yet.</p>
+          ) : (
+            <ul className="space-y-1">
+              {driveFolders.map((folder) => (
+                <li
+                  key={folder.id}
+                  className="flex items-center gap-2 rounded-md border border-border px-3 py-2 bg-muted/20"
+                >
+                  <span className="flex-1 text-sm truncate">
+                    {folder.folderName ?? <span className="font-mono text-muted-foreground">{folder.folderId}</span>}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => deleteDriveFolderMutation.mutate({ id: folder.id })}
+                    disabled={deleteDriveFolderMutation.isPending}
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+                    title="Remove"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <Card className="border-border shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg font-mono">Source Configuration</CardTitle>
-              <CardDescription>Where should the pipeline look for new videos?</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <FormField
-                control={form.control}
-                name="driveFolderId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-mono">Google Drive Folder ID</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. 1a2B3c4D5e6F7g8H9i0J" className="font-mono text-sm" {...field} data-testid="input-drive-folder" />
-                    </FormControl>
-                    <FormDescription>
-                      The ID from the Google Drive folder URL.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
-
           <Card className="border-border shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-mono">Library Configuration</CardTitle>

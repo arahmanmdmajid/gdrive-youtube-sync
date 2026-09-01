@@ -8,6 +8,7 @@ import lectureNamesRouter from "./lectureNames";
 import libraryRouter from "./library";
 import thumbnailsRouter from "./thumbnails";
 import scheduleRouter from "./schedule";
+import driveFoldersRouter from "./driveFolders";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(lectureNamesRouter);
 router.use(libraryRouter);
 router.use(thumbnailsRouter);
 router.use(scheduleRouter);
+router.use(driveFoldersRouter);
 
 export default router;

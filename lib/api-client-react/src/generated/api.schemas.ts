@@ -123,6 +123,17 @@ export interface UpsertScheduleSlotInput {
   teacherEn: string;
 }
 
+export interface DriveSourceFolder {
+  id: number;
+  folderId: string;
+  folderName: string | null;
+  createdAt: string;
+}
+
+export interface AddDriveFolderInput {
+  folderId: string;
+}
+
 export interface ApproveJobInput {
   lectureName?: string;
   proposedTitle?: string;
