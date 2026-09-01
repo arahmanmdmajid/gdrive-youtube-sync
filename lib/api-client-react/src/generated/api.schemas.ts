@@ -138,12 +138,23 @@ export interface ApproveJobInput {
   lectureName?: string;
   proposedTitle?: string;
   proposedDescription?: string;
+  conflictResolution?: "swap" | "merge";
 }
 
 export interface PatchJobInput {
   lectureName?: string;
   proposedTitle?: string;
   proposedDescription?: string;
+  conflictResolution?: "swap" | "merge";
+}
+
+export interface JobNameConflictResponse {
+  conflict: true;
+  conflictingJob: {
+    id: number;
+    proposedTitle: string;
+    driveCreatedTime: string | null;
+  };
 }
 
 export interface RenameYoutubeTitleInput {

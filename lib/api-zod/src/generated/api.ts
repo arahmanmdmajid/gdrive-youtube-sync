@@ -131,6 +131,7 @@ export const PatchJobBody = zod.object({
   "lectureName": zod.string().optional(),
   "proposedTitle": zod.string().optional(),
   "proposedDescription": zod.string().optional(),
+  "conflictResolution": zod.enum(["swap", "merge"]).optional(),
 })
 
 
@@ -175,6 +176,7 @@ export const ApproveJobBody = zod.object({
   "lectureName": zod.string().optional(),
   "proposedTitle": zod.string().optional(),
   "proposedDescription": zod.string().optional(),
+  "conflictResolution": zod.enum(["swap", "merge"]).optional(),
 })
 
 

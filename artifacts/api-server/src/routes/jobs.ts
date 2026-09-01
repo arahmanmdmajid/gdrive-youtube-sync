@@ -127,42 +127,52 @@ async function buildAndAssignTitle(
   return `${baseTitle} | Part ${myIndex + 1}`;
 }
 
+type CascadeResult =
+  | { matched: false }
+  | { matched: true; conflict: { id: number; proposedTitle: string; driveCreatedTime: string | null } }
+  | { matched: true };
+
 /**
- * When a user manually assigns a lecture name to a job, apply it and — if another
+ * When a user manually assigns a lecture name to a job, apply it — unless another
  * needs_review sibling for the same PKT date + meeting code currently holds that
- * same name — swap the two jobs' titles (a genuine two-way exchange), unless that
- * sibling was itself already manually confirmed (a deliberate same-day repeat,
- * left untouched rather than being swapped away).
+ * same name (and isn't itself already confirmed), in which case the caller must
+ * supply a conflictResolution:
+ *   - "swap": the two jobs' titles are exchanged (a genuine two-way trade — two
+ *     teachers swapped slots for the day).
+ *   - "merge": the conflicting sibling's title is left untouched and it's simply
+ *     marked confirmed too (one class split across two recording files — both
+ *     genuinely share this name).
+ * With no conflictResolution given and a conflict found, nothing is written —
+ * the caller is expected to surface the choice and retry.
  *
- * This intentionally does NOT cascade-shift every other sibling: a swap is the
- * correct fix when two teachers trade slots for the day, while a chain-shift is
- * the correct fix when a class was skipped — the two look identical from the
- * "new name collides with an existing one" trigger alone, and swap is the more
- * common real-world case reported. A skip beyond the first colliding pair still
- * needs one more manual correction, same as before this whole cascade existed.
+ * This intentionally does NOT cascade-shift every other sibling on a swap: that's
+ * correct for a skipped class, but wrong for a swap or a split recording — and all
+ * three look identical from the "new name collides with an existing one" trigger
+ * alone. A skip beyond the first colliding pair still needs one more manual
+ * correction, same as before any of this cascade logic existed.
  *
- * Returns true if the lecture name matched a schedule subject and a title was
- * assigned; false if it doesn't correspond to any schedule slot (e.g. audio-only
- * subjects, or a custom name), in which case the caller should fall back to
- * buildAndAssignTitle's Part-N naming instead.
+ * Returns { matched: false } if the lecture name doesn't correspond to any
+ * schedule slot (e.g. audio-only subjects, or a custom name) — the caller should
+ * fall back to buildAndAssignTitle's Part-N naming instead.
  */
 async function cascadeSlotAssignment(
   currentJobId: number,
   selectedLectureName: string,
   driveCreatedTime: string,
   driveFileName: string,
-): Promise<boolean> {
+  conflictResolution?: "swap" | "merge",
+): Promise<CascadeResult> {
   const { dateStr, dayOfWeek } = getPktInfo(driveCreatedTime);
   const meetingCode = extractMeetingCode(driveFileName);
   const slots = await getOrderedSlotsForDay(dayOfWeek);
-  if (slots.length === 0) return false;
+  if (slots.length === 0) return { matched: false };
 
   // Match the selected lecture name back to a slot by subjectEn.
   // Lecture name format: "X.X SubjectEn | TeacherEn"
   const nameWithoutSerial = selectedLectureName.replace(/^\d+\.\d+\s+/, "");
   const subjectEn = nameWithoutSerial.split(" | ")[0]?.trim() ?? "";
   const selectedSlot = slots.find(s => s.subjectEn === subjectEn);
-  if (!selectedSlot) return false;
+  if (!selectedSlot) return { matched: false };
 
   const newTitle = buildYoutubeTitleFromSlot(selectedSlot, dateStr);
   const newDescription = buildYoutubeDescriptionFromSlot(selectedSlot, dateStr, driveFileName);
@@ -171,7 +181,7 @@ async function cascadeSlotAssignment(
     .select({ id: jobsTable.id, proposedTitle: jobsTable.proposedTitle, proposedDescription: jobsTable.proposedDescription })
     .from(jobsTable)
     .where(eq(jobsTable.id, currentJobId));
-  if (!currentJob) return false;
+  if (!currentJob) return { matched: false };
   const oldTitle = currentJob.proposedTitle;
   const oldDescription = currentJob.proposedDescription;
 
@@ -201,9 +211,20 @@ async function cascadeSlotAssignment(
     return true;
   });
 
-  if (conflicting && oldTitle) {
+  if (conflicting && !conflictResolution) {
+    return {
+      matched: true,
+      conflict: { id: conflicting.id, proposedTitle: conflicting.proposedTitle ?? "", driveCreatedTime: conflicting.driveCreatedTime },
+    };
+  }
+
+  if (conflicting && conflictResolution === "swap" && oldTitle) {
     await db.update(jobsTable)
       .set({ proposedTitle: oldTitle, proposedDescription: oldDescription, updatedAt: new Date() })
+      .where(eq(jobsTable.id, conflicting.id));
+  } else if (conflicting && conflictResolution === "merge") {
+    await db.update(jobsTable)
+      .set({ lectureNameConfirmed: true, updatedAt: new Date() })
       .where(eq(jobsTable.id, conflicting.id));
   }
 
@@ -211,7 +232,7 @@ async function cascadeSlotAssignment(
     .set({ proposedTitle: newTitle, proposedDescription: newDescription, lectureNameConfirmed: true, updatedAt: new Date() })
     .where(eq(jobsTable.id, currentJobId));
 
-  return true;
+  return { matched: true };
 }
 
 const router = Router();
@@ -369,14 +390,20 @@ router.post("/jobs/:id/approve", async (req, res) => {
 
   if (bodyParsed.data.lectureName) {
     // Retitle the whole same-day/meeting-code group anchored on this job's corrected
-    // slot (both directions). Meaningless for audio (no Meet-schedule slot concept),
-    // so only attempted for video; falls back to Part-N naming if the lecture name
-    // doesn't match any schedule subject.
-    let cascaded = false;
+    // slot. Meaningless for audio (no Meet-schedule slot concept), so only attempted
+    // for video; falls back to Part-N naming if the lecture name doesn't match any
+    // schedule subject.
+    let cascadeResult: Awaited<ReturnType<typeof cascadeSlotAssignment>> = { matched: false };
     if (job.contentType !== "audio" && job.driveCreatedTime && job.driveFileName) {
-      cascaded = await cascadeSlotAssignment(id, bodyParsed.data.lectureName, job.driveCreatedTime, job.driveFileName);
+      cascadeResult = await cascadeSlotAssignment(
+        id, bodyParsed.data.lectureName, job.driveCreatedTime, job.driveFileName, bodyParsed.data.conflictResolution,
+      );
     }
-    if (!cascaded) {
+    if (cascadeResult.matched && "conflict" in cascadeResult) {
+      res.status(409).json({ conflict: true, conflictingJob: cascadeResult.conflict });
+      return;
+    }
+    if (!cascadeResult.matched) {
       await buildAndAssignTitle(id, bodyParsed.data.lectureName, job.driveCreatedTime ?? null);
     }
     await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
@@ -415,14 +442,20 @@ router.patch("/jobs/:id", async (req, res) => {
 
   if (bodyParsed.data.lectureName) {
     // Retitle the whole same-day/meeting-code group anchored on this job's corrected
-    // slot (both directions). Meaningless for audio (no Meet-schedule slot concept),
-    // so only attempted for video; falls back to Part-N naming if the lecture name
-    // doesn't match any schedule subject.
-    let cascaded = false;
+    // slot. Meaningless for audio (no Meet-schedule slot concept), so only attempted
+    // for video; falls back to Part-N naming if the lecture name doesn't match any
+    // schedule subject.
+    let cascadeResult: Awaited<ReturnType<typeof cascadeSlotAssignment>> = { matched: false };
     if (job.contentType !== "audio" && job.driveCreatedTime && job.driveFileName) {
-      cascaded = await cascadeSlotAssignment(id, bodyParsed.data.lectureName, job.driveCreatedTime, job.driveFileName);
+      cascadeResult = await cascadeSlotAssignment(
+        id, bodyParsed.data.lectureName, job.driveCreatedTime, job.driveFileName, bodyParsed.data.conflictResolution,
+      );
     }
-    if (!cascaded) {
+    if (cascadeResult.matched && "conflict" in cascadeResult) {
+      res.status(409).json({ conflict: true, conflictingJob: cascadeResult.conflict });
+      return;
+    }
+    if (!cascadeResult.matched) {
       await buildAndAssignTitle(id, bodyParsed.data.lectureName, job.driveCreatedTime ?? null);
     }
     if (Object.keys(updates).length > 1) {

@@ -14,7 +14,9 @@ import {
   useListLectureNames,
   getListJobsQueryKey,
   getGetPipelineStatsQueryKey,
-  ListJobsStatus
+  ListJobsStatus,
+  ApiError,
+  type JobNameConflictResponse
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -81,6 +83,12 @@ export default function Jobs() {
   const [statusFilter, setStatusFilter] = useState<ListJobsStatus | "all">("all");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
+  const [conflictPrompt, setConflictPrompt] = useState<{
+    jobId: number;
+    useApprove: boolean;
+    payload: Record<string, unknown>;
+    conflictingJob: JobNameConflictResponse["conflictingJob"];
+  } | null>(null);
   const [renameState, setRenameState] = useState<{ id: number; value: string; selectedLectureName: string; driveCreatedTime?: string | null } | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const [thumbnailDialogJobId, setThumbnailDialogJobId] = useState<number | null>(null);
@@ -124,6 +132,20 @@ export default function Jobs() {
     }
   });
 
+  /** Shared conflict check for approve/patch onError — returns true if handled as a naming conflict. */
+  const handleNameConflict = (
+    err: unknown,
+    variables: { id: number; data?: unknown },
+    useApprove: boolean,
+  ): boolean => {
+    if (err instanceof ApiError && err.status === 409 && (err.data as { conflict?: boolean } | null)?.conflict) {
+      const { conflictingJob } = err.data as JobNameConflictResponse;
+      setConflictPrompt({ jobId: variables.id, useApprove, payload: (variables.data as Record<string, unknown>) ?? {}, conflictingJob });
+      return true;
+    }
+    return false;
+  };
+
   // Used when approving a needs_review job (title edits + status → pending)
   const approveMutation = useApproveJob({
     mutation: {
@@ -132,7 +154,10 @@ export default function Jobs() {
         toast({ title: "Job approved and queued for upload" });
         setEditState(null);
       },
-      onError: () => toast({ title: "Failed to approve job", variant: "destructive" })
+      onError: (err, variables) => {
+        if (handleNameConflict(err, variables, true)) return;
+        toast({ title: "Failed to approve job", variant: "destructive" });
+      }
     }
   });
 
@@ -145,7 +170,10 @@ export default function Jobs() {
         setEditState(null);
         setRenameState(null);
       },
-      onError: () => toast({ title: "Failed to update title", variant: "destructive" })
+      onError: (err, variables) => {
+        if (handleNameConflict(err, variables, false)) return;
+        toast({ title: "Failed to update title", variant: "destructive" });
+      }
     }
   });
 
@@ -236,6 +264,17 @@ export default function Jobs() {
     } else {
       patchMutation.mutate({ id: editState.id, data: payload });
     }
+  };
+
+  const resolveConflict = (resolution: "swap" | "merge") => {
+    if (!conflictPrompt) return;
+    const payload = { ...conflictPrompt.payload, conflictResolution: resolution };
+    if (conflictPrompt.useApprove) {
+      approveMutation.mutate({ id: conflictPrompt.jobId, data: payload });
+    } else {
+      patchMutation.mutate({ id: conflictPrompt.jobId, data: payload });
+    }
+    setConflictPrompt(null);
   };
 
   /** Preview title shown in the dialog before saving */
@@ -739,6 +778,37 @@ export default function Jobs() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Naming conflict — appears on top of the edit dialog when the chosen lecture
+          name is already held by another unconfirmed job that day. Neither the swap
+          nor the merge is a safe default, so ask. */}
+      <AlertDialog open={conflictPrompt !== null} onOpenChange={(open) => !open && setConflictPrompt(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Name already used today</AlertDialogTitle>
+            <AlertDialogDescription>
+              Another recording that day
+              {conflictPrompt?.conflictingJob.driveCreatedTime
+                ? ` (${format(new Date(conflictPrompt.conflictingJob.driveCreatedTime), "MMM d, HH:mm")})`
+                : ""}
+              {" "}is currently titled "{conflictPrompt?.conflictingJob.proposedTitle}". Is this the same class
+              (e.g. a recording that got split into two files), or should the two names be swapped between the
+              recordings?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:justify-between">
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => resolveConflict("merge")}>
+                Same class — keep both
+              </Button>
+              <Button onClick={() => resolveConflict("swap")}>
+                Swap
+              </Button>
+            </div>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete confirmation */}
       <AlertDialog open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
