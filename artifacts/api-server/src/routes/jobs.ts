@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { db, jobsTable } from "@workspace/db";
-import { eq, desc, like, asc } from "drizzle-orm";
+import { eq, desc, like, asc, sql } from "drizzle-orm";
 import fs from "node:fs";
 import {
   ListJobsQueryParams,
@@ -244,13 +244,16 @@ router.get("/jobs", async (req, res) => {
     return;
   }
   const { status } = parsed.data;
-  let query = db.select().from(jobsTable).orderBy(desc(jobsTable.createdAt));
+  // Sort by the recording's own date, not by when it was scanned into our DB —
+  // a bulk scan can insert weeks of backlog at once, which sorted by createdAt
+  // would just show the scan order, not the actual class dates.
+  const byRecordingDate = sql`${jobsTable.driveCreatedTime} desc nulls last`;
   if (status) {
-    const rows = await db.select().from(jobsTable).where(eq(jobsTable.status, status)).orderBy(desc(jobsTable.createdAt));
+    const rows = await db.select().from(jobsTable).where(eq(jobsTable.status, status)).orderBy(byRecordingDate);
     res.json(rows.map(formatJob));
     return;
   }
-  const rows = await query;
+  const rows = await db.select().from(jobsTable).orderBy(byRecordingDate);
   res.json(rows.map(formatJob));
 });
 
