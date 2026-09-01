@@ -13,6 +13,7 @@ export const jobsTable = pgTable("jobs", {
   contentType: text("content_type", { enum: ["video", "audio"] }).notNull().default("video"),
   proposedTitle: text("proposed_title"),
   proposedDescription: text("proposed_description"),
+  lectureNameConfirmed: boolean("lecture_name_confirmed").notNull().default(false),
   youtubeVideoId: text("youtube_video_id"),
   youtubeUrl: text("youtube_url"),
   youtubeTitle: text("youtube_title"),

@@ -177,13 +177,32 @@ export async function runPipelineScan(): Promise<{
   );
   const filtered = totalScanned - eligible.length;
 
+  // ── Load existing jobs ────────────────────────────────────────────────────
+  const existingJobs = await db
+    .select({
+      id: jobsTable.id,
+      driveFileId: jobsTable.driveFileId,
+      status: jobsTable.status,
+      proposedTitle: jobsTable.proposedTitle,
+      lectureNameConfirmed: jobsTable.lectureNameConfirmed,
+    })
+    .from(jobsTable);
+  const queuedIds = new Set(existingJobs.map((j) => j.driveFileId));
+  const existingByFileId = new Map(existingJobs.map((j) => [j.driveFileId, j]));
+
   // ── Positional slot assignment ────────────────────────────────────────────
   // Group files by (PKT date, meeting code), sort each group by createdTime
   // ascending, then assign schedule slots positionally:
-  //   position 0 → first slot of the day, position 1 → second slot, etc.
+  //   position 0 → first available slot of the day, position 1 → next, etc.
   // This is timezone-safe: the schedule is in PKT; we shift UTC→PKT before
   // extracting the date and day-of-week, so a KSA-recorded file that crosses
   // a UTC midnight still lands on the correct PKT calendar day.
+  //
+  // "Available" excludes slot names already manually confirmed for that day
+  // (lectureNameConfirmed) — those jobs are left untouched entirely, and their
+  // slot is removed from the pool so nothing else gets auto-suggested the same
+  // name. Non-confirmed files (new or previously auto-guessed) draw positionally
+  // from whatever's left, same as before.
 
   type GroupEntry = {
     pktDateStr: string;
@@ -208,21 +227,36 @@ export async function runPipelineScan(): Promise<{
     );
   }
 
-  // Map driveFileId → { title, description } for every eligible file
+  // Map driveFileId → { title, description } for every eligible, non-confirmed file
   const positionalAssignments = new Map<string, { title: string; description: string }>();
   for (const group of groupMap.values()) {
-    const slots = group.meetingCode ? await getOrderedSlotsForDay(group.dayOfWeek) : [];
-    for (let i = 0; i < group.files.length; i++) {
-      const file = group.files[i];
+    const allSlots = group.meetingCode ? await getOrderedSlotsForDay(group.dayOfWeek) : [];
+
+    const confirmedTitles = new Set(
+      group.files
+        .map((f) => (f.id ? existingByFileId.get(f.id) : undefined))
+        .filter((j) => j?.lectureNameConfirmed)
+        .map((j) => j!.proposedTitle),
+    );
+    const availableSlots = allSlots.filter(
+      (slot) => !confirmedTitles.has(buildYoutubeTitleFromSlot(slot, group.pktDateStr)),
+    );
+
+    let nextSlotIdx = 0;
+    for (const file of group.files) {
       if (!file.id) continue;
-      const slot = slots[i];
+      const existing = existingByFileId.get(file.id);
+      if (existing?.lectureNameConfirmed) continue; // manually confirmed — leave untouched
+
+      const slot = availableSlots[nextSlotIdx];
       if (slot) {
+        nextSlotIdx++;
         positionalAssignments.set(file.id, {
           title: buildYoutubeTitleFromSlot(slot, group.pktDateStr),
           description: buildYoutubeDescriptionFromSlot(slot, group.pktDateStr, file.name ?? file.id),
         });
       } else {
-        // Overflow (more recordings than schedule slots) or no meeting code
+        // Overflow (more recordings than remaining schedule slots) or no meeting code
         positionalAssignments.set(file.id, {
           title: await buildYoutubeTitle(file.name ?? "Untitled", file.createdTime),
           description: await buildYoutubeDescription(file.name ?? "Untitled", file.createdTime),
@@ -231,14 +265,9 @@ export async function runPipelineScan(): Promise<{
     }
   }
 
-  // ── Load existing jobs ────────────────────────────────────────────────────
-  const existingJobs = await db
-    .select({ id: jobsTable.id, driveFileId: jobsTable.driveFileId, status: jobsTable.status })
-    .from(jobsTable);
-  const queuedIds = new Set(existingJobs.map((j) => j.driveFileId));
-
   // ── Re-title existing needs_review jobs with corrected positional names ───
-  // These haven't been approved yet so it's safe to overwrite their proposed title.
+  // Manually confirmed jobs have no entry in positionalAssignments (see above)
+  // and are skipped here, so a rescan never undoes an admin's correction.
   for (const existing of existingJobs) {
     if (existing.status !== "needs_review") continue;
     const assignment = positionalAssignments.get(existing.driveFileId);

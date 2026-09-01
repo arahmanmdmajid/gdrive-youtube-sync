@@ -128,18 +128,20 @@ async function buildAndAssignTitle(
 }
 
 /**
- * When a user manually assigns a lecture name to a job, retitle every needs_review
- * sibling for the same PKT date + meeting code — including the job itself — based
- * on its chronological offset from the corrected job's chosen slot, in both
- * directions.
+ * When a user manually assigns a lecture name to a job, apply it and — if another
+ * needs_review sibling for the same PKT date + meeting code currently holds that
+ * same name — swap the two jobs' titles (a genuine two-way exchange), unless that
+ * sibling was itself already manually confirmed (a deliberate same-day repeat,
+ * left untouched rather than being swapped away).
  *
- * Example: schedule has slots [A, B, C, D]. Recording chunks finished uploading to
- * Drive out of order, so the pipeline's createdTime-based positional assignment
- * mislabeled them as [B, A, C]. User corrects job[0] (wrongly labeled B) to A.
- * This function then retitles job[0] to A, job[1] to B, and job[2] to C —
- * anchored on the corrected job rather than raw upload order.
+ * This intentionally does NOT cascade-shift every other sibling: a swap is the
+ * correct fix when two teachers trade slots for the day, while a chain-shift is
+ * the correct fix when a class was skipped — the two look identical from the
+ * "new name collides with an existing one" trigger alone, and swap is the more
+ * common real-world case reported. A skip beyond the first colliding pair still
+ * needs one more manual correction, same as before this whole cascade existed.
  *
- * Returns true if the lecture name matched a schedule subject and titles were
+ * Returns true if the lecture name matched a schedule subject and a title was
  * assigned; false if it doesn't correspond to any schedule slot (e.g. audio-only
  * subjects, or a custom name), in which case the caller should fall back to
  * buildAndAssignTitle's Part-N naming instead.
@@ -159,48 +161,55 @@ async function cascadeSlotAssignment(
   // Lecture name format: "X.X SubjectEn | TeacherEn"
   const nameWithoutSerial = selectedLectureName.replace(/^\d+\.\d+\s+/, "");
   const subjectEn = nameWithoutSerial.split(" | ")[0]?.trim() ?? "";
-  const selectedSlotIdx = slots.findIndex(s => s.subjectEn === subjectEn);
-  if (selectedSlotIdx < 0) return false;
+  const selectedSlot = slots.find(s => s.subjectEn === subjectEn);
+  if (!selectedSlot) return false;
 
-  // Find all needs_review siblings for the same PKT date + meeting code
+  const newTitle = buildYoutubeTitleFromSlot(selectedSlot, dateStr);
+  const newDescription = buildYoutubeDescriptionFromSlot(selectedSlot, dateStr, driveFileName);
+
+  const [currentJob] = await db
+    .select({ id: jobsTable.id, proposedTitle: jobsTable.proposedTitle, proposedDescription: jobsTable.proposedDescription })
+    .from(jobsTable)
+    .where(eq(jobsTable.id, currentJobId));
+  if (!currentJob) return false;
+  const oldTitle = currentJob.proposedTitle;
+  const oldDescription = currentJob.proposedDescription;
+
+  // Find same-day/meeting-code needs_review siblings currently holding the new title.
   const allNeedsReview = await db
     .select({
       id: jobsTable.id,
       driveCreatedTime: jobsTable.driveCreatedTime,
       driveFileName: jobsTable.driveFileName,
+      proposedTitle: jobsTable.proposedTitle,
+      lectureNameConfirmed: jobsTable.lectureNameConfirmed,
     })
     .from(jobsTable)
     .where(eq(jobsTable.status, "needs_review"));
 
-  const siblings = allNeedsReview
-    .filter(j => {
-      if (!j.driveCreatedTime) return false;
-      const info = getPktInfo(j.driveCreatedTime);
-      if (info.dateStr !== dateStr) return false;
-      if (meetingCode) {
-        const jCode = extractMeetingCode(j.driveFileName ?? "");
-        if (jCode !== meetingCode) return false;
-      }
-      return true;
-    })
-    .sort((a, b) => (a.driveCreatedTime ?? "").localeCompare(b.driveCreatedTime ?? ""));
+  const conflicting = allNeedsReview.find(j => {
+    if (j.id === currentJobId) return false;
+    if (j.proposedTitle !== newTitle) return false;
+    if (j.lectureNameConfirmed) return false; // deliberate repeat — leave it alone
+    if (!j.driveCreatedTime) return false;
+    const info = getPktInfo(j.driveCreatedTime);
+    if (info.dateStr !== dateStr) return false;
+    if (meetingCode) {
+      const jCode = extractMeetingCode(j.driveFileName ?? "");
+      if (jCode !== meetingCode) return false;
+    }
+    return true;
+  });
 
-  const currentPos = siblings.findIndex(j => j.id === currentJobId);
-  if (currentPos < 0) return false;
-
-  // Retitle every sibling — including the corrected job itself — based on its
-  // offset from the chosen slot. Overflow/underflow past the day's schedule is
-  // left untouched (no curriculum slot to assign).
-  for (let i = 0; i < siblings.length; i++) {
-    const slotIdx = selectedSlotIdx + (i - currentPos);
-    if (slotIdx < 0 || slotIdx >= slots.length) continue;
-    const slot = slots[slotIdx];
-    const title = buildYoutubeTitleFromSlot(slot, dateStr);
-    const description = buildYoutubeDescriptionFromSlot(slot, dateStr, siblings[i].driveFileName ?? "");
+  if (conflicting && oldTitle) {
     await db.update(jobsTable)
-      .set({ proposedTitle: title, proposedDescription: description, updatedAt: new Date() })
-      .where(eq(jobsTable.id, siblings[i].id));
+      .set({ proposedTitle: oldTitle, proposedDescription: oldDescription, updatedAt: new Date() })
+      .where(eq(jobsTable.id, conflicting.id));
   }
+
+  await db.update(jobsTable)
+    .set({ proposedTitle: newTitle, proposedDescription: newDescription, lectureNameConfirmed: true, updatedAt: new Date() })
+    .where(eq(jobsTable.id, currentJobId));
 
   return true;
 }
