@@ -670,10 +670,101 @@ export async function processAllPendingJobs(): Promise<number> {
   }
 }
 
+/**
+ * Reclaims jobs left stranded in "processing" by a process death.
+ *
+ * uploadJob() defends against *errors* (quota, transient, auth) but not against
+ * the process itself dying mid-upload — a PM2 restart, a crash, or the machine
+ * sleeping. When that happens the row keeps status "processing" with no error
+ * message, and nothing ever picks it up again: both processNextPendingJob and
+ * processAllPendingJobs only select status "pending".
+ *
+ * Only one worker process runs at a time, so at startup nothing can legitimately
+ * still be uploading — every "processing" row is orphaned by definition. That
+ * makes startup the safe place to sweep, as opposed to an age-based timer, which
+ * would race genuinely slow uploads of large recordings.
+ *
+ * The video is often already on YouTube: the usual death window is between
+ * videos.insert returning and the "done" write landing. So check the channel by
+ * title first and adopt the existing upload rather than re-uploading it, which
+ * is what previously forced a manual delete-and-rescan.
+ */
+export async function reclaimOrphanedJobs(): Promise<{ recovered: number; requeued: number }> {
+  const orphaned = await db.select().from(jobsTable).where(eq(jobsTable.status, "processing"));
+  if (orphaned.length === 0) return { recovered: 0, requeued: 0 };
+
+  logger.warn({ count: orphaned.length }, "Found jobs stranded in processing — reclaiming");
+  const [settings] = await db.select().from(settingsTable).limit(1);
+  const youtube = getYoutubeClient();
+  let recovered = 0;
+  let requeued = 0;
+
+  for (const job of orphaned) {
+    const title = job.proposedTitle ?? (await buildYoutubeTitle(job.driveFileName, job.driveCreatedTime));
+    let existingId: string | null = null;
+    try {
+      existingId = await findVideoOnYoutube(youtube, title);
+    } catch (err) {
+      logger.warn({ jobId: job.id, err }, "Reclaim: YouTube lookup failed — leaving job as-is for the next restart");
+      continue;
+    }
+
+    if (!existingId) {
+      await db.update(jobsTable)
+        .set({ status: "pending", updatedAt: new Date() })
+        .where(eq(jobsTable.id, job.id));
+      requeued++;
+      logger.info({ jobId: job.id, title }, "Reclaim: no upload found — requeued as pending");
+      continue;
+    }
+
+    await db.update(jobsTable)
+      .set({
+        status: "done",
+        youtubeVideoId: existingId,
+        youtubeUrl: `https://www.youtube.com/watch?v=${existingId}`,
+        youtubeTitle: title,
+        updatedAt: new Date(),
+      })
+      .where(eq(jobsTable.id, job.id));
+    recovered++;
+    logger.info({ jobId: job.id, existingId, title }, "Reclaim: upload already on YouTube — marked done");
+
+    // The playlist insert runs after the "done" write in uploadJob, so a job that
+    // died in that window is on the channel but not in the playlist. Best-effort,
+    // exactly as in the normal path.
+    if (settings?.youtubePlaylistId) {
+      try {
+        await youtube?.playlistItems.insert({
+          part: ["snippet"],
+          requestBody: {
+            snippet: {
+              playlistId: settings.youtubePlaylistId,
+              resourceId: { kind: "youtube#video", videoId: existingId },
+            },
+          },
+        });
+      } catch (playlistErr) {
+        logger.warn({ jobId: job.id, existingId, playlistErr }, "Reclaim: playlist insert failed");
+      }
+    }
+  }
+
+  logger.info({ recovered, requeued }, "Reclaim complete");
+  return { recovered, requeued };
+}
+
 let workerInterval: ReturnType<typeof setInterval> | null = null;
 
 export function startPipelineWorker() {
   if (workerInterval) return;
+
+  // Sweep before the first tick so a job orphaned by the previous process is
+  // resolved rather than sitting invisible until someone notices it by hand.
+  void reclaimOrphanedJobs().catch((err) => {
+    logger.error({ err }, "reclaimOrphanedJobs failed at startup");
+  });
+
   workerInterval = setInterval(async () => {
     try {
       const [settings] = await db.select().from(settingsTable).limit(1);
