@@ -58,16 +58,32 @@ class QuotaExceededError extends Error {
   }
 }
 
+/** A title match on the channel, plus whether that upload actually completed. */
+export interface YoutubeMatch {
+  videoId: string;
+  /**
+   * True once YouTube holds the whole file. An upload killed mid-stream still
+   * leaves a video resource behind — the resource is created when the upload
+   * starts, not when it finishes — and that husk sits at uploaded/processing
+   * with duration "P0D" forever, showing "processing will begin shortly" in
+   * Studio. Adopting one of those marks a job done against a video that will
+   * never play, so every caller must check this before trusting the match.
+   */
+  complete: boolean;
+  /** Publish time, used to tell a still-transcoding upload from a dead husk. */
+  publishedAt: string | null;
+}
+
 /**
  * Search the authenticated YouTube channel for a video whose title exactly
- * matches `title`. Returns the videoId if found, null otherwise.
+ * matches `title`. Returns the match if found, null otherwise.
  * Uses the cheap videos.list on the channel's uploads playlist — avoids
  * the expensive search.list quota cost.
  */
 async function findVideoOnYoutube(
   youtube: ReturnType<typeof getYoutubeClient>,
   title: string,
-): Promise<string | null> {
+): Promise<YoutubeMatch | null> {
   if (!youtube) return null;
   try {
     // Step 1: get the channel's uploads playlist ID (1 unit)
@@ -93,7 +109,20 @@ async function findVideoOnYoutube(
       for (const item of itemsRes.data.items ?? []) {
         if (item.snippet?.title === title) {
           const videoId = item.snippet.resourceId?.videoId;
-          if (videoId) return videoId;
+          if (!videoId) continue;
+          const detail = await youtube.videos.list({
+            part: ["status", "contentDetails"],
+            id: [videoId],
+          });
+          const v = detail.data.items?.[0];
+          const duration = v?.contentDetails?.duration;
+          // "processed" means transcoding finished. A video still transcoding
+          // reports "uploaded", but by then YouTube already knows the real
+          // duration — whereas a truncated upload never leaves P0D.
+          const complete =
+            v?.status?.uploadStatus === "processed" ||
+            (!!duration && duration !== "P0D");
+          return { videoId, complete, publishedAt: item.snippet.publishedAt ?? null };
         }
       }
       pageToken = itemsRes.data.nextPageToken ?? undefined;
@@ -339,8 +368,15 @@ async function uploadJob(job: typeof jobsTable.$inferSelect): Promise<void> {
     // before uploading to avoid creating a duplicate.
     if (job.errorMessage && (isTransient({ message: job.errorMessage } as Error) || isAuthError({ message: job.errorMessage } as Error))) {
       logger.info({ jobId: job.id, title }, "Previous auth/network failure — checking YouTube for existing upload");
-      const existingId = await findVideoOnYoutube(youtube, title);
-      if (existingId) {
+      const match = await findVideoOnYoutube(youtube, title);
+      if (match && !match.complete) {
+        logger.warn(
+          { jobId: job.id, videoId: match.videoId },
+          "Found a same-titled but incomplete upload — ignoring it and uploading again",
+        );
+      }
+      if (match?.complete) {
+        const existingId = match.videoId;
         logger.info({ jobId: job.id, existingId }, "Video already exists on YouTube — marking as done without re-uploading");
         await db.update(jobsTable)
           .set({
@@ -463,8 +499,9 @@ async function uploadJob(job: typeof jobsTable.$inferSelect): Promise<void> {
         const youtube = getYoutubeClient();
         const title =
           job.proposedTitle ?? (await buildYoutubeTitle(job.driveFileName, job.driveCreatedTime));
-        const existingId = await findVideoOnYoutube(youtube, title);
-        if (existingId) {
+        const match = await findVideoOnYoutube(youtube, title);
+        if (match?.complete) {
+          const existingId = match.videoId;
           logger.info({ jobId: job.id, existingId }, "Video found on YouTube after error — recovering as done");
           const [settings] = await db.select().from(settingsTable).limit(1);
           await db.update(jobsTable)
@@ -671,6 +708,12 @@ export async function processAllPendingJobs(): Promise<number> {
 }
 
 /**
+ * How long a same-titled but not-yet-complete upload is given to finish
+ * transcoding before it's treated as a husk from an interrupted upload.
+ */
+const INCOMPLETE_UPLOAD_GRACE_MS = 60 * 60 * 1000;
+
+/**
  * Reclaims jobs left stranded in "processing" by a process death.
  *
  * uploadJob() defends against *errors* (quota, transient, auth) but not against
@@ -701,23 +744,44 @@ export async function reclaimOrphanedJobs(): Promise<{ recovered: number; requeu
 
   for (const job of orphaned) {
     const title = job.proposedTitle ?? (await buildYoutubeTitle(job.driveFileName, job.driveCreatedTime));
-    let existingId: string | null = null;
+    let match: YoutubeMatch | null = null;
     try {
-      existingId = await findVideoOnYoutube(youtube, title);
+      match = await findVideoOnYoutube(youtube, title);
     } catch (err) {
       logger.warn({ jobId: job.id, err }, "Reclaim: YouTube lookup failed — leaving job as-is for the next restart");
       continue;
     }
 
-    if (!existingId) {
+    // A match that hasn't completed is either still transcoding (fine, give it
+    // time) or a husk left by the interrupted upload (must re-upload). Age is
+    // what separates them: transcoding finishes, a husk never does. Waiting is
+    // the safe side of the trade — re-uploading a good video creates a
+    // duplicate, whereas waiting only costs another restart.
+    if (match && !match.complete) {
+      const ageMs = match.publishedAt ? Date.now() - Date.parse(match.publishedAt) : Infinity;
+      if (ageMs < INCOMPLETE_UPLOAD_GRACE_MS) {
+        logger.info(
+          { jobId: job.id, videoId: match.videoId, ageMs },
+          "Reclaim: match still transcoding — leaving job processing, will re-check next startup",
+        );
+        continue;
+      }
+      logger.warn(
+        { jobId: job.id, videoId: match.videoId },
+        "Reclaim: match is an incomplete upload — requeueing for a fresh upload (the husk stays on YouTube for manual deletion)",
+      );
+    }
+
+    if (!match || !match.complete) {
       await db.update(jobsTable)
         .set({ status: "pending", updatedAt: new Date() })
         .where(eq(jobsTable.id, job.id));
       requeued++;
-      logger.info({ jobId: job.id, title }, "Reclaim: no upload found — requeued as pending");
+      logger.info({ jobId: job.id, title }, "Reclaim: requeued as pending");
       continue;
     }
 
+    const existingId = match.videoId;
     await db.update(jobsTable)
       .set({
         status: "done",
