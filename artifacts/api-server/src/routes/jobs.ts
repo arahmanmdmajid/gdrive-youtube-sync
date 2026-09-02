@@ -6,9 +6,6 @@ import fs from "node:fs";
 import {
   ListJobsQueryParams,
   CreateJobBody,
-  GetJobParams,
-  DeleteJobParams,
-  RetryJobParams,
   ApproveJobBody,
   PatchJobBody,
   RenameYoutubeTitleBody,
@@ -43,18 +40,8 @@ import {
   getOrderedSlotsForDay,
   buildYoutubeTitleFromSlot,
   buildYoutubeDescriptionFromSlot,
+  toPktDateStr,
 } from "../lib/schedule";
-
-/** Format a date as DD-MM-YYYY (PKT = UTC+5) */
-function formatDateDDMMYYYY(isoString: string): string {
-  const d = new Date(isoString);
-  // Shift to PKT (UTC+5)
-  const pkt = new Date(d.getTime() + 5 * 60 * 60 * 1000);
-  const dd = String(pkt.getUTCDate()).padStart(2, "0");
-  const mm = String(pkt.getUTCMonth() + 1).padStart(2, "0");
-  const yyyy = pkt.getUTCFullYear();
-  return `${dd}-${mm}-${yyyy}`;
-}
 
 /**
  * Given a lectureName and a job, build the full proposed title with date and,
@@ -66,7 +53,7 @@ async function buildAndAssignTitle(
   lectureName: string,
   driveCreatedTime: string | null,
 ): Promise<string> {
-  const dateStr = driveCreatedTime ? formatDateDDMMYYYY(driveCreatedTime) : "00-00-0000";
+  const dateStr = driveCreatedTime ? toPktDateStr(driveCreatedTime) : "00-00-0000";
   const baseTitle = `${lectureName} | ${dateStr}`;
 
   // Find all jobs (any status) whose title already starts with this base
@@ -235,6 +222,35 @@ async function cascadeSlotAssignment(
   return { matched: true };
 }
 
+/**
+ * Applies a manually-chosen lecture name to a job: tries the schedule-slot
+ * cascade first (swap/merge on conflict), falling back to buildAndAssignTitle's
+ * Part-N naming when the name doesn't match any schedule subject or the job is
+ * audio (no Meet-schedule slot concept). Shared by POST /jobs/:id/approve and
+ * PATCH /jobs/:id, which differ only in what they do with status/other fields
+ * afterward.
+ *
+ * Returns a conflict payload (to send as a 409, with nothing written yet) if
+ * the change needs a swap/merge decision first; returns null once the title
+ * has actually been applied.
+ */
+async function applyLectureNameChange(
+  id: number,
+  job: typeof jobsTable.$inferSelect,
+  lectureName: string,
+  conflictResolution?: "swap" | "merge",
+): Promise<{ conflict: true; conflictingJob: { id: number; proposedTitle: string; driveCreatedTime: string | null } } | null> {
+  if (job.contentType !== "audio" && job.driveCreatedTime && job.driveFileName) {
+    const cascadeResult = await cascadeSlotAssignment(id, lectureName, job.driveCreatedTime, job.driveFileName, conflictResolution);
+    if (cascadeResult.matched && "conflict" in cascadeResult) {
+      return { conflict: true, conflictingJob: cascadeResult.conflict };
+    }
+    if (cascadeResult.matched) return null;
+  }
+  await buildAndAssignTitle(id, lectureName, job.driveCreatedTime ?? null);
+  return null;
+}
+
 const router = Router();
 
 router.get("/jobs", async (req, res) => {
@@ -279,12 +295,12 @@ router.post("/jobs", async (req, res) => {
 });
 
 router.get("/jobs/:id", async (req, res) => {
-  const parsed = GetJobParams.safeParse({ id: Number(req.params.id) });
-  if (!parsed.success) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
     res.status(400).json({ error: "Invalid id" });
     return;
   }
-  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, parsed.data.id));
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
   if (!job) {
     res.status(404).json({ error: "Not found" });
     return;
@@ -293,12 +309,12 @@ router.get("/jobs/:id", async (req, res) => {
 });
 
 router.delete("/jobs/:id", async (req, res) => {
-  const parsed = DeleteJobParams.safeParse({ id: Number(req.params.id) });
-  if (!parsed.success) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
     res.status(400).json({ error: "Invalid id" });
     return;
   }
-  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, parsed.data.id));
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
   if (!job) {
     res.status(404).json({ error: "Not found" });
     return;
@@ -308,12 +324,12 @@ router.delete("/jobs/:id", async (req, res) => {
     const [updated] = await db
       .update(jobsTable)
       .set({ status: "rejected", updatedAt: new Date() })
-      .where(eq(jobsTable.id, parsed.data.id))
+      .where(eq(jobsTable.id, id))
       .returning();
     res.json(formatJob(updated));
     return;
   }
-  await db.delete(jobsTable).where(eq(jobsTable.id, parsed.data.id));
+  await db.delete(jobsTable).where(eq(jobsTable.id, id));
   res.status(204).send();
 });
 
@@ -392,22 +408,10 @@ router.post("/jobs/:id/approve", async (req, res) => {
   if (bodyParsed.data.proposedDescription !== undefined) updates.proposedDescription = bodyParsed.data.proposedDescription;
 
   if (bodyParsed.data.lectureName) {
-    // Retitle the whole same-day/meeting-code group anchored on this job's corrected
-    // slot. Meaningless for audio (no Meet-schedule slot concept), so only attempted
-    // for video; falls back to Part-N naming if the lecture name doesn't match any
-    // schedule subject.
-    let cascadeResult: Awaited<ReturnType<typeof cascadeSlotAssignment>> = { matched: false };
-    if (job.contentType !== "audio" && job.driveCreatedTime && job.driveFileName) {
-      cascadeResult = await cascadeSlotAssignment(
-        id, bodyParsed.data.lectureName, job.driveCreatedTime, job.driveFileName, bodyParsed.data.conflictResolution,
-      );
-    }
-    if (cascadeResult.matched && "conflict" in cascadeResult) {
-      res.status(409).json({ conflict: true, conflictingJob: cascadeResult.conflict });
+    const conflict = await applyLectureNameChange(id, job, bodyParsed.data.lectureName, bodyParsed.data.conflictResolution);
+    if (conflict) {
+      res.status(409).json(conflict);
       return;
-    }
-    if (!cascadeResult.matched) {
-      await buildAndAssignTitle(id, bodyParsed.data.lectureName, job.driveCreatedTime ?? null);
     }
     await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
   } else {
@@ -444,22 +448,10 @@ router.patch("/jobs/:id", async (req, res) => {
   if (bodyParsed.data.proposedDescription !== undefined) updates.proposedDescription = bodyParsed.data.proposedDescription;
 
   if (bodyParsed.data.lectureName) {
-    // Retitle the whole same-day/meeting-code group anchored on this job's corrected
-    // slot. Meaningless for audio (no Meet-schedule slot concept), so only attempted
-    // for video; falls back to Part-N naming if the lecture name doesn't match any
-    // schedule subject.
-    let cascadeResult: Awaited<ReturnType<typeof cascadeSlotAssignment>> = { matched: false };
-    if (job.contentType !== "audio" && job.driveCreatedTime && job.driveFileName) {
-      cascadeResult = await cascadeSlotAssignment(
-        id, bodyParsed.data.lectureName, job.driveCreatedTime, job.driveFileName, bodyParsed.data.conflictResolution,
-      );
-    }
-    if (cascadeResult.matched && "conflict" in cascadeResult) {
-      res.status(409).json({ conflict: true, conflictingJob: cascadeResult.conflict });
+    const conflict = await applyLectureNameChange(id, job, bodyParsed.data.lectureName, bodyParsed.data.conflictResolution);
+    if (conflict) {
+      res.status(409).json(conflict);
       return;
-    }
-    if (!cascadeResult.matched) {
-      await buildAndAssignTitle(id, bodyParsed.data.lectureName, job.driveCreatedTime ?? null);
     }
     if (Object.keys(updates).length > 1) {
       await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
@@ -681,19 +673,19 @@ router.post("/jobs/:id/process", async (req, res) => {
 });
 
 router.post("/jobs/:id/retry", async (req, res) => {
-  const parsed = RetryJobParams.safeParse({ id: Number(req.params.id) });
-  if (!parsed.success) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
     res.status(400).json({ error: "Invalid id" });
     return;
   }
-  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, parsed.data.id));
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
   if (!job) {
     res.status(404).json({ error: "Not found" });
     return;
   }
   const [updated] = await db.update(jobsTable)
     .set({ status: "pending", errorMessage: null, updatedAt: new Date() })
-    .where(eq(jobsTable.id, parsed.data.id))
+    .where(eq(jobsTable.id, id))
     .returning();
   res.json(formatJob(updated));
 });
@@ -778,7 +770,7 @@ router.post("/pipeline/upload", async (req, res) => {
 
   setImmediate(() => {
     processAllPendingJobs().catch((err) =>
-      console.error("processAllPendingJobs error:", err)
+      logger.error({ err }, "processAllPendingJobs error")
     );
   });
 });

@@ -1,14 +1,18 @@
 import { Router } from "express";
-import { db, jobsTable } from "@workspace/db";
+import { db, jobsTable, driveSourceFoldersTable } from "@workspace/db";
 import { getDriveClient } from "../lib/driveClient";
-import { getSettings } from "../lib/settingsHelper";
+import { collectVideoFiles } from "../lib/pipeline";
 import { getSkipReason, BATCH_RECORDING_SIZE_BYTES } from "../lib/filter";
 
 const router = Router();
 
+// Manual browse/queue view — lists every video across all configured source
+// folders (the same driveSourceFoldersTable the automated scan uses), so
+// there's one place to manage which folders are watched rather than a
+// separate single-folder setting for this page.
 router.get("/drive/files", async (req, res) => {
-  const settings = await getSettings();
-  if (!settings?.driveFolderId) {
+  const sourceFolders = await db.select().from(driveSourceFoldersTable);
+  if (sourceFolders.length === 0) {
     res.json([]);
     return;
   }
@@ -20,22 +24,11 @@ router.get("/drive/files", async (req, res) => {
       return;
     }
 
-    // Paginate to fetch every file in the folder, not just the first 100
-    let allFiles: Array<{ id: string; name: string; mimeType: string; size: string; createdTime: string; modifiedTime: string }> = [];
-    let pageToken: string | undefined;
-
-    do {
-      const response = await drive.files.list({
-        q: `'${settings.driveFolderId}' in parents and mimeType contains 'video/' and trashed = false`,
-        fields: "nextPageToken,files(id,name,mimeType,size,createdTime,modifiedTime)",
-        orderBy: "createdTime desc",
-        pageSize: 100,
-        ...(pageToken ? { pageToken } : {}),
-      });
-      const page = (response.data.files ?? []) as typeof allFiles;
-      allFiles = allFiles.concat(page);
-      pageToken = response.data.nextPageToken ?? undefined;
-    } while (pageToken);
+    let allFiles: Awaited<ReturnType<typeof collectVideoFiles>> = [];
+    for (const folder of sourceFolders) {
+      allFiles = allFiles.concat(await collectVideoFiles(drive, folder.folderId));
+    }
+    allFiles.sort((a, b) => (b.createdTime ?? "").localeCompare(a.createdTime ?? ""));
 
     const existingJobs = await db.select({ driveFileId: jobsTable.driveFileId }).from(jobsTable);
     const queuedIds = new Set(existingJobs.map((j) => j.driveFileId));

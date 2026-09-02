@@ -24,7 +24,7 @@ const PKT_OFFSET_HOURS = 5; // UTC+5
 // Meeting code → allowed days of week (PKT)
 // uys-vqbk-mnn = Monday (1) + Tuesday (2)
 // zeo-iaqz-qqu = Friday (5) + Saturday (6)
-const MEETING_CODE_DAYS: Record<string, number[]> = {
+export const MEETING_CODE_DAYS: Record<string, number[]> = {
   "uys-vqbk-mnn": [1, 2],
   "zeo-iaqz-qqu": [5, 6],
 };
@@ -41,7 +41,17 @@ export function extractMeetingCode(fileName: string): string | null {
 }
 
 /**
- * Resolves a class slot from a Drive ISO createdTime string.
+ * Resolves a class slot from a Drive ISO createdTime string, by rounding the
+ * actual clock time to the nearest 30-min schedule slot.
+ *
+ * This is NOT the pipeline's primary naming path. runPipelineScan() assigns
+ * slots positionally (by index within the day, not clock time) — see
+ * pipeline.ts — because recordings can start late and a time-based lookup
+ * would then match the wrong slot. This clock-time approach only runs as a
+ * fallback for files that don't fit the positional grouping (overflow beyond
+ * the day's schedule, or an unrecognized meeting code) via buildYoutubeTitle
+ * below.
+ *
  * Converts UTC → PKT, then looks up day-of-week + 30-min slot in the schedule.
  * Rounds the minutes to the nearest :00 or :30 boundary.
  * If meetingCode is supplied, only returns a match when the PKT day belongs to
@@ -78,7 +88,7 @@ export async function resolveClassFromTime(isoTimestamp: string, meetingCode?: s
 /**
  * Returns a PKT date string (DD-MM-YYYY) from a Drive ISO createdTime.
  */
-function toPktDateStr(isoTimestamp: string): string {
+export function toPktDateStr(isoTimestamp: string): string {
   const utc = new Date(isoTimestamp);
   const pktMs = utc.getTime() + PKT_OFFSET_HOURS * 60 * 60 * 1000;
   const pkt = new Date(pktMs);

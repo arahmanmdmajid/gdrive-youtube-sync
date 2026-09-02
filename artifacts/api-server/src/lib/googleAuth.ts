@@ -26,8 +26,3 @@ export function getGoogleAuthClient() {
 
   return _authClient;
 }
-
-/** Clears the cached client (useful in tests or after credential rotation). */
-export function resetGoogleAuthClient() {
-  _authClient = null;
-}

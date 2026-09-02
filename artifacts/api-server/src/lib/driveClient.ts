@@ -23,6 +23,7 @@ export interface DriveChildFile {
   mimeType: string;
   size?: string;
   createdTime?: string;
+  modifiedTime?: string;
 }
 
 export const FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
@@ -39,7 +40,7 @@ export async function listChildren(
   do {
     const response = await drive.files.list({
       q: `'${folderId}' in parents and trashed = false${mimeTypeFilter ? ` and ${mimeTypeFilter}` : ""}`,
-      fields: "nextPageToken,files(id,name,mimeType,size,createdTime)",
+      fields: "nextPageToken,files(id,name,mimeType,size,createdTime,modifiedTime)",
       pageSize: 200,
       ...(pageToken ? { pageToken } : {}),
     });

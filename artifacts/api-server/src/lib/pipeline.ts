@@ -136,7 +136,7 @@ async function withRetry<T>(
  * meeting code; every other subfolder is an unrelated Meet call swept into
  * the same account-wide auto-save folder and is left alone.
  */
-async function collectVideoFiles(
+export async function collectVideoFiles(
   drive: NonNullable<ReturnType<typeof getDriveClient>>,
   folderId: string,
 ): Promise<DriveChildFile[]> {

@@ -33,8 +33,6 @@ router.put("/settings", async (req, res) => {
 function formatSettings(s: typeof settingsTable.$inferSelect | null) {
   if (!s) {
     return {
-      driveFolderId: null,
-      driveFolderName: null,
       youtubePlaylistId: null,
       youtubePlaylistName: null,
       libraryFolderId: null,
@@ -46,8 +44,6 @@ function formatSettings(s: typeof settingsTable.$inferSelect | null) {
     };
   }
   return {
-    driveFolderId: s.driveFolderId ?? null,
-    driveFolderName: s.driveFolderName ?? null,
     youtubePlaylistId: s.youtubePlaylistId ?? null,
     youtubePlaylistName: s.youtubePlaylistName ?? null,
     libraryFolderId: s.libraryFolderId ?? null,

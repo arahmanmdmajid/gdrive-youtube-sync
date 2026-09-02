@@ -54,13 +54,6 @@ export const CreateJobBody = zod.object({
 })
 
 
-/**
- * @summary Get a job by ID
- */
-export const GetJobParams = zod.object({
-  "id": zod.coerce.number()
-})
-
 export const GetJobResponse = zod.object({
   "id": zod.number(),
   "driveFileId": zod.string(),
@@ -79,21 +72,6 @@ export const GetJobResponse = zod.object({
   "updatedAt": zod.string().optional()
 })
 
-
-/**
- * @summary Delete a job
- */
-export const DeleteJobParams = zod.object({
-  "id": zod.coerce.number()
-})
-
-
-/**
- * @summary Retry a failed job
- */
-export const RetryJobParams = zod.object({
-  "id": zod.coerce.number()
-})
 
 export const RetryJobResponse = zod.object({
   "id": zod.number(),
@@ -138,10 +116,6 @@ export const PatchJobBody = zod.object({
 /**
  * @summary Rename the YouTube title of a done job
  */
-export const RenameYoutubeTitleParams = zod.object({
-  "id": zod.coerce.number()
-})
-
 export const RenameYoutubeTitleBody = zod.object({
   "title": zod.string().min(1),
 })
@@ -168,10 +142,6 @@ export const ReconcilePlaylistResponse = zod.object({
 /**
  * @summary Approve a needs_review job (optionally update title/description) and move to pending
  */
-export const ApproveJobParams = zod.object({
-  "id": zod.coerce.number()
-})
-
 export const ApproveJobBody = zod.object({
   "lectureName": zod.string().optional(),
   "proposedTitle": zod.string().optional(),
@@ -225,8 +195,6 @@ export const ListYoutubePlaylistsResponse = zod.array(ListYoutubePlaylistsRespon
  * @summary Get current pipeline settings
  */
 export const GetSettingsResponse = zod.object({
-  "driveFolderId": zod.string().nullable(),
-  "driveFolderName": zod.string().nullish(),
   "youtubePlaylistId": zod.string().nullable(),
   "youtubePlaylistName": zod.string().nullish(),
   "libraryFolderId": zod.string().nullish(),
@@ -242,8 +210,6 @@ export const GetSettingsResponse = zod.object({
  * @summary Update pipeline settings
  */
 export const UpdateSettingsBody = zod.object({
-  "driveFolderId": zod.string().nullish(),
-  "driveFolderName": zod.string().nullish(),
   "youtubePlaylistId": zod.string().nullish(),
   "youtubePlaylistName": zod.string().nullish(),
   "libraryFolderId": zod.string().nullish(),
@@ -255,8 +221,6 @@ export const UpdateSettingsBody = zod.object({
 })
 
 export const UpdateSettingsResponse = zod.object({
-  "driveFolderId": zod.string().nullable(),
-  "driveFolderName": zod.string().nullish(),
   "youtubePlaylistId": zod.string().nullable(),
   "youtubePlaylistName": zod.string().nullish(),
   "libraryFolderId": zod.string().nullish(),

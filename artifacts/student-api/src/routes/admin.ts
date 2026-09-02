@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { requireAuth, requireAdminRole, hashPassword } from "../lib/auth";
 import { getInviteCode, setInviteCode } from "../lib/settings";
 import { doneLectures, progressMap, groupBySubject } from "./student";
+import { loadSubjectLookup } from "../lib/subjects";
 import { resetPasswordSchema, inviteCodeSchema } from "../zod";
 
 const router: Router = Router();
@@ -52,8 +53,8 @@ router.get("/students/:id/progress", async (req: Request, res: Response) => {
     return;
   }
 
-  const [lectures, progress] = await Promise.all([doneLectures(), progressMap(id)]);
-  res.json({ student, subjects: groupBySubject(lectures, progress) });
+  const [lectures, progress, lookup] = await Promise.all([doneLectures(), progressMap(id), loadSubjectLookup()]);
+  res.json({ student, subjects: groupBySubject(lectures, progress, lookup) });
 });
 
 router.put("/students/:id/password", async (req: Request, res: Response) => {

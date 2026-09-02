@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { db, jobsTable, lectureProgressTable, usersTable } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
 import { requireAuth, requireAdminRole, type AuthedRequest } from "../lib/auth";
-import { SUBJECTS, UNGROUPED_SERIAL, serialForTitle } from "../lib/subjects";
+import { UNGROUPED_SERIAL, serialForTitle, loadSubjectLookup, type SubjectLookup } from "../lib/subjects";
 import { progressSchema } from "../zod";
 
 const router: Router = Router();
@@ -55,10 +55,10 @@ export async function progressMap(userId: number): Promise<Map<number, string>> 
   return new Map(rows.map((r) => [r.jobId, r.status]));
 }
 
-export function groupBySubject(lectures: LectureRow[], progress: Map<number, string>) {
+export function groupBySubject(lectures: LectureRow[], progress: Map<number, string>, lookup: SubjectLookup) {
   const groups = new Map<string, { total: number; completed: number; inProgress: number; latest: string | null }>();
   for (const lecture of lectures) {
-    const serial = serialForTitle(lecture.title);
+    const serial = serialForTitle(lecture.title, lookup);
     const group = groups.get(serial) ?? { total: 0, completed: 0, inProgress: 0, latest: null };
     group.total += 1;
     const status = progress.get(lecture.id);
@@ -70,7 +70,7 @@ export function groupBySubject(lectures: LectureRow[], progress: Map<number, str
     groups.set(serial, group);
   }
 
-  const subjects = SUBJECTS.filter((s) => groups.has(s.serial)).map((s) => ({
+  const subjects = lookup.subjects.filter((s) => groups.has(s.serial)).map((s) => ({
     ...s,
     ...groups.get(s.serial)!,
   }));
@@ -88,17 +88,18 @@ export function groupBySubject(lectures: LectureRow[], progress: Map<number, str
 
 router.get("/subjects", async (req: Request, res: Response) => {
   const { userId } = req as AuthedRequest;
-  const [lectures, progress] = await Promise.all([doneLectures(), progressMap(userId)]);
-  res.json({ subjects: groupBySubject(lectures, progress) });
+  const [lectures, progress, lookup] = await Promise.all([doneLectures(), progressMap(userId), loadSubjectLookup()]);
+  res.json({ subjects: groupBySubject(lectures, progress, lookup) });
 });
 
 router.get("/subjects/:serial/lectures", async (req: Request, res: Response) => {
   const { userId } = req as AuthedRequest;
   const serial = req.params.serial!;
+  const lookup = await loadSubjectLookup();
   const subject =
     serial === UNGROUPED_SERIAL
       ? { serial: UNGROUPED_SERIAL, nameEn: "Earlier lectures", teacherEn: "" }
-      : SUBJECTS.find((s) => s.serial === serial);
+      : lookup.subjects.find((s) => s.serial === serial);
   if (!subject) {
     res.status(404).json({ error: "Subject not found" });
     return;
@@ -106,7 +107,7 @@ router.get("/subjects/:serial/lectures", async (req: Request, res: Response) => 
 
   const [lectures, progress] = await Promise.all([doneLectures(), progressMap(userId)]);
   const result = lectures
-    .filter((lecture) => serialForTitle(lecture.title) === serial)
+    .filter((lecture) => serialForTitle(lecture.title, lookup) === serial)
     .map((lecture) => ({ ...lecture, progress: progress.get(lecture.id) ?? "not_started" }));
 
   res.json({ subject, lectures: result });
@@ -189,10 +190,10 @@ router.get("/continue", async (req: Request, res: Response) => {
     return;
   }
 
-  const lectures = await doneLectures();
+  const [lectures, lookup] = await Promise.all([doneLectures(), loadSubjectLookup()]);
   const lecture = lectures.find((l) => l.id === latest.jobId) ?? null;
   res.json({
-    lecture: lecture ? { ...lecture, serial: serialForTitle(lecture.title) } : null,
+    lecture: lecture ? { ...lecture, serial: serialForTitle(lecture.title, lookup) } : null,
   });
 });
 

@@ -193,10 +193,6 @@ export interface YoutubePlaylist {
 
 export interface Settings {
   /** @nullable */
-  driveFolderId: string | null;
-  /** @nullable */
-  driveFolderName?: string | null;
-  /** @nullable */
   youtubePlaylistId: string | null;
   /** @nullable */
   youtubePlaylistName?: string | null;
@@ -213,10 +209,6 @@ export interface Settings {
 }
 
 export interface SettingsInput {
-  /** @nullable */
-  driveFolderId?: string | null;
-  /** @nullable */
-  driveFolderName?: string | null;
   /** @nullable */
   youtubePlaylistId?: string | null;
   /** @nullable */

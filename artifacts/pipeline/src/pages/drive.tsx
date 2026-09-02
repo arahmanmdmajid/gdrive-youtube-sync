@@ -70,10 +70,10 @@ export default function Drive() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold font-mono tracking-tight text-foreground">Drive Files</h1>
-          <p className="text-muted-foreground mt-1">All videos in the source folder</p>
+          <p className="text-muted-foreground mt-1">All videos across configured source folders</p>
         </div>
         <Button variant="outline" asChild>
-          <Link href="/settings">Configure Folder</Link>
+          <Link href="/settings">Configure Folders</Link>
         </Button>
       </div>
 
@@ -108,13 +108,13 @@ export default function Drive() {
             </div>
           ) : error ? (
             <div className="text-center p-12 text-destructive">
-              <p>Failed to load Drive files. Please check your folder ID in settings.</p>
+              <p>Failed to load Drive files. Please check your source folders in settings.</p>
             </div>
           ) : !visibleFiles || visibleFiles.length === 0 ? (
             <div className="text-center p-12 bg-muted/20">
               <p className="text-muted-foreground mb-4">
                 {files?.length === 0
-                  ? "No video files found in the configured folder."
+                  ? "No video files found in the configured source folders."
                   : "No files match the current filter."}
               </p>
               {files?.length === 0 && (

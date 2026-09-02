@@ -17,7 +17,7 @@ const SERIAL_SWAP: Record<string, string> = {
 const SERIAL_RE = /^(\d+\.\d+)/;
 const DATE_RE = /(\d{2})(\d{2})(\d{4})\.mp3$/i;
 
-function extractSerial(...names: (string | undefined)[]): string | null {
+function extractSwappedSerial(...names: (string | undefined)[]): string | null {
   for (const name of names) {
     const match = name?.match(SERIAL_RE);
     if (match) return SERIAL_SWAP[match[1]!] ?? match[1]!;
@@ -55,7 +55,7 @@ async function processFile(
     .limit(1);
   if (existing) return null;
 
-  const serial = extractSerial(file.name, parentFolderName);
+  const serial = extractSwappedSerial(file.name, parentFolderName);
   const date = extractDate(file.name);
 
   let proposedTitle: string;
