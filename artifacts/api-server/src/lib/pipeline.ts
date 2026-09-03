@@ -178,6 +178,117 @@ export async function collectVideoFiles(
   return [...direct, ...nested.flat()];
 }
 
+interface GroupMember {
+  id: string;
+  driveFileName: string;
+  driveCreatedTime: string;
+  currentTitle: string | null;
+  confirmed: boolean;
+}
+
+/**
+ * Computes title/description assignments for one (PKT date, meeting code) group.
+ * Confirmed members are excluded from the pool entirely (their slot is reserved,
+ * their own title untouched) so the walk never suggests an already-claimed name.
+ * Non-confirmed members draw positionally from what's left, in the given order
+ * (chronological by createdTime), falling back to a filename-derived title once
+ * the day's schedule slots run out.
+ */
+async function computeGroupAssignments(
+  dayOfWeek: number,
+  pktDateStr: string,
+  meetingCode: string | null,
+  membersChronological: GroupMember[],
+): Promise<Map<string, { title: string; description: string }>> {
+  const allSlots = meetingCode ? await getOrderedSlotsForDay(dayOfWeek) : [];
+
+  const confirmedTitles = new Set(
+    membersChronological.filter((m) => m.confirmed).map((m) => m.currentTitle),
+  );
+  const availableSlots = allSlots.filter(
+    (slot) => !confirmedTitles.has(buildYoutubeTitleFromSlot(slot, pktDateStr)),
+  );
+
+  const assignments = new Map<string, { title: string; description: string }>();
+  let nextSlotIdx = 0;
+  for (const member of membersChronological) {
+    if (member.confirmed) continue;
+
+    const slot = availableSlots[nextSlotIdx];
+    if (slot) {
+      nextSlotIdx++;
+      assignments.set(member.id, {
+        title: buildYoutubeTitleFromSlot(slot, pktDateStr),
+        description: buildYoutubeDescriptionFromSlot(slot, pktDateStr, member.driveFileName),
+      });
+    } else {
+      // Overflow (more recordings than remaining schedule slots) or no meeting code
+      assignments.set(member.id, {
+        title: await buildYoutubeTitle(member.driveFileName, member.driveCreatedTime),
+        description: await buildYoutubeDescription(member.driveFileName, member.driveCreatedTime),
+      });
+    }
+  }
+  return assignments;
+}
+
+/**
+ * Re-derives titles for a single day+meeting-code group's still-unconfirmed
+ * needs_review jobs, right now — instead of waiting for the next full pipeline
+ * scan. Called after a reject or a manual correction, so removing a junk
+ * duplicate (or fixing one job) immediately fixes up the rest of that day's
+ * group rather than leaving them with stale, now-wrong guesses until whoever
+ * is reviewing manually retitles each one.
+ */
+export async function reflowGroupTitles(driveCreatedTime: string, driveFileName: string): Promise<void> {
+  const { dateStr, dayOfWeek } = getPktInfo(driveCreatedTime);
+  const meetingCode = extractMeetingCode(driveFileName);
+
+  const needsReview = await db
+    .select({
+      id: jobsTable.id,
+      driveCreatedTime: jobsTable.driveCreatedTime,
+      driveFileName: jobsTable.driveFileName,
+      proposedTitle: jobsTable.proposedTitle,
+      lectureNameConfirmed: jobsTable.lectureNameConfirmed,
+    })
+    .from(jobsTable)
+    .where(eq(jobsTable.status, "needs_review"));
+
+  const groupJobs = needsReview
+    .filter((j) => {
+      if (!j.driveCreatedTime) return false;
+      const info = getPktInfo(j.driveCreatedTime);
+      if (info.dateStr !== dateStr) return false;
+      if (meetingCode) {
+        const jCode = extractMeetingCode(j.driveFileName ?? "");
+        if (jCode !== meetingCode) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => (a.driveCreatedTime ?? "").localeCompare(b.driveCreatedTime ?? ""));
+
+  if (groupJobs.length === 0) return;
+
+  const members: GroupMember[] = groupJobs.map((j) => ({
+    id: String(j.id),
+    driveFileName: j.driveFileName ?? "",
+    driveCreatedTime: j.driveCreatedTime ?? "",
+    currentTitle: j.proposedTitle,
+    confirmed: j.lectureNameConfirmed,
+  }));
+
+  const assignments = await computeGroupAssignments(dayOfWeek, dateStr, meetingCode, members);
+
+  for (const j of groupJobs) {
+    const assignment = assignments.get(String(j.id));
+    if (!assignment || assignment.title === j.proposedTitle) continue;
+    await db.update(jobsTable)
+      .set({ proposedTitle: assignment.title, proposedDescription: assignment.description, updatedAt: new Date() })
+      .where(eq(jobsTable.id, j.id));
+  }
+}
+
 export async function runPipelineScan(): Promise<{
   newJobsCreated: number;
   alreadyQueued: number;
@@ -259,38 +370,21 @@ export async function runPipelineScan(): Promise<{
   // Map driveFileId → { title, description } for every eligible, non-confirmed file
   const positionalAssignments = new Map<string, { title: string; description: string }>();
   for (const group of groupMap.values()) {
-    const allSlots = group.meetingCode ? await getOrderedSlotsForDay(group.dayOfWeek) : [];
-
-    const confirmedTitles = new Set(
-      group.files
-        .map((f) => (f.id ? existingByFileId.get(f.id) : undefined))
-        .filter((j) => j?.lectureNameConfirmed)
-        .map((j) => j!.proposedTitle),
-    );
-    const availableSlots = allSlots.filter(
-      (slot) => !confirmedTitles.has(buildYoutubeTitleFromSlot(slot, group.pktDateStr)),
-    );
-
-    let nextSlotIdx = 0;
-    for (const file of group.files) {
-      if (!file.id) continue;
-      const existing = existingByFileId.get(file.id);
-      if (existing?.lectureNameConfirmed) continue; // manually confirmed — leave untouched
-
-      const slot = availableSlots[nextSlotIdx];
-      if (slot) {
-        nextSlotIdx++;
-        positionalAssignments.set(file.id, {
-          title: buildYoutubeTitleFromSlot(slot, group.pktDateStr),
-          description: buildYoutubeDescriptionFromSlot(slot, group.pktDateStr, file.name ?? file.id),
-        });
-      } else {
-        // Overflow (more recordings than remaining schedule slots) or no meeting code
-        positionalAssignments.set(file.id, {
-          title: await buildYoutubeTitle(file.name ?? "Untitled", file.createdTime),
-          description: await buildYoutubeDescription(file.name ?? "Untitled", file.createdTime),
-        });
-      }
+    const members: GroupMember[] = group.files
+      .filter((f): f is typeof f & { id: string; createdTime: string } => Boolean(f.id && f.createdTime))
+      .map((f) => {
+        const existing = existingByFileId.get(f.id);
+        return {
+          id: f.id,
+          driveFileName: f.name ?? f.id,
+          driveCreatedTime: f.createdTime,
+          currentTitle: existing?.proposedTitle ?? null,
+          confirmed: existing?.lectureNameConfirmed ?? false,
+        };
+      });
+    const groupAssignments = await computeGroupAssignments(group.dayOfWeek, group.pktDateStr, group.meetingCode, members);
+    for (const [id, assignment] of groupAssignments) {
+      positionalAssignments.set(id, assignment);
     }
   }
 

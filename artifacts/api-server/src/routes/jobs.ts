@@ -10,7 +10,7 @@ import {
   PatchJobBody,
   RenameYoutubeTitleBody,
 } from "@workspace/api-zod";
-import { runPipelineScan, processJobById, processAllPendingJobs, reconcilePlaylist, isQuotaError, isThumbnailRateLimited } from "../lib/pipeline";
+import { runPipelineScan, processJobById, processAllPendingJobs, reconcilePlaylist, isQuotaError, isThumbnailRateLimited, reflowGroupTitles } from "../lib/pipeline";
 import { scanAudioLibrary } from "../lib/audioPipeline";
 import { getYoutubeClient } from "../lib/youtubeClient";
 import {
@@ -205,18 +205,27 @@ async function cascadeSlotAssignment(
     };
   }
 
+  let currentFinalTitle = newTitle;
+
   if (conflicting && conflictResolution === "swap" && oldTitle) {
     await db.update(jobsTable)
       .set({ proposedTitle: oldTitle, proposedDescription: oldDescription, updatedAt: new Date() })
       .where(eq(jobsTable.id, conflicting.id));
   } else if (conflicting && conflictResolution === "merge") {
+    // Same class split across two files — give both a distinguishing Part N
+    // suffix (chronological order) so they aren't indistinguishable on YouTube.
+    const conflictingIsEarlier = conflicting.driveCreatedTime
+      ? new Date(conflicting.driveCreatedTime).getTime() < new Date(driveCreatedTime).getTime()
+      : true;
+    const conflictingFinalTitle = `${newTitle} | Part ${conflictingIsEarlier ? 1 : 2}`;
+    currentFinalTitle = `${newTitle} | Part ${conflictingIsEarlier ? 2 : 1}`;
     await db.update(jobsTable)
-      .set({ lectureNameConfirmed: true, updatedAt: new Date() })
+      .set({ proposedTitle: conflictingFinalTitle, lectureNameConfirmed: true, updatedAt: new Date() })
       .where(eq(jobsTable.id, conflicting.id));
   }
 
   await db.update(jobsTable)
-    .set({ proposedTitle: newTitle, proposedDescription: newDescription, lectureNameConfirmed: true, updatedAt: new Date() })
+    .set({ proposedTitle: currentFinalTitle, proposedDescription: newDescription, lectureNameConfirmed: true, updatedAt: new Date() })
     .where(eq(jobsTable.id, currentJobId));
 
   return { matched: true };
@@ -245,7 +254,12 @@ async function applyLectureNameChange(
     if (cascadeResult.matched && "conflict" in cascadeResult) {
       return { conflict: true, conflictingJob: cascadeResult.conflict };
     }
-    if (cascadeResult.matched) return null;
+    if (cascadeResult.matched) {
+      // This correction may free up (or claim) a slot for the rest of the
+      // day's group — reflow now instead of waiting for a rescan.
+      await reflowGroupTitles(job.driveCreatedTime, job.driveFileName);
+      return null;
+    }
   }
   await buildAndAssignTitle(id, lectureName, job.driveCreatedTime ?? null);
   return null;
@@ -326,6 +340,11 @@ router.delete("/jobs/:id", async (req, res) => {
       .set({ status: "rejected", updatedAt: new Date() })
       .where(eq(jobsTable.id, id))
       .returning();
+    // Removing this job (often a junk duplicate) frees up its slot for the
+    // rest of the day's group — reflow now instead of waiting for a rescan.
+    if (job.contentType !== "audio" && job.driveCreatedTime && job.driveFileName) {
+      await reflowGroupTitles(job.driveCreatedTime, job.driveFileName);
+    }
     res.json(formatJob(updated));
     return;
   }
