@@ -190,8 +190,12 @@
   .node.n-library .n-sub{ font-style:italic; }
 
   /* ---- detail panel ---- */
+  /* The panel is a side drawer on wide screens, so a selected node stays "pinned"
+     and the canvas must remain scrollable and readable behind it — the scrim would
+     otherwise dim the diagram and swallow both scroll and click. It only becomes a
+     real modal backdrop under 800px, where the panel turns into a bottom sheet. */
   .scrim{ position:fixed; inset:0; background:rgba(5,10,10,.35); opacity:0; pointer-events:none; transition:opacity .18s; z-index:10; }
-  .scrim.open{ opacity:1; pointer-events:auto; }
+  .scrim.open{ opacity:0; pointer-events:none; }
 
   #panel{
     position:fixed; top:0; right:0; height:100%; width:380px; max-width:92vw;
@@ -255,6 +259,8 @@
     #panel{ top:auto; bottom:0; left:0; right:0; width:100%; max-width:100%; height:auto; max-height:78vh;
       border-left:none; border-top:1px solid var(--border); border-radius:14px 14px 0 0; transform:translateY(100%); }
     #panel.open{ transform:translateY(0); }
+    /* Bottom sheet covers the diagram here, so the backdrop earns its keep again. */
+    .scrim.open{ opacity:1; pointer-events:auto; }
   }
   @media (prefers-reduced-motion: reduce){
     .node, #panel, .scrim{ transition:none; }
@@ -293,7 +299,7 @@
       Show UI control lines
     </label>
   </div>
-  <p class="hint">Hover any node to trace just its connections — the rest of the diagram dims so a single line is easy to follow.</p>
+  <p class="hint">Hover any node to trace just its connections — the rest of the diagram dims so a single line is easy to follow. Click to pin that trace so it survives scrolling; click empty space or press Esc to unpin.</p>
 
   <div class="canvas-shell">
     <div class="canvas" id="canvas">
@@ -339,25 +345,25 @@
 <script>
 const DATA = {
   nodes: [
-    { id:"drive-scan", type:"stage", label:"Drive Scan", sub:"auto · manual", description:"Lists video files in the configured Google Drive folder.", functionality:["Auto: worker tick every 60s (WORKER_TICK_MS) when settings.autoSync is on","Manual: Dashboard ‘Scan Now’ / ‘Scan Audio Recordings’ buttons","Also browsable read-only via the Drive Browser page"], files:["api-server/src/lib/pipeline.ts","api-server/src/routes/drive.ts"], routes:[["POST","/pipeline/trigger"],["POST","/pipeline/scan-audio"],["GET","/drive/files"]] },
+    { id:"drive-scan", type:"stage", label:"Drive Scan", sub:"auto · manual", description:"Lists video files across every configured Drive source folder.", functionality:["Auto: worker tick every 60s (WORKER_TICK_MS) when settings.autoSync is on","Manual: Dashboard ‘Scan Now’ / ‘Scan Audio Recordings’ buttons","Scans each source folder both flat and for subfolders named after a known meeting code","Also browsable read-only via the Drive Browser page"], files:["api-server/src/lib/pipeline.ts","api-server/src/routes/drive.ts","api-server/src/routes/driveFolders.ts"], routes:[["POST","/pipeline/trigger"],["POST","/pipeline/scan-audio"],["GET","/drive/files"],["GET","/drive-folders"]] },
     { id:"filter-group", type:"stage", label:"Filter & Group", sub:"cutoff · meeting code", description:"Drops ineligible files, groups the rest by (PKT date, meeting code).", functionality:["Skips files created before cutoff 2026-05-17","Skips unrecognized or wrong-day meeting codes","Flags files over 500MB as likely batch recordings"], files:["api-server/src/lib/filter.ts"], routes:[] },
     { id:"schedule-match", type:"stage", label:"Schedule Match", sub:"positional", description:"Positionally matches each day's grouped files to that day's fixed schedule slots and builds the proposed title.", functionality:["Sorts each group by createdTime ascending","Assigns by position index, not clock time — handles late starts","Looks up serial / subject / teacher from the schedule table"], files:["api-server/src/lib/schedule.ts"], routes:[] },
     { id:"job-created", type:"stage", label:"Job Created", sub:"DB row", description:"A job row is created per matched recording with a proposed title/description.", functionality:["Unambiguous matches can be auto-proposed","Uncertain matches start in needs_review","Files can also be queued manually from the Drive Browser"], files:["lib/db/src/schema/jobs.ts"], routes:[["POST","/jobs"]] },
     { id:"needs_review", type:"status", status:"review", label:"Needs Review", sub:"human checkpoint", description:"Waiting in the Job Queue for a human to confirm or correct before anything is uploaded.", functionality:["Editable: title, lecture name, thumbnail","Approve → pending","Reject → rejected (soft delete)"], files:[], routes:[["GET","/jobs"],["PATCH","/jobs/:id"]] },
-    { id:"cascade", type:"effect", label:"Cascade Reassign", sub:"side-effect", description:"Correcting a job's lecture name resequences every later needs_review job that day/meeting-code to the next correct slot.", functionality:["Triggered by editing lecture name during approve","Avoids manually relabeling the rest of the day's queue","Falls back to Part-N naming if no schedule subject matches"], files:["api-server/src/routes/jobs.ts (cascadeSlotAssignment)"], routes:[] },
+    { id:"cascade", type:"effect", label:"Cascade Reassign", sub:"side-effect", description:"Correcting a job's lecture name resequences every later needs_review job that day/meeting-code to the next correct slot.", functionality:["Triggered by editing lecture name during approve","Avoids manually relabeling the rest of the day's queue","Names a human confirmed (lectureNameConfirmed) are never resequenced","If the new name collides with another job, the API returns 409 instead of guessing — the reviewer chooses swap (two classes traded places) or merge (one class split across two files)","Falls back to Part-N naming if no schedule subject matches"], files:["api-server/src/routes/jobs.ts (cascadeSlotAssignment, applyLectureNameChange)"], routes:[["POST","/jobs/:id/approve"],["PATCH","/jobs/:id"]] },
     { id:"rejected", type:"status", status:"rejected", label:"Rejected", sub:"soft delete", description:"Soft-deleted job. driveFileId is kept so the scanner won't re-queue the same file.", functionality:["Restore → back to needs_review","Hard delete removes it permanently"], files:[], routes:[["DELETE","/jobs/:id"],["POST","/jobs/:id/restore"]] },
     { id:"pending", type:"status", status:"pending", label:"Pending", sub:"approved, queued", description:"Approved, waiting for the worker to upload it to YouTube.", functionality:["Picked up by worker tick or Upload Pending button","Failed jobs return here via Retry"], files:[], routes:[["POST","/jobs/:id/process"],["POST","/pipeline/upload"]] },
-    { id:"processing", type:"status", status:"processing", label:"Processing", sub:"uploading", description:"Upload to YouTube is actively running for this job.", functionality:["Succeeds → done","Errors → failed (errorMessage stored)"], files:["api-server/src/lib/youtubeClient.ts"], routes:[] },
+    { id:"processing", type:"status", status:"processing", label:"Processing", sub:"uploading", description:"Upload to YouTube is actively running for this job.", functionality:["Succeeds → done","Errors → failed (errorMessage stored)","Quota errors → back to pending, batch stops","If the process dies mid-upload the row is stranded here with no error — reclaimOrphanedJobs() sweeps those at worker startup","A husk left by an interrupted upload (uploadStatus 'uploaded', duration P0D) is never mistaken for a successful one"], files:["api-server/src/lib/youtubeClient.ts","api-server/src/lib/pipeline.ts (uploadJob, reclaimOrphanedJobs)"], routes:[] },
     { id:"done", type:"status", status:"done", label:"Done", sub:"unlisted · in playlist", description:"Uploaded as an unlisted YouTube video and present in the target playlist.", functionality:["Thumbnail can still be changed after upload","May flip to removed if it leaves the playlist"], files:[], routes:[["PATCH","/jobs/:id/youtube-title"],["POST","/jobs/:id/thumbnail"]] },
     { id:"failed", type:"status", status:"failed", label:"Failed", sub:"retryable", description:"Upload errored; retryable.", functionality:["Retry → back to pending, clears errorMessage"], files:[], routes:[["POST","/jobs/:id/retry"]] },
     { id:"removed", type:"status", status:"removed", label:"Removed", sub:"missing from playlist", description:"Was done, but the video is no longer found in the YouTube playlist.", functionality:["Self-heals to done if the video reappears during reconciliation","Or manually restored (DB-only) after an admin re-adds it"], files:[], routes:[["POST","/jobs/:id/restore-done"]] },
     { id:"playlist-sync", type:"stage", label:"Playlist Sync", sub:"reconciliation", description:"Reconciles YouTube playlist membership against job state.", functionality:["done ↔ removed based on playlist membership","Backfills jobs for playlist videos that have none","Runs on the worker tick, or via Dashboard ‘Sync Playlist’"], files:[], routes:[["POST","/pipeline/reconcile-playlist"]] },
 
     { id:"dashboard", type:"page", label:"Dashboard", sub:"“Mission Control”", description:"The home screen: at-a-glance status and one-click pipeline actions.", functionality:["Stat cards per job status (needs_review highlighted)","Recent-activity table with status badges","Buttons: Scan Now, Scan Audio, Sync Playlist, Apply Thumbnails to All, Upload Pending"], files:["pipeline/src/pages/dashboard.tsx"], routes:[] },
-    { id:"drive-browser", type:"page", label:"Drive Browser", sub:"manual escape hatch", description:"Read-only view of raw files sitting in the Drive folder.", functionality:["Shows eligible vs. skipped files with the skip reason","‘Queue as Job’ for files the automatic scan missed or excluded"], files:["pipeline/src/pages/drive.tsx"], routes:[] },
+    { id:"drive-browser", type:"page", label:"Drive Browser", sub:"manual escape hatch", description:"Read-only view of raw files across all configured Drive source folders.", functionality:["Shows eligible vs. skipped files with the skip reason","‘Queue as Job’ for files the automatic scan missed or excluded"], files:["pipeline/src/pages/drive.tsx"], routes:[["GET","/drive/files"]] },
     { id:"schedule-editor", type:"page", label:"Schedule Editor", sub:"weekly grid", description:"Weekly class-schedule grid that Schedule Match reads from.", functionality:["Drag-and-drop slot reordering (dnd-kit)","Edit teacher, subject, serial number, time slot per day"], files:["pipeline/src/pages/schedule.tsx"], routes:[["GET","/schedule"],["PUT","/schedule/:day/:slot"]] },
     { id:"job-queue", type:"page", label:"Job Queue", sub:"the review screen", description:"Main review/approve screen — the human checkpoint of the whole pipeline.", functionality:["Status filter across all 7 statuses","Inline rename with lecture-name preset dropdown","Per-row: approve, retry, restore, rename, set thumbnail, delete"], files:["pipeline/src/pages/jobs.tsx"], routes:[] },
-    { id:"settings", type:"page", label:"Settings", sub:"global config", description:"Global pipeline configuration.", functionality:["Drive source folder ID, YouTube destination playlist ID","Auto-sync on/off toggle (drives the worker tick)","Lecture-name presets and default thumbnails per subject"], files:["pipeline/src/pages/settings.tsx"], routes:[["GET","/settings"],["PUT","/settings"]] },
+    { id:"settings", type:"page", label:"Settings", sub:"global config", description:"Global pipeline configuration.", functionality:["Drive source folders (add/remove any number), YouTube destination playlist ID","Auto-sync on/off toggle (drives the worker tick)","Lecture-name presets and default thumbnails per subject","Student-portal invite code"], files:["pipeline/src/pages/settings.tsx"], routes:[["GET","/settings"],["PUT","/settings"],["GET","/drive-folders"],["POST","/drive-folders"],["DELETE","/drive-folders/:id"]] },
     { id:"library", type:"page", label:"Library", sub:"independent module", description:"Manages the institute's scanned book/PDF resources by subject category. Not part of the video upload pipeline — shares the dashboard shell only.", functionality:["Scan for new library resources","List / patch / delete resources, categorized by subject"], files:["pipeline/src/pages/library.tsx"], routes:[["POST","/library/scan"],["GET","/library/resources"]], standalone:true }
   ],
   edges: [
@@ -391,7 +397,7 @@ const DATA = {
     { from:"drive-browser", to:"drive-scan", kind:"control", label:"reads listing" },
     { from:"drive-browser", to:"job-created", kind:"control", label:"Queue as Job" },
     { from:"schedule-editor", to:"schedule-match", kind:"control", label:"defines slots" },
-    { from:"settings", to:"drive-scan", kind:"control", label:"folder ID" },
+    { from:"settings", to:"drive-scan", kind:"control", label:"source folders" },
     { from:"settings", to:"playlist-sync", kind:"control", label:"playlist ID" },
     { from:"settings", to:"job-created", kind:"control", label:"lecture presets" }
   ],
@@ -428,7 +434,10 @@ const DATA = {
     ["DELETE","/lecture-names/:id","Delete a preset"],
     ["GET","/settings","Read global settings"],
     ["PUT","/settings","Update global settings"],
-    ["GET","/drive/files","List Drive folder contents with eligibility flags"],
+    ["GET","/drive/files","List videos across all configured source folders, with eligibility flags"],
+    ["GET","/drive-folders","List the configured Drive source folders"],
+    ["POST","/drive-folders","Add a source folder (raw ID or full Drive URL)"],
+    ["DELETE","/drive-folders/:id","Stop watching a source folder"],
     ["POST","/library/scan","Scan for new library resources"],
     ["GET","/library/resources","List library resources"],
     ["PATCH","/library/resources/:id","Edit a library resource"],
@@ -647,7 +656,10 @@ function drawEdges(){
 }
 
 function applyNodeDim(){
-  const focus = hoverFocus || currentSelection;
+  // A clicked node stays pinned: it outranks hover so that dragging the mouse
+  // across the diagram to scroll horizontally doesn't hand the trace to whatever
+  // card happens to pass under the cursor.
+  const focus = currentSelection || hoverFocus;
   const connected = new Set();
   if (focus){
     connected.add(focus);
@@ -741,6 +753,14 @@ canvas.addEventListener("keydown", e => {
 document.getElementById("panelClose").addEventListener("click", closePanel);
 scrim.addEventListener("click", closePanel);
 document.addEventListener("keydown", e => { if (e.key === "Escape") closePanel(); });
+
+// With the scrim no longer intercepting clicks on wide screens, unpin on any
+// click that isn't on the panel or on another node (clicking a node re-pins it).
+document.addEventListener("click", e => {
+  if (!currentSelection) return;
+  if (e.target.closest("#panel") || e.target.closest(".node")) return;
+  closePanel();
+});
 
 // ---- API reference table ----
 const apiBody = document.getElementById("apiBody");

@@ -98,7 +98,11 @@ Serial map (Arabic subject → serial):
 
 Files are grouped by (PKT date, meeting code), sorted by `createdTime` ascending, then assigned schedule slots by **position index** (not by actual recording time). This handles late-start recordings correctly.
 
-**Cascade**: when a user changes a job's lecture name during review (because a class was skipped), all subsequent `needs_review` siblings for the same day+meeting code are automatically reassigned to the next slots.
+**Cascade**: when a user changes a job's lecture name during review (because a class was skipped), all subsequent `needs_review` siblings for the same day+meeting code are automatically reassigned to the next slots. Jobs whose name a human already confirmed (`lectureNameConfirmed`) are never resequenced.
+
+**Naming conflicts**: if the new name collides with another job's current name, the API returns `409` instead of guessing. The reviewer picks `conflictResolution`:
+- `"swap"` — two classes traded places; the other job takes this one's old name
+- `"merge"` — one class split across two recordings; both keep the name, both confirmed
 
 ---
 
@@ -109,7 +113,12 @@ needs_review → pending → processing → done
                                     → failed (retryable)
 needs_review → rejected (soft delete — driveFileId kept so pipeline won't re-scan)
 rejected → needs_review (via Restore button)
+done → removed (video left the playlist; self-heals or restore-done)
 ```
+
+**Stranded `processing` jobs**: `uploadJob` handles errors, but not the process dying mid-upload — such a row keeps `processing` with no `errorMessage`, and both job processors select only `pending`, so nothing would ever pick it up. `reclaimOrphanedJobs()` sweeps these at worker startup (only one worker runs, so anything in `processing` then is orphaned by definition).
+
+⚠️ **A matching title on YouTube does not mean the upload succeeded.** The video resource is created when an upload *starts*, so an interrupted upload leaves a husk stuck at `uploadStatus: "uploaded"` / duration `P0D` forever ("processing will begin shortly" in Studio). Always verify completeness before adopting a match — adopting a husk marks a job done against a video that will never play.
 
 ---
 
@@ -118,7 +127,9 @@ rejected → needs_review (via Restore button)
 - **Never mock the DB** — the project uses real Drizzle + PostgreSQL only
 - **After schema changes**: rebuild `lib/db` with `npx tsc -p tsconfig.json` from `lib/db/`
 - **Frontend is `artifacts/pipeline`** — not `artifacts/mockup-sandbox` (that's a component preview server)
-- **API client hooks** are in `lib/api-client-react/src/generated/api.ts` and are manually extended (not auto-generated from a script)
+- **The `generated/` files are hand-maintained** — `lib/api-client-react/src/generated/` and `lib/api-zod/src/generated/` carry an orval "do not edit manually" header, but nothing regenerates them here. Edit them directly.
+- **After editing `lib/db`, `lib/api-zod` or `lib/api-client-react`**: run `pnpm run typecheck:libs` from the repo root, or the per-package typechecks won't see the change
+- **Drive sources are multi-folder** (`driveSourceFoldersTable`, managed via `/drive-folders`). The old single `settings.driveFolderId` column was removed — don't reintroduce a one-folder assumption
 - **OAuth token** — if you see `invalid_grant`, the refresh token has expired. Re-run the OAuth Playground flow and update `GOOGLE_OAUTH_REFRESH_TOKEN` in `.env`
 
 ---

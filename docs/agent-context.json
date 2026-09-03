@@ -4,7 +4,8 @@
     "oneLiner": "Auto-uploads Google Drive class recordings from a madrasa in Pakistan to YouTube, titled from a fixed weekly schedule, with a human review step before anything goes live.",
     "repo": "https://github.com/arahmanmdmajid/gdrive-youtube-sync.git",
     "workingDirectory": "artifacts/api-server (API + worker) and artifacts/pipeline (dashboard) under the repo root",
-    "generated": "2026-08-07",
+    "generated": "2026-09-02",
+    "coversThrough": "commit 4f22187",
     "purpose": "Machine-readable map of this app's pipeline flow, UI screens, job-status lifecycle and API surface. Intended for AI coding agents to load as fast, accurate context before making changes. Companion to CLAUDE.md (prose) and docs/app-flow.html (interactive diagram) — all three describe the same system and should be kept in sync."
   },
 
@@ -78,7 +79,7 @@
     "statuses": [
       { "id": "needs_review", "meaning": "Matched to a schedule slot but not yet confirmed by a human. Sits in the Job Queue for review." },
       { "id": "pending", "meaning": "Approved and waiting for the worker to upload it." },
-      { "id": "processing", "meaning": "Upload to YouTube is actively running." },
+      { "id": "processing", "meaning": "Upload to YouTube is actively running. Only one worker uploads at a time, so any row still in processing at startup was orphaned by a process death (crash, PM2 restart, machine sleep) — reclaimOrphanedJobs() resolves those, since both job processors select only pending and would never pick such a row up." },
       { "id": "done", "meaning": "Uploaded (unlisted) and present in the target YouTube playlist." },
       { "id": "failed", "meaning": "Upload errored. Retryable — sends the job back to pending." },
       { "id": "rejected", "meaning": "Soft-deleted from needs_review (e.g. wrong file, duplicate). driveFileId is kept so the scanner won't re-queue it. Restorable back to needs_review." },
@@ -99,18 +100,18 @@
   },
 
   "pipelineSteps": [
-    { "step": 1, "name": "Drive Scan", "description": "Lists video files in the configured Drive folder.", "trigger": "Automatic: worker setInterval, default every 60s (WORKER_TICK_MS), only when settings.autoSync is true. Manual: 'Scan Now' / 'Scan Audio Recordings' buttons on the Dashboard.", "files": ["artifacts/api-server/src/lib/pipeline.ts", "artifacts/api-server/src/routes/drive.ts"] },
+    { "step": 1, "name": "Drive Scan", "description": "Lists video files across every folder in driveSourceFoldersTable — each is scanned both flat and for subfolders named after a known meeting code.", "trigger": "Automatic: worker setInterval, default every 60s (WORKER_TICK_MS), only when settings.autoSync is true. Manual: 'Scan Now' / 'Scan Audio Recordings' buttons on the Dashboard.", "files": ["artifacts/api-server/src/lib/pipeline.ts", "artifacts/api-server/src/routes/drive.ts", "artifacts/api-server/src/routes/driveFolders.ts"] },
     { "step": 2, "name": "Filter & Group", "description": "Drops files before the cutoff date or with an unrecognized/wrong-day meeting code; groups the remainder by (PKT date, meeting code).", "files": ["artifacts/api-server/src/lib/filter.ts"] },
     { "step": 3, "name": "Schedule Match", "description": "Sorts each day's group by createdTime ascending and assigns files to that day's schedule slots by position (not literal timestamp) — so a late-starting recording still lands in the right slot.", "files": ["artifacts/api-server/src/lib/schedule.ts"] },
     { "step": 4, "name": "Job Created", "description": "A DB row is created per matched recording with a proposed title/description. Unambiguous matches can be auto-proposed; anything uncertain starts in needs_review.", "files": ["lib/db/src/schema/jobs.ts", "artifacts/api-server/src/routes/jobs.ts"] },
     { "step": 5, "name": "Human Review", "description": "Staff reviews the Job Queue: confirm/edit the title or lecture name, set a thumbnail, approve, or reject.", "ui": "artifacts/pipeline/src/pages/jobs.tsx" },
-    { "step": 6, "name": "Cascade Reassign", "description": "If a reviewer changes a job's lecture name (e.g. a class was skipped that week), every later needs_review job for the same day+meeting-code is automatically resequenced to the next correct slot.", "files": ["artifacts/api-server/src/routes/jobs.ts (cascadeSlotAssignment)"] },
-    { "step": 7, "name": "Upload", "description": "Approved (pending) jobs are picked up and uploaded to YouTube as unlisted videos.", "files": ["artifacts/api-server/src/lib/youtubeClient.ts"] },
+    { "step": 6, "name": "Cascade Reassign", "description": "If a reviewer changes a job's lecture name (e.g. a class was skipped that week), every later needs_review job for the same day+meeting-code is automatically resequenced to the next correct slot. Jobs whose name a human confirmed (lectureNameConfirmed) are left alone. If the new name collides with another job's current name the API returns 409 rather than guessing, and the reviewer picks conflictResolution 'swap' (two classes traded places) or 'merge' (one class split across two recordings, so both keep the name).", "files": ["artifacts/api-server/src/routes/jobs.ts (cascadeSlotAssignment, applyLectureNameChange)"] },
+    { "step": 7, "name": "Upload", "description": "Approved (pending) jobs are picked up and uploaded to YouTube as unlisted videos, one at a time. On worker startup reclaimOrphanedJobs() sweeps any job left in processing by a previous process death, adopting the upload if it completed or requeueing it if not.", "files": ["artifacts/api-server/src/lib/youtubeClient.ts", "artifacts/api-server/src/lib/pipeline.ts (uploadJob, reclaimOrphanedJobs)"] },
     { "step": 8, "name": "Playlist Sync", "description": "Reconciliation keeps the YouTube playlist in sync with job state: marks done jobs removed if their video left the playlist, self-heals removed jobs whose video reappeared, and backfills jobs for playlist videos that have none.", "routes": ["POST /pipeline/reconcile-playlist"] }
   ],
 
   "nodes": [
-    { "id": "drive-scan", "type": "stage", "label": "Drive Scan", "description": "Lists video files in the configured Google Drive folder. Runs automatically on a timer when auto-sync is on, or on demand.", "functionality": ["Auto: worker tick every 60s (WORKER_TICK_MS) if settings.autoSync", "Manual: Dashboard 'Scan Now' / 'Scan Audio Recordings' buttons", "Also browsable read-only via the Drive Browser page"], "files": ["artifacts/api-server/src/lib/pipeline.ts", "artifacts/api-server/src/routes/drive.ts"], "routes": ["POST /pipeline/trigger", "POST /pipeline/scan-audio", "GET /drive/files"] },
+    { "id": "drive-scan", "type": "stage", "label": "Drive Scan", "description": "Lists video files across every configured Drive source folder. Runs automatically on a timer when auto-sync is on, or on demand.", "functionality": ["Auto: worker tick every 60s (WORKER_TICK_MS) if settings.autoSync", "Manual: Dashboard 'Scan Now' / 'Scan Audio Recordings' buttons", "Each source folder is scanned flat and for subfolders named after a known meeting code", "Also browsable read-only via the Drive Browser page"], "files": ["artifacts/api-server/src/lib/pipeline.ts", "artifacts/api-server/src/routes/drive.ts", "artifacts/api-server/src/routes/driveFolders.ts"], "routes": ["POST /pipeline/trigger", "POST /pipeline/scan-audio", "GET /drive/files", "GET /drive-folders"] },
     { "id": "filter-group", "type": "stage", "label": "Filter & Group", "description": "Drops ineligible files, groups the rest by (PKT date, meeting code).", "functionality": ["Skips files before cutoff 2026-05-17", "Skips unrecognized or wrong-day meeting codes", "Flags files over 500MB as likely batch recordings"], "files": ["artifacts/api-server/src/lib/filter.ts"] },
     { "id": "schedule-match", "type": "stage", "label": "Schedule Match", "description": "Positionally matches each day's grouped files to that day's fixed schedule slots and builds the proposed title.", "functionality": ["Sort group by createdTime ascending", "Assign by position index, not clock time (handles late starts)", "Look up serial/subject/teacher from the schedule table"], "files": ["artifacts/api-server/src/lib/schedule.ts"] },
     { "id": "job-created", "type": "stage", "label": "Job Created", "description": "A job row is created per matched recording with a proposed title/description.", "functionality": ["Unambiguous matches can be auto-proposed", "Uncertain matches start in needs_review", "Files can also be queued manually from the Drive Browser"], "files": ["lib/db/src/schema/jobs.ts"], "routes": ["POST /jobs"] },
@@ -118,7 +119,7 @@
     { "id": "cascade", "type": "effect", "label": "Cascade Reassign", "description": "Side-effect of correcting a job's lecture name: resequences every later needs_review job that day/meeting-code to the next correct slot.", "functionality": ["Triggered by editing lecture name during approve", "Avoids manually relabeling the rest of the day's queue", "Falls back to Part-N naming if no schedule subject matches"], "files": ["artifacts/api-server/src/routes/jobs.ts"] },
     { "id": "rejected", "type": "status", "label": "Rejected", "description": "Soft-deleted job. driveFileId is retained so the scanner won't re-queue the same file.", "functionality": ["Restore → back to needs_review", "Hard delete removes it permanently"], "routes": ["DELETE /jobs/:id", "POST /jobs/:id/restore"] },
     { "id": "pending", "type": "status", "label": "Pending", "description": "Approved, waiting for the worker to upload it to YouTube.", "functionality": ["Picked up by worker tick or Upload Pending button", "Failed jobs return here via Retry"], "routes": ["POST /jobs/:id/process", "POST /pipeline/upload"] },
-    { "id": "processing", "type": "status", "label": "Processing", "description": "Upload to YouTube is actively running for this job.", "functionality": ["Succeeds → done", "Errors → failed (with errorMessage stored)"] },
+    { "id": "processing", "type": "status", "label": "Processing", "description": "Upload to YouTube is actively running for this job.", "functionality": ["Succeeds → done", "Errors → failed (with errorMessage stored)", "Quota errors → back to pending, batch stops", "Stranded here by a process death → swept by reclaimOrphanedJobs() at worker startup"] },
     { "id": "done", "type": "status", "label": "Done", "description": "Uploaded as an unlisted YouTube video and present in the target playlist.", "functionality": ["Thumbnail can still be changed after upload", "Reconciliation may flip this to removed if it leaves the playlist"], "routes": ["PATCH /jobs/:id/youtube-title", "POST /jobs/:id/thumbnail"] },
     { "id": "failed", "type": "status", "label": "Failed", "description": "Upload errored; retryable.", "functionality": ["Retry → back to pending, clears errorMessage"], "routes": ["POST /jobs/:id/retry"] },
     { "id": "removed", "type": "status", "label": "Removed", "description": "Was done, but the video is no longer found in the YouTube playlist.", "functionality": ["Self-heals to done if the video reappears during reconciliation", "Or manually restored (DB-only) after an admin re-adds it to the playlist"], "routes": ["POST /jobs/:id/restore-done"] },
@@ -126,9 +127,9 @@
 
     { "id": "dashboard", "type": "page", "label": "Dashboard", "description": "\"Mission Control\" home screen.", "functionality": ["Stat cards per job status (needs_review count highlighted)", "Recent-activity table with status badges", "Buttons: Scan Now, Scan Audio Recordings, Sync Playlist, Apply Thumbnails to All, Upload Pending (with live count badge)"], "files": ["artifacts/pipeline/src/pages/dashboard.tsx"] },
     { "id": "job-queue", "type": "page", "label": "Job Queue", "description": "Main review/approve screen — the human checkpoint of the whole pipeline.", "functionality": ["Status filter dropdown across all 7 statuses", "Inline rename with lecture-name preset dropdown + auto title/description builder", "Per-row actions: approve, retry, restore, restore-done, rename, set thumbnail, delete (with confirmation)", "Badges for 'manually added' and 'audio' jobs"], "files": ["artifacts/pipeline/src/pages/jobs.tsx"] },
-    { "id": "drive-browser", "type": "page", "label": "Drive Browser", "description": "Read-only view of raw files sitting in the Drive folder, with a manual escape hatch.", "functionality": ["Shows eligible vs. skipped files with the skip reason", "'Queue as Job' for files the automatic scan missed or excluded"], "files": ["artifacts/pipeline/src/pages/drive.tsx"] },
+    { "id": "drive-browser", "type": "page", "label": "Drive Browser", "description": "Read-only view of raw files across all configured Drive source folders, with a manual escape hatch.", "functionality": ["Shows eligible vs. skipped files with the skip reason", "'Queue as Job' for files the automatic scan missed or excluded"], "files": ["artifacts/pipeline/src/pages/drive.tsx"] },
     { "id": "schedule-editor", "type": "page", "label": "Schedule Editor", "description": "Weekly class-schedule grid that Schedule Match reads from.", "functionality": ["Drag-and-drop slot reordering (dnd-kit)", "Edit teacher, subject, serial number, time slot per day"], "files": ["artifacts/pipeline/src/pages/schedule.tsx"], "routes": ["GET /schedule", "PUT /schedule/:dayOfWeek/:timeSlot", "DELETE /schedule/:dayOfWeek/:timeSlot"] },
-    { "id": "settings", "type": "page", "label": "Settings", "description": "Global pipeline configuration.", "functionality": ["Drive source folder ID, YouTube destination playlist ID", "Auto-sync on/off toggle (drives the worker tick)", "Lecture-name presets used by the title builder", "Default thumbnails per subject"], "files": ["artifacts/pipeline/src/pages/settings.tsx"], "routes": ["GET /settings", "PUT /settings", "GET /lecture-names", "POST /lecture-names", "PATCH /lecture-names/:id", "DELETE /lecture-names/:id", "GET /thumbnails/subjects", "POST /thumbnails/subjects/:serial", "DELETE /thumbnails/subjects/:serial"] },
+    { "id": "settings", "type": "page", "label": "Settings", "description": "Global pipeline configuration.", "functionality": ["Drive source folders — add or remove any number", "YouTube destination playlist ID", "Auto-sync on/off toggle (drives the worker tick)", "Lecture-name presets used by the title builder", "Default thumbnails per subject", "Student-portal invite code"], "files": ["artifacts/pipeline/src/pages/settings.tsx"], "routes": ["GET /settings", "PUT /settings", "GET /drive-folders", "POST /drive-folders", "DELETE /drive-folders/:id", "GET /lecture-names", "POST /lecture-names", "PATCH /lecture-names/:id", "DELETE /lecture-names/:id", "GET /thumbnails/subjects", "POST /thumbnails/subjects/:serial", "DELETE /thumbnails/subjects/:serial"] },
     { "id": "library", "type": "page", "label": "Library", "description": "Independent module for the institute's scanned book/PDF resources, organized by subject category (Tafseer, Fiqh, etc.). Not part of the video upload pipeline — shares the dashboard shell only.", "functionality": ["Scan for new library resources", "List/patch/delete resources, categorized by subject"], "files": ["artifacts/pipeline/src/pages/library.tsx"], "routes": ["POST /library/scan", "GET /library/resources", "PATCH /library/resources/:id", "DELETE /library/resources/:id"] }
   ],
 
@@ -163,7 +164,7 @@
     { "from": "drive-browser", "to": "drive-scan", "kind": "control", "label": "reads same listing" },
     { "from": "drive-browser", "to": "job-created", "kind": "control", "label": "Queue as Job" },
     { "from": "schedule-editor", "to": "schedule-match", "kind": "control", "label": "defines slots" },
-    { "from": "settings", "to": "drive-scan", "kind": "control", "label": "source folder ID" },
+    { "from": "settings", "to": "drive-scan", "kind": "control", "label": "source folders" },
     { "from": "settings", "to": "playlist-sync", "kind": "control", "label": "target playlist ID" },
     { "from": "settings", "to": "job-created", "kind": "control", "label": "lecture-name presets" }
   ],
@@ -200,8 +201,11 @@
     { "method": "PATCH", "path": "/lecture-names/:id", "purpose": "Edit a preset", "file": "routes/lectureNames.ts" },
     { "method": "DELETE", "path": "/lecture-names/:id", "purpose": "Delete a preset", "file": "routes/lectureNames.ts" },
     { "method": "GET", "path": "/settings", "purpose": "Read global settings", "file": "routes/settings.ts" },
-    { "method": "PUT", "path": "/settings", "purpose": "Update global settings (folders, playlist, auto-sync)", "file": "routes/settings.ts" },
-    { "method": "GET", "path": "/drive/files", "purpose": "List Drive folder contents with eligibility flags", "file": "routes/drive.ts" },
+    { "method": "PUT", "path": "/settings", "purpose": "Update global settings (library/audio folders, playlist, auto-sync). Drive source folders are managed via /drive-folders, not here.", "file": "routes/settings.ts" },
+    { "method": "GET", "path": "/drive/files", "purpose": "List videos across all configured Drive source folders, with eligibility flags", "file": "routes/drive.ts" },
+    { "method": "GET", "path": "/drive-folders", "purpose": "List the configured Drive source folders the scanner watches", "file": "routes/driveFolders.ts" },
+    { "method": "POST", "path": "/drive-folders", "purpose": "Add a source folder (accepts a raw folder ID or a full Drive folder URL)", "file": "routes/driveFolders.ts" },
+    { "method": "DELETE", "path": "/drive-folders/:id", "purpose": "Stop watching a source folder", "file": "routes/driveFolders.ts" },
     { "method": "POST", "path": "/library/scan", "purpose": "Scan for new library resources", "file": "routes/library.ts" },
     { "method": "GET", "path": "/library/resources", "purpose": "List library resources", "file": "routes/library.ts" },
     { "method": "PATCH", "path": "/library/resources/:id", "purpose": "Edit a library resource", "file": "routes/library.ts" },
@@ -216,7 +220,10 @@
     "Never mock the DB — real Drizzle + PostgreSQL only.",
     "After schema changes, rebuild lib/db with `npx tsc -p tsconfig.json` from lib/db/.",
     "Frontend is artifacts/pipeline — artifacts/mockup-sandbox is a separate component-preview server, not the app.",
-    "API client hooks in lib/api-client-react/src/generated/api.ts are manually extended, not auto-generated.",
+    "The generated/ files in lib/api-client-react and lib/api-zod carry an orval 'do not edit manually' header, but nothing regenerates them here — edit them directly.",
+    "After editing lib/db, lib/api-zod or lib/api-client-react, run `pnpm run typecheck:libs` from the repo root or the per-package typechecks will not see the change.",
+    "Drive sources are multi-folder (driveSourceFoldersTable, managed via /drive-folders). The old single settings.driveFolderId column was removed — do not reintroduce a one-folder assumption.",
+    "A video existing on the channel with a matching title does NOT mean its upload succeeded. YouTube creates the video resource when an upload starts, so an interrupted upload leaves a husk stuck at uploadStatus 'uploaded' / duration 'P0D' forever. Always check completeness before adopting a match.",
     "invalid_grant OAuth error means the refresh token expired — redo the OAuth Playground flow and update GOOGLE_OAUTH_REFRESH_TOKEN in .env."
   ]
 }
