@@ -44,6 +44,8 @@ export interface Job {
   driveFileSizeBytes?: number | null;
   /** @nullable */
   driveCreatedTime?: string | null;
+  /** @nullable */
+  durationSeconds?: number | null;
   status: JobStatus;
   source?: JobSource;
   contentType: JobContentType;

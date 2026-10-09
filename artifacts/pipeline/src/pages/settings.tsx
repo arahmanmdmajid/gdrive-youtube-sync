@@ -31,6 +31,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Save, Plus, Trash2, Pencil, Check, X, ImageUp, ImageOff } from "lucide-react";
 
+/** Mirrors the backend's parser (routes/driveFolders.ts) so duplicates can be caught client-side before a network round trip. */
+function extractFolderId(input: string): string | null {
+  const trimmed = input.trim();
+  const urlMatch = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (urlMatch) return urlMatch[1];
+  if (/^[a-zA-Z0-9_-]+$/.test(trimmed)) return trimmed;
+  return null;
+}
+
 const formSchema = z.object({
   youtubePlaylistId: z.string().nullable().optional(),
   libraryFolderId: z.string().nullable().optional(),
@@ -81,6 +90,15 @@ export default function Settings() {
   const handleAddDriveFolder = () => {
     const trimmed = newFolderInput.trim();
     if (!trimmed) return;
+    const parsedId = extractFolderId(trimmed);
+    const duplicate = parsedId && driveFolders?.find((f) => f.folderId === parsedId);
+    if (duplicate) {
+      toast({
+        title: "Already added",
+        description: `This folder is already in the list${duplicate.folderName ? ` as "${duplicate.folderName}"` : ""}.`,
+      });
+      return;
+    }
     addDriveFolderMutation.mutate({ data: { folderId: trimmed } });
   };
 
@@ -275,8 +293,11 @@ export default function Settings() {
                   key={folder.id}
                   className="flex items-center gap-2 rounded-md border border-border px-3 py-2 bg-muted/20"
                 >
-                  <span className="flex-1 text-sm truncate">
+                  <span className="flex-1 min-w-0 text-sm truncate">
                     {folder.folderName ?? <span className="font-mono text-muted-foreground">{folder.folderId}</span>}
+                    {folder.folderName && (
+                      <span className="ml-2 font-mono text-xs text-muted-foreground">…{folder.folderId.slice(-8)}</span>
+                    )}
                   </span>
                   <Button
                     variant="ghost"

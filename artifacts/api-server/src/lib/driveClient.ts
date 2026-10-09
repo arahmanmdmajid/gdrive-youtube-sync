@@ -1,8 +1,8 @@
 import { google } from "googleapis";
-import { getGoogleAuthClient } from "./googleAuth";
+import { getGoogleDriveAuthClient } from "./googleAuth";
 
 export function getDriveClient() {
-  const auth = getGoogleAuthClient();
+  const auth = getGoogleDriveAuthClient();
   if (!auth) return null;
   return google.drive({ version: "v3", auth });
 }
@@ -24,6 +24,7 @@ export interface DriveChildFile {
   size?: string;
   createdTime?: string;
   modifiedTime?: string;
+  videoMediaMetadata?: { durationMillis?: string };
 }
 
 export const FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
@@ -40,7 +41,7 @@ export async function listChildren(
   do {
     const response = await drive.files.list({
       q: `'${folderId}' in parents and trashed = false${mimeTypeFilter ? ` and ${mimeTypeFilter}` : ""}`,
-      fields: "nextPageToken,files(id,name,mimeType,size,createdTime,modifiedTime)",
+      fields: "nextPageToken,files(id,name,mimeType,size,createdTime,modifiedTime,videoMediaMetadata(durationMillis))",
       pageSize: 200,
       ...(pageToken ? { pageToken } : {}),
     });

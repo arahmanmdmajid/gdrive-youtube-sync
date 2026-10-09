@@ -106,19 +106,39 @@ PGPASSWORD=your_password psql -h localhost -U postgres -d drivetotube -f driveto
 
 ---
 
-## 8. Get a Google OAuth refresh token (first time only — skip if you have one)
+## 8. Get Google OAuth refresh tokens (first time only — skip if you have them)
 
-If you don't have a refresh token yet, or the existing one has expired (`invalid_grant` error):
+The pipeline can use **two separate Google accounts**: one for YouTube uploads
+(`GOOGLE_OAUTH_REFRESH_TOKEN`), and optionally a different one for Drive access
+(`GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN`) — useful when the account that actually
+hosts the Meet recordings isn't the same as the YouTube channel's account, so
+Drive folders owned by that account can be listed directly instead of relying
+on link-shared access. If `GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN` isn't set, Drive
+access falls back to the YouTube token (single-account setup).
+
+Both accounts authorize against the **same** Client ID/Secret (they identify
+the OAuth app itself, not the consenting user) — only the refresh token
+differs per account. If either token has expired (`invalid_grant` error),
+repeat these steps for that account only:
 
 1. Go to [Google OAuth 2.0 Playground](https://developers.google.com/oauthplayground/)
 2. Click the settings gear (top right) → check **"Use your own OAuth credentials"**
 3. Enter your Client ID and Client Secret
 4. In Step 1, select scopes:
-   - `https://www.googleapis.com/auth/drive.readonly`
-   - `https://www.googleapis.com/auth/youtube`
-5. Click **Authorize APIs** → sign in with the Google account that owns the Drive + YouTube channel
+   - For the YouTube token: `https://www.googleapis.com/auth/youtube`
+   - For the Drive token: `https://www.googleapis.com/auth/drive` (or `drive.readonly` for read-only access)
+5. Click **Authorize APIs** → sign in with the Google account for that token (YouTube channel owner, or Drive/recordings host)
 6. Click **Exchange authorization code for tokens**
-7. Copy the **Refresh token** value → paste it into `.env` as `GOOGLE_OAUTH_REFRESH_TOKEN`
+7. Copy the **Refresh token** value → paste it into `.env` as `GOOGLE_OAUTH_REFRESH_TOKEN` (YouTube) or `GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN` (Drive)
+
+> If refresh tokens keep expiring after ~7 days, the OAuth consent screen is
+> still in **Testing** publishing status in Google Cloud Console. Go to
+> **APIs & Services → OAuth consent screen** and click **Publish App** to move
+> it to Production — this app's scopes (`drive`/`drive.readonly`, `youtube`)
+> are "sensitive" but not "restricted", so this doesn't require Google's full
+> security-assessment review. Users will see an "unverified app" warning
+> during consent, which is fine for an app you administer yourself. Re-run
+> the steps above once more afterward to mint a non-expiring refresh token.
 
 ---
 

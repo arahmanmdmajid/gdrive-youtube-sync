@@ -222,6 +222,7 @@
     "Frontend is artifacts/pipeline — artifacts/mockup-sandbox is a separate component-preview server, not the app.",
     "The generated/ files in lib/api-client-react and lib/api-zod carry an orval 'do not edit manually' header, but nothing regenerates them here — edit them directly.",
     "After editing lib/db, lib/api-zod or lib/api-client-react, run `pnpm run typecheck:libs` from the repo root or the per-package typechecks will not see the change.",
+    "New 'Google Meet' folders are auto-registered and link-shared: each scan, discoverDriveSourceFolders() finds every such folder the Drive account can see (by ID), registers new ones, and ensureLinkViewer() sets Anyone-with-the-link Viewer. Dry-run unless DRIVE_SHARE_APPLY=true; needs the full drive scope on GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN; blocked folders are logged, not fatal.",
     "Drive sources are multi-folder (driveSourceFoldersTable, managed via /drive-folders). The old single settings.driveFolderId column was removed — do not reintroduce a one-folder assumption.",
     "A video existing on the channel with a matching title does NOT mean its upload succeeded. YouTube creates the video resource when an upload starts, so an interrupted upload leaves a husk stuck at uploadStatus 'uploaded' / duration 'P0D' forever. Always check completeness before adopting a match.",
     "invalid_grant OAuth error means the refresh token expired — redo the OAuth Playground flow and update GOOGLE_OAUTH_REFRESH_TOKEN in .env."

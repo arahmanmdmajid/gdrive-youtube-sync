@@ -1,5 +1,5 @@
 import { db, jobsTable, settingsTable, driveSourceFoldersTable } from "@workspace/db";
-import { eq, asc, isNotNull } from "drizzle-orm";
+import { eq, asc, isNotNull, notInArray } from "drizzle-orm";
 import fs from "node:fs";
 import { getDriveClient, streamDriveFile, listChildren, FOLDER_MIME_TYPE, type DriveChildFile } from "./driveClient";
 import { getYoutubeClient } from "./youtubeClient";
@@ -183,14 +183,18 @@ interface GroupMember {
   driveFileName: string;
   driveCreatedTime: string;
   currentTitle: string | null;
-  confirmed: boolean;
+  // True once this job's slot must never be reassigned to someone else: either
+  // a human confirmed it (lectureNameConfirmed), or it has already left
+  // needs_review (pending/processing/done/failed). Only a still-needs_review,
+  // unconfirmed job is "walkable" — up for (re)assignment by this pool-walk.
+  locked: boolean;
 }
 
 /**
  * Computes title/description assignments for one (PKT date, meeting code) group.
- * Confirmed members are excluded from the pool entirely (their slot is reserved,
+ * Locked members are excluded from the pool entirely (their slot is reserved,
  * their own title untouched) so the walk never suggests an already-claimed name.
- * Non-confirmed members draw positionally from what's left, in the given order
+ * Non-locked members draw positionally from what's left, in the given order
  * (chronological by createdTime), falling back to a filename-derived title once
  * the day's schedule slots run out.
  */
@@ -202,17 +206,17 @@ async function computeGroupAssignments(
 ): Promise<Map<string, { title: string; description: string }>> {
   const allSlots = meetingCode ? await getOrderedSlotsForDay(dayOfWeek) : [];
 
-  const confirmedTitles = new Set(
-    membersChronological.filter((m) => m.confirmed).map((m) => m.currentTitle),
+  const lockedTitles = new Set(
+    membersChronological.filter((m) => m.locked).map((m) => m.currentTitle),
   );
   const availableSlots = allSlots.filter(
-    (slot) => !confirmedTitles.has(buildYoutubeTitleFromSlot(slot, pktDateStr)),
+    (slot) => !lockedTitles.has(buildYoutubeTitleFromSlot(slot, pktDateStr)),
   );
 
   const assignments = new Map<string, { title: string; description: string }>();
   let nextSlotIdx = 0;
   for (const member of membersChronological) {
-    if (member.confirmed) continue;
+    if (member.locked) continue;
 
     const slot = availableSlots[nextSlotIdx];
     if (slot) {
@@ -239,23 +243,32 @@ async function computeGroupAssignments(
  * duplicate (or fixing one job) immediately fixes up the rest of that day's
  * group rather than leaving them with stale, now-wrong guesses until whoever
  * is reviewing manually retitles each one.
+ *
+ * Includes every job that hasn't been rejected — not just needs_review ones —
+ * so a slot already claimed by an approved/pending/done/removed job is never
+ * handed out again to a still-unreviewed sibling. ("removed" still holds a
+ * real YouTube video under that title, just currently off the playlist, so
+ * its slot stays reserved too — only "rejected" truly frees one up.) Only
+ * needs_review jobs are actually rewritten; anything else is read-only
+ * context for slot protection.
  */
 export async function reflowGroupTitles(driveCreatedTime: string, driveFileName: string): Promise<void> {
   const { dateStr, dayOfWeek } = getPktInfo(driveCreatedTime);
   const meetingCode = extractMeetingCode(driveFileName);
 
-  const needsReview = await db
+  const candidates = await db
     .select({
       id: jobsTable.id,
+      status: jobsTable.status,
       driveCreatedTime: jobsTable.driveCreatedTime,
       driveFileName: jobsTable.driveFileName,
       proposedTitle: jobsTable.proposedTitle,
       lectureNameConfirmed: jobsTable.lectureNameConfirmed,
     })
     .from(jobsTable)
-    .where(eq(jobsTable.status, "needs_review"));
+    .where(notInArray(jobsTable.status, ["rejected"]));
 
-  const groupJobs = needsReview
+  const groupJobs = candidates
     .filter((j) => {
       if (!j.driveCreatedTime) return false;
       const info = getPktInfo(j.driveCreatedTime);
@@ -275,17 +288,122 @@ export async function reflowGroupTitles(driveCreatedTime: string, driveFileName:
     driveFileName: j.driveFileName ?? "",
     driveCreatedTime: j.driveCreatedTime ?? "",
     currentTitle: j.proposedTitle,
-    confirmed: j.lectureNameConfirmed,
+    locked: j.lectureNameConfirmed || j.status !== "needs_review",
   }));
 
   const assignments = await computeGroupAssignments(dayOfWeek, dateStr, meetingCode, members);
 
   for (const j of groupJobs) {
+    if (j.status !== "needs_review") continue; // read-only context — never rewrite it
     const assignment = assignments.get(String(j.id));
     if (!assignment || assignment.title === j.proposedTitle) continue;
     await db.update(jobsTable)
       .set({ proposedTitle: assignment.title, proposedDescription: assignment.description, updatedAt: new Date() })
       .where(eq(jobsTable.id, j.id));
+  }
+}
+
+/**
+ * Finds every "Google Meet" folder owned by the Drive account and registers
+ * any not already in driveSourceFoldersTable. Google creates a fresh one of
+ * these under some accounts as part of its July 2026 Meet-recordings
+ * restructuring (the old "Meet Recordings" folder became "Legacy Meet
+ * Recordings", nested inside a new per-account "Google Meet" folder) — this
+ * only works for the account whose refresh token Drive access uses
+ * (GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN), since a plain owned-files search can't
+ * see folders merely shared with that account via a link. Runs at the start
+ * of every scan so a newly discovered folder is included in that same cycle.
+ */
+export async function discoverDriveSourceFolders(
+  drive: NonNullable<ReturnType<typeof getDriveClient>>,
+): Promise<{ discovered: number; share: Record<ShareResult, number> }> {
+  const found: { id?: string | null; name?: string | null }[] = [];
+  let pageToken: string | undefined;
+  do {
+    const res = await drive.files.list({
+      q: "name = 'Google Meet' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+      fields: "nextPageToken, files(id, name)",
+      pageSize: 100,
+      ...(pageToken ? { pageToken } : {}),
+    });
+    found.push(...(res.data.files ?? []));
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken);
+
+  const share: Record<ShareResult, number> = { "already-ok": 0, "would-apply": 0, applied: 0, blocked: 0, failed: 0 };
+  if (found.length === 0) return { discovered: 0, share };
+
+  const existing = await db.select({ folderId: driveSourceFoldersTable.folderId }).from(driveSourceFoldersTable);
+  const existingIds = new Set(existing.map((f) => f.folderId));
+
+  let discovered = 0;
+  for (const folder of found) {
+    if (!folder.id) continue;
+    if (!existingIds.has(folder.id)) {
+      await db.insert(driveSourceFoldersTable).values({ folderId: folder.id, folderName: folder.name ?? "Google Meet" });
+      discovered++;
+    }
+    if (shareResolved.has(folder.id)) continue;
+    const result = await ensureLinkViewer(drive, folder.id);
+    share[result]++;
+    // "failed" is retried on the next scan; every other outcome is final for this process.
+    if (result !== "failed") shareResolved.add(folder.id);
+  }
+
+  if (discovered > 0 || share.applied + share["would-apply"] + share.blocked + share.failed > 0) {
+    logger.info({ discovered, share, dryRun: !shareApplyEnabled() }, "Drive folder discovery summary");
+  }
+  return { discovered, share };
+}
+
+export type ShareResult = "already-ok" | "would-apply" | "applied" | "blocked" | "failed";
+
+/** Folder IDs whose sharing was already settled in this process, so each scan doesn't re-query all of them. */
+const shareResolved = new Set<string>();
+
+// Dry-run unless explicitly enabled, so the first run only reports what it would change.
+const shareApplyEnabled = () => process.env.DRIVE_SHARE_APPLY === "true";
+
+/**
+ * Makes a folder readable by "anyone with the link" (viewer, not searchable),
+ * so the recordings stay reachable by accounts other than the owner. Never
+ * touches the folder's name, location or contents, and never fails the scan:
+ * Workspace policy can forbid link sharing, which is reported as "blocked".
+ */
+async function ensureLinkViewer(
+  drive: NonNullable<ReturnType<typeof getDriveClient>>,
+  folderId: string,
+): Promise<ShareResult> {
+  const read = () =>
+    drive.files.get({ fileId: folderId, fields: "capabilities(canShare), permissions(type, role)", supportsAllDrives: true });
+  const hasLink = (perms?: { type?: string | null }[]) => (perms ?? []).some((p) => p.type === "anyone");
+  try {
+    const before = (await read()).data;
+    if (hasLink(before.permissions)) return "already-ok";
+    if (!before.capabilities?.canShare) {
+      logger.warn({ folderId }, "Drive folder cannot be shared by this account");
+      return "blocked";
+    }
+    if (!shareApplyEnabled()) {
+      logger.info({ folderId }, "Dry run: would set Anyone with the link → Viewer");
+      return "would-apply";
+    }
+    await drive.permissions.create({
+      fileId: folderId,
+      supportsAllDrives: true,
+      requestBody: { type: "anyone", role: "reader", allowFileDiscovery: false },
+    });
+    if (!hasLink((await read()).data.permissions)) {
+      logger.error({ folderId }, "Sharing change did not take effect");
+      return "failed";
+    }
+    logger.info({ folderId }, "Drive folder set to Anyone with the link → Viewer");
+    return "applied";
+  } catch (err) {
+    // A domain policy that forbids link sharing answers 403; retrying every minute can't fix it.
+    const status = (err as { code?: number }).code;
+    logger.warn({ folderId, status, err }, "Drive folder sharing check failed");
+    return status === 403 ? "blocked" : "failed";
   }
 }
 
@@ -295,13 +413,20 @@ export async function runPipelineScan(): Promise<{
   totalScanned: number;
   filtered: number;
 }> {
-  const sourceFolders = await db.select().from(driveSourceFoldersTable);
-  if (sourceFolders.length === 0) {
+  const drive = getDriveClient();
+  if (!drive) {
     return { newJobsCreated: 0, alreadyQueued: 0, totalScanned: 0, filtered: 0 };
   }
 
-  const drive = getDriveClient();
-  if (!drive) {
+  try {
+    await discoverDriveSourceFolders(drive);
+  } catch (err) {
+    // Discovery is additive: folders already registered must still be scanned.
+    logger.warn({ err }, "Drive folder discovery failed — scanning registered folders only");
+  }
+
+  const sourceFolders = await db.select().from(driveSourceFoldersTable);
+  if (sourceFolders.length === 0) {
     return { newJobsCreated: 0, alreadyQueued: 0, totalScanned: 0, filtered: 0 };
   }
 
@@ -379,7 +504,9 @@ export async function runPipelineScan(): Promise<{
           driveFileName: f.name ?? f.id,
           driveCreatedTime: f.createdTime,
           currentTitle: existing?.proposedTitle ?? null,
-          confirmed: existing?.lectureNameConfirmed ?? false,
+          locked: existing
+            ? existing.lectureNameConfirmed || (existing.status !== "needs_review" && existing.status !== "rejected")
+            : false,
         };
       });
     const groupAssignments = await computeGroupAssignments(group.dayOfWeek, group.pktDateStr, group.meetingCode, members);
@@ -410,6 +537,8 @@ export async function runPipelineScan(): Promise<{
       alreadyQueued++;
     } else {
       const sizeBytes = file.size ? parseInt(file.size, 10) : null;
+      const durationMillis = file.videoMediaMetadata?.durationMillis;
+      const durationSeconds = durationMillis ? Math.round(parseInt(durationMillis, 10) / 1000) : null;
       const isSuspiciousSize = sizeBytes !== null && sizeBytes > BATCH_RECORDING_SIZE_BYTES;
       const assignment = positionalAssignments.get(file.id) ?? {
         title: await buildYoutubeTitle(file.name ?? "Untitled", file.createdTime ?? null),
@@ -425,6 +554,7 @@ export async function runPipelineScan(): Promise<{
         driveFileName: file.name ?? "Untitled",
         driveFileSizeBytes: sizeBytes,
         driveCreatedTime: file.createdTime ?? null,
+        durationSeconds,
         status: "needs_review",
         proposedTitle,
         proposedDescription,

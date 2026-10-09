@@ -8,6 +8,7 @@ export const jobsTable = pgTable("jobs", {
   driveFileName: text("drive_file_name").notNull(),
   driveFileSizeBytes: bigint("drive_file_size_bytes", { mode: "number" }),
   driveCreatedTime: text("drive_created_time"),
+  durationSeconds: integer("duration_seconds"),
   status: text("status", { enum: ["needs_review", "pending", "processing", "done", "failed", "rejected", "removed"] }).notNull().default("needs_review"),
   source: text("source", { enum: ["pipeline", "manual"] }).notNull().default("pipeline"),
   contentType: text("content_type", { enum: ["video", "audio"] }).notNull().default("video"),

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { db, jobsTable } from "@workspace/db";
-import { eq, desc, like, asc, sql } from "drizzle-orm";
+import { eq, desc, like, asc, sql, notInArray } from "drizzle-orm";
 import fs from "node:fs";
 import {
   ListJobsQueryParams,
@@ -172,22 +172,30 @@ async function cascadeSlotAssignment(
   const oldTitle = currentJob.proposedTitle;
   const oldDescription = currentJob.proposedDescription;
 
-  // Find same-day/meeting-code needs_review siblings currently holding the new title.
-  const allNeedsReview = await db
+  // Find same-day/meeting-code siblings currently holding the new title. Not
+  // just needs_review — a job that already left review (pending/processing/
+  // done/failed/removed) still owns its slot, so colliding with one of those
+  // must surface as a conflict too, not silently overwrite. Only "rejected"
+  // is excluded, since that's the one status that actually frees a slot.
+  const allActive = await db
     .select({
       id: jobsTable.id,
+      status: jobsTable.status,
       driveCreatedTime: jobsTable.driveCreatedTime,
       driveFileName: jobsTable.driveFileName,
       proposedTitle: jobsTable.proposedTitle,
       lectureNameConfirmed: jobsTable.lectureNameConfirmed,
     })
     .from(jobsTable)
-    .where(eq(jobsTable.status, "needs_review"));
+    .where(notInArray(jobsTable.status, ["rejected"]));
 
-  const conflicting = allNeedsReview.find(j => {
+  const conflicting = allActive.find(j => {
     if (j.id === currentJobId) return false;
     if (j.proposedTitle !== newTitle) return false;
-    if (j.lectureNameConfirmed) return false; // deliberate repeat — leave it alone
+    // A needs_review sibling already confirmed with this exact title is a
+    // deliberate repeat — leave it alone. A sibling that has left needs_review
+    // entirely still owns its slot regardless, so it's always a real conflict.
+    if (j.status === "needs_review" && j.lectureNameConfirmed) return false;
     if (!j.driveCreatedTime) return false;
     const info = getPktInfo(j.driveCreatedTime);
     if (info.dateStr !== dateStr) return false;
@@ -820,6 +828,7 @@ function formatJob(j: typeof jobsTable.$inferSelect) {
     driveFileName: j.driveFileName,
     driveFileSizeBytes: j.driveFileSizeBytes ?? null,
     driveCreatedTime: j.driveCreatedTime ?? null,
+    durationSeconds: j.durationSeconds ?? null,
     status: j.status,
     source: j.source,
     contentType: j.contentType,

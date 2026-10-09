@@ -291,6 +291,16 @@ export default function Jobs() {
     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   };
 
+  const formatDuration = (seconds?: number | null) => {
+    if (!seconds) return "-";
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return h > 0
+      ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+      : `${m}:${String(s).padStart(2, "0")}`;
+  };
+
   const driveUrl = (fileId: string) => `https://drive.google.com/file/d/${fileId}/view`;
 
   return (
@@ -338,6 +348,7 @@ export default function Jobs() {
                   <TableHead className="font-mono text-xs">ID</TableHead>
                   <TableHead className="font-mono text-xs">FILE / TITLE</TableHead>
                   <TableHead className="font-mono text-xs">SIZE</TableHead>
+                  <TableHead className="font-mono text-xs">DURATION</TableHead>
                   <TableHead className="font-mono text-xs">STATUS</TableHead>
                   <TableHead className="font-mono text-xs">RECORDED</TableHead>
                   <TableHead className="font-mono text-xs text-right">ACTIONS</TableHead>
@@ -459,6 +470,10 @@ export default function Jobs() {
 
                     <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                       {bytesToMB(job.driveFileSizeBytes)}
+                    </TableCell>
+
+                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap font-mono">
+                      {formatDuration(job.durationSeconds)}
                     </TableCell>
 
                     <TableCell>
