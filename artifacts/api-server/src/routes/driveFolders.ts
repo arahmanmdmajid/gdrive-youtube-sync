@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, driveSourceFoldersTable } from "@workspace/db";
 import { eq, asc } from "drizzle-orm";
 import { getDriveClient } from "../lib/driveClient";
-import { consolidateMeetFolders } from "../lib/meetConsolidation";
+import { consolidateMeetFolders, cleanupEmptyMeetFolders } from "../lib/meetConsolidation";
 
 const router = Router();
 
@@ -67,11 +67,16 @@ router.post("/drive-folders/consolidate", async (req, res) => {
     return;
   }
   try {
-    res.json(await consolidateMeetFolders(drive, {
+    const apply = req.body?.apply === true;
+    const summary = await consolidateMeetFolders(drive, {
       targetFolderId: target,
-      apply: req.body?.apply === true,
+      apply,
       ...(req.body?.all === true ? {} : { lookbackDays: 14 }),
-    }));
+    });
+    // cleanup: true also trashes the emptied top-level folders (same apply/dry-run switch).
+    res.json(req.body?.cleanup === true
+      ? { ...summary, cleanup: await cleanupEmptyMeetFolders(drive, { targetFolderId: target, apply }) }
+      : summary);
   } catch (err) {
     req.log.error({ err }, "Meet consolidation failed");
     res.status(503).json({ error: "Consolidation failed" });
