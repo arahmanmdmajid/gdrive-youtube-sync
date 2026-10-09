@@ -16,6 +16,7 @@ import { isEligible, BATCH_RECORDING_SIZE_BYTES } from "./filter";
 import { prepareAudioForYoutube } from "./audioMux";
 import { extractSerial, getSubjectThumbnailPath } from "./thumbnails";
 import { logger } from "./logger";
+import { maybeRunDailyConsolidation } from "./meetConsolidation";
 
 /** Returns true for errors that are worth retrying (DNS blip, socket reset, timeout). */
 function isTransient(err: unknown): boolean {
@@ -1054,6 +1055,8 @@ export function startPipelineWorker() {
   });
 
   workerInterval = setInterval(async () => {
+    // Independent of autoSync and of the scan below, so a failure here never blocks uploads.
+    await maybeRunDailyConsolidation().catch((err) => logger.error({ err }, "Meet consolidation failed"));
     try {
       const [settings] = await db.select().from(settingsTable).limit(1);
       if (!settings?.autoSync) return;

@@ -437,6 +437,7 @@ const DATA = {
     ["GET","/drive/files","List videos across all configured source folders, with eligibility flags"],
     ["GET","/drive-folders","List the configured Drive source folders"],
     ["POST","/drive-folders","Add a source folder (raw ID or full Drive URL)"],
+    ["POST","/drive-folders/consolidate","Merge Meet session folders into one folder per code and day (dry-run unless apply)"],
     ["DELETE","/drive-folders/:id","Stop watching a source folder"],
     ["POST","/library/scan","Scan for new library resources"],
     ["GET","/library/resources","List library resources"],

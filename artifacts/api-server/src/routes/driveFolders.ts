@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, driveSourceFoldersTable } from "@workspace/db";
 import { eq, asc } from "drizzle-orm";
 import { getDriveClient } from "../lib/driveClient";
+import { consolidateMeetFolders } from "../lib/meetConsolidation";
 
 const router = Router();
 
@@ -54,6 +55,27 @@ router.post("/drive-folders", async (req, res) => {
 
   const [row] = await db.insert(driveSourceFoldersTable).values({ folderId, folderName }).returning();
   res.status(201).json(row);
+});
+
+// Manual run of the daily Meet-folder consolidation. Dry-run unless the body says apply: true,
+// so the backlog can be reviewed first; `all: true` sweeps every date instead of the last 14 days.
+router.post("/drive-folders/consolidate", async (req, res) => {
+  const target = process.env.DRIVE_CONSOLIDATE_TARGET_FOLDER_ID;
+  const drive = getDriveClient();
+  if (!target || !drive) {
+    res.status(400).json({ error: "DRIVE_CONSOLIDATE_TARGET_FOLDER_ID or Google Drive is not configured" });
+    return;
+  }
+  try {
+    res.json(await consolidateMeetFolders(drive, {
+      targetFolderId: target,
+      apply: req.body?.apply === true,
+      ...(req.body?.all === true ? {} : { lookbackDays: 14 }),
+    }));
+  } catch (err) {
+    req.log.error({ err }, "Meet consolidation failed");
+    res.status(503).json({ error: "Consolidation failed" });
+  }
 });
 
 router.delete("/drive-folders/:id", async (req, res) => {

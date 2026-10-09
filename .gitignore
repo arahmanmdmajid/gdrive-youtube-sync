@@ -59,3 +59,5 @@ Thumbs.db
 # Admin-curated per-subject thumbnail images (dropped in locally, not code)
 /artifacts/api-server/thumbnails/*
 !/artifacts/api-server/thumbnails/.gitkeep
+
+meet-moves.jsonl
