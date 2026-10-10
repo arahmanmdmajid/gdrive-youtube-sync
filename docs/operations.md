@@ -71,7 +71,7 @@ Two accounts share one OAuth app:
 
 If either returns `invalid_grant`, mint a new one (SETUP.md §8) and put it in `.env`.
 
-**Tokens expiring about weekly means the consent screen is still in "Testing".** Publish it (Google Cloud → Google Auth Platform → Audience → *Publish app*), then re-mint both tokens — tokens created while in Testing keep the 7-day limit. The `drive` scope is "restricted"; staying unverified is fine for two users (you only see an "unverified app" warning at sign-in). Do not remove the app's access at `myaccount.google.com/permissions` after minting — that revokes the token immediately.
+**Tokens expiring about weekly means the consent screen is still in "Testing".** Publish it (Google Cloud → Google Auth Platform → Audience → *Publish app*; the button stays greyed until Branding has the home-page and privacy-policy links, which are `docs/index.html` and `docs/privacy.html` served by GitHub Pages, so keep those pages online), then re-mint both tokens — tokens created while in Testing keep the 7-day limit. The `drive` scope is "restricted"; staying unverified is fine for two users (you only see an "unverified app" warning at sign-in). Do not remove the app's access at `myaccount.google.com/permissions` after minting — that revokes the token immediately.
 
 ## Troubleshooting
 

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drive-To-Tube — Hidayah Academy lecture pipeline</title>
+<meta name="description" content="Drive-To-Tube uploads Hidayah Academy's recorded classes from Google Drive to YouTube and serves them to enrolled students.">
+<style>
+  :root { --bg:#f6f8f8; --card:#fff; --text:#12191a; --dim:#57706c; --accent:#0b7a6e; --border:#d7dfdd; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0e1415; --card:#151d1e; --text:#e7efed; --dim:#9db2ae; --accent:#2dd4bf; --border:#243030; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width: 46rem; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
+  h1 { font-size: 2rem; margin: 0 0 .25rem; letter-spacing: -.01em; }
+  h2 { font-size: 1.15rem; margin: 2.2rem 0 .5rem; }
+  p, li { color: var(--text); }
+  .lede { color: var(--dim); font-size: 1.05rem; margin: 0 0 1.5rem; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.1rem 1.3rem; }
+  a { color: var(--accent); }
+  ul { padding-left: 1.2rem; }
+  footer { margin-top: 3rem; color: var(--dim); font-size: .9rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Drive-To-Tube</h1>
+  <p class="lede">The recorded-class pipeline for Hidayah Academy for Islamic Education.</p>
+
+  <div class="card">
+    <p>Drive-To-Tube takes the online classes that Hidayah Academy records on Google Meet and publishes them for its enrolled students. It is run by the academy's administrators for the academy's own classes; it is not a general-purpose service.</p>
+  </div>
+
+  <h2>What it does</h2>
+  <ul>
+    <li><strong>Finds the recordings.</strong> It reads the academy's Google Drive, where Google Meet saves each class recording, and names each one from the weekly timetable (subject, teacher and date).</li>
+    <li><strong>Publishes them after review.</strong> A staff member checks each title, then the recording is uploaded to the academy's YouTube channel as an unlisted video and added to a playlist.</li>
+    <li><strong>Keeps Drive tidy.</strong> Google Meet creates many folders. The tool moves each class's recordings into one folder per class and day, and never deletes recordings.</li>
+    <li><strong>Serves students.</strong> Enrolled students sign in to a separate portal with an invite code to watch lectures by subject and track their own progress.</li>
+  </ul>
+
+  <h2>Google access</h2>
+  <p>The tool asks for access to two Google accounts that belong to the academy's administrators: one for Google Drive (to read and organise class recordings) and one for YouTube (to upload them). It does not access the Google accounts of students or of anyone else. Details are in the <a href="privacy.html">privacy policy</a>.</p>
+
+  <h2>Learn more</h2>
+  <ul>
+    <li><a href="privacy.html">Privacy policy</a></li>
+    <li><a href="app-flow.html">Interactive diagram of how the pipeline works</a></li>
+    <li><a href="https://github.com/arahmanmdmajid/gdrive-youtube-sync">Source code on GitHub</a></li>
+  </ul>
+
+  <footer>Hidayah Academy for Islamic Education · hidayah.edu.pk</footer>
+</main>
+</body>
+</html>
