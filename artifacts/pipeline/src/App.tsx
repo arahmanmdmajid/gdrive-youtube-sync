@@ -39,7 +39,12 @@ function handlePossibleAuthError(error: unknown) {
 
 const queryClient = new QueryClient({
   queryCache: new QueryCache({ onError: handlePossibleAuthError }),
-  mutationCache: new MutationCache({ onError: handlePossibleAuthError }),
+  mutationCache: new MutationCache({
+    onError: (error, _variables, _context, mutation) => {
+      if (mutation.meta?.skipAuthLogout) return;
+      handlePossibleAuthError(error);
+    },
+  }),
 });
 
 /** Admin accounts have full access, including student routes. */

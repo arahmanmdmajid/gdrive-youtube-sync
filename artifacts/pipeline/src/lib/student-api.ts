@@ -87,6 +87,9 @@ export function useLogin() {
     mutationFn: (body: { username: string; password: string }) =>
       customFetch<AuthResponse>("/api/auth/login", { method: "POST", body: JSON.stringify(body) }),
     onSuccess: (data) => storeSession(data.token, data.user),
+    // A wrong password is a 401 too; without this the global "stale session" handler in App.tsx
+    // logs out and reloads the page, wiping the error message and what was typed.
+    meta: { skipAuthLogout: true },
   });
 }
 
