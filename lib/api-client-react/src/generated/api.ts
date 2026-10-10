@@ -119,8 +119,6 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listJobs>>, TError, TData> & { queryKey: QueryKey }
 }
 
-export type ListJobsQueryResult = NonNullable<Awaited<ReturnType<typeof listJobs>>>
-export type ListJobsQueryError = ErrorType<unknown>
 
 
 /**
@@ -198,9 +196,6 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type CreateJobMutationResult = NonNullable<Awaited<ReturnType<typeof createJob>>>
-    export type CreateJobMutationBody = BodyType<JobInput>
-    export type CreateJobMutationError = ErrorType<unknown>
 
     /**
  * @summary Enqueue a Drive video for YouTube upload
@@ -268,9 +263,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type DeleteJobMutationResult = NonNullable<Awaited<ReturnType<typeof deleteJob>>>
 
-    export type DeleteJobMutationError = ErrorType<unknown>
 
     /**
  * @summary Delete a job
@@ -338,9 +331,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type RetryJobMutationResult = NonNullable<Awaited<ReturnType<typeof retryJob>>>
 
-    export type RetryJobMutationError = ErrorType<unknown>
 
     /**
  * @summary Retry a failed job
@@ -379,8 +370,6 @@ export const getRestoreJobMutationOptions = <TError = ErrorType<unknown>,
   return {mutationFn, ...mutationOptions};
 }
 
-export type RestoreJobMutationResult = NonNullable<Awaited<ReturnType<typeof restoreJob>>>
-export type RestoreJobMutationError = ErrorType<unknown>
 
 export const useRestoreJob = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof restoreJob>>, TError, {id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -422,9 +411,6 @@ export const getApproveJobMutationOptions = <TError = ErrorType<unknown>, TConte
   return { mutationFn, ...mutationOptions }
 }
 
-export type ApproveJobMutationResult = NonNullable<Awaited<ReturnType<typeof approveJob>>>
-export type ApproveJobMutationBody = BodyType<ApproveJobInput>
-export type ApproveJobMutationError = ErrorType<unknown>
 
 /**
  * @summary Approve a needs_review job
@@ -470,9 +456,6 @@ export const getRenameYoutubeTitleMutationOptions = <TError = ErrorType<unknown>
   return { mutationFn, ...mutationOptions }
 }
 
-export type RenameYoutubeTitleMutationResult = NonNullable<Awaited<ReturnType<typeof renameYoutubeTitle>>>
-export type RenameYoutubeTitleMutationBody = BodyType<RenameYoutubeTitleInput>
-export type RenameYoutubeTitleMutationError = ErrorType<unknown>
 
 /**
  * @summary Rename the YouTube title of a done job
@@ -507,8 +490,6 @@ export const getRestoreDoneJobMutationOptions = <TError = ErrorType<unknown>,
   return {mutationFn, ...mutationOptions};
 }
 
-export type RestoreDoneJobMutationResult = NonNullable<Awaited<ReturnType<typeof restoreDoneJob>>>
-export type RestoreDoneJobMutationError = ErrorType<unknown>
 
 export const useRestoreDoneJob = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof restoreDoneJob>>, TError, {id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -540,8 +521,6 @@ export const getSetJobThumbnailMutationOptions = <TError = ErrorType<unknown>,
   return {mutationFn, ...mutationOptions};
 }
 
-export type SetJobThumbnailMutationResult = NonNullable<Awaited<ReturnType<typeof setJobThumbnail>>>
-export type SetJobThumbnailMutationError = ErrorType<unknown>
 
 export const useSetJobThumbnail = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof setJobThumbnail>>, TError, {id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -572,8 +551,6 @@ export const getReconcilePlaylistMutationOptions = <TError = ErrorType<unknown>,
   return {mutationFn, ...mutationOptions};
 }
 
-export type ReconcilePlaylistMutationResult = NonNullable<Awaited<ReturnType<typeof reconcilePlaylist>>>
-export type ReconcilePlaylistMutationError = ErrorType<unknown>
 
 export const useReconcilePlaylist = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof reconcilePlaylist>>, TError, void, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -616,9 +593,6 @@ export const getPatchJobMutationOptions = <TError = ErrorType<unknown>, TContext
   return { mutationFn, ...mutationOptions }
 }
 
-export type PatchJobMutationResult = NonNullable<Awaited<ReturnType<typeof patchJob>>>
-export type PatchJobMutationBody = BodyType<PatchJobInput>
-export type PatchJobMutationError = ErrorType<unknown>
 
 /**
  * @summary Edit proposed title/description of a needs_review or pending job
@@ -682,9 +656,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type TriggerPipelineMutationResult = NonNullable<Awaited<ReturnType<typeof triggerPipeline>>>
 
-    export type TriggerPipelineMutationError = ErrorType<unknown>
 
     /**
  * @summary Scan Drive folder and enqueue new videos
@@ -780,8 +752,6 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPipelineStats>>, TError, TData> & { queryKey: QueryKey }
 }
 
-export type GetPipelineStatsQueryResult = NonNullable<Awaited<ReturnType<typeof getPipelineStats>>>
-export type GetPipelineStatsQueryError = ErrorType<unknown>
 
 
 /**
@@ -857,8 +827,6 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDriveFiles>>, TError, TData> & { queryKey: QueryKey }
 }
 
-export type ListDriveFilesQueryResult = NonNullable<Awaited<ReturnType<typeof listDriveFiles>>>
-export type ListDriveFilesQueryError = ErrorType<unknown>
 
 
 /**
@@ -934,8 +902,6 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listYoutubePlaylists>>, TError, TData> & { queryKey: QueryKey }
 }
 
-export type ListYoutubePlaylistsQueryResult = NonNullable<Awaited<ReturnType<typeof listYoutubePlaylists>>>
-export type ListYoutubePlaylistsQueryError = ErrorType<unknown>
 
 
 /**
@@ -1011,8 +977,6 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSettings>>, TError, TData> & { queryKey: QueryKey }
 }
 
-export type GetSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getSettings>>>
-export type GetSettingsQueryError = ErrorType<unknown>
 
 
 /**
@@ -1090,9 +1054,6 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type UpdateSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateSettings>>>
-    export type UpdateSettingsMutationBody = BodyType<SettingsInput>
-    export type UpdateSettingsMutationError = ErrorType<unknown>
 
     /**
  * @summary Update pipeline settings
