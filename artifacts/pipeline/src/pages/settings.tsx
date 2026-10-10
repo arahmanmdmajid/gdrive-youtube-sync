@@ -40,6 +40,22 @@ function extractFolderId(input: string): string | null {
   return null;
 }
 
+/** Link beside a folder-ID field, shown once the field holds something that parses as a Drive folder. */
+function OpenInDrive({ value }: { value?: string | null }) {
+  const id = value ? extractFolderId(value) : null;
+  if (!id) return null;
+  return (
+    <a
+      href={`https://drive.google.com/drive/folders/${id}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+    >
+      Open in Drive <ExternalLink className="h-3 w-3" />
+    </a>
+  );
+}
+
 const formSchema = z.object({
   youtubePlaylistId: z.string().nullable().optional(),
   libraryFolderId: z.string().nullable().optional(),
@@ -336,7 +352,10 @@ export default function Settings() {
                 name="libraryFolderId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="font-mono">Books Folder ID</FormLabel>
+                    <div className="flex items-center justify-between">
+                      <FormLabel className="font-mono">Books Folder ID</FormLabel>
+                      <OpenInDrive value={field.value} />
+                    </div>
                     <FormControl>
                       <Input
                         placeholder="e.g. 1a2B3c4D5e6F7g8H9i0J"
@@ -367,7 +386,10 @@ export default function Settings() {
                 name="audioFolderId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="font-mono">Recordings Folder ID</FormLabel>
+                    <div className="flex items-center justify-between">
+                      <FormLabel className="font-mono">Recordings Folder ID</FormLabel>
+                      <OpenInDrive value={field.value} />
+                    </div>
                     <FormControl>
                       <Input
                         placeholder="e.g. 1a2B3c4D5e6F7g8H9i0J"
