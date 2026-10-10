@@ -1,42 +1,33 @@
 # Drive-To-Tube — Setup Guide
 
-Auto-uploads Google Drive class recordings to a YouTube playlist with correct titles, serial numbers, and schedule-based naming.
+Installing the admin pipeline on a new machine. For what it is, see the [README](README.md); for running it day to day, [docs/operations.md](docs/operations.md).
+
+The **student side is already hosted** (Render + Vercel, deploying from `main`), so a new machine only needs the admin API and dashboard.
 
 ---
 
 ## Prerequisites
 
-Install these before anything else:
-
 | Tool | Version | Notes |
 |---|---|---|
-| Node.js | 20+ | https://nodejs.org |
-| pnpm | 9+ | `npm install -g pnpm` |
-| PostgreSQL | 15+ | https://www.postgresql.org/download/ |
+| Node.js | 24 | https://nodejs.org |
+| pnpm | the version in `package.json` (`packageManager`) | `corepack enable` picks it up; installing pnpm globally also works |
+| PostgreSQL | 15+ | or a hosted database (we use Neon) — https://www.postgresql.org/download/ |
 | Git | any | https://git-scm.com |
 
 ---
 
-## 1. Clone the repo
+## 1. Clone and install
 
 ```bash
 git clone https://github.com/arahmanmdmajid/gdrive-youtube-sync.git
-cd gdrive-youtube-sync/Drive-To-Tube
-```
-
----
-
-## 2. Install dependencies
-
-```bash
+cd gdrive-youtube-sync
 pnpm install
 ```
 
 ---
 
-## 3. Create the database
-
-Open pgAdmin or psql and run:
+## 2. Create the database
 
 ```sql
 CREATE DATABASE drivetotube;
@@ -44,38 +35,30 @@ CREATE DATABASE drivetotube;
 
 ---
 
-## 4. Create the `.env` file
+## 3. Create the `.env` file
 
-Create a file named `.env` in the `Drive-To-Tube/` directory (next to `package.json`):
+```bash
+cp .env.example .env
+```
+
+Fill in `.env` (next to `package.json`). `.env.example` documents every variable. The minimum to run the admin pipeline is:
 
 ```env
 DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/drivetotube
 PORT=5000
-
-GOOGLE_OAUTH_CLIENT_ID=your_client_id_here
-GOOGLE_OAUTH_CLIENT_SECRET=your_client_secret_here
-GOOGLE_OAUTH_REFRESH_TOKEN=your_refresh_token_here
+GOOGLE_OAUTH_CLIENT_ID=...
+GOOGLE_OAUTH_CLIENT_SECRET=...
+GOOGLE_OAUTH_REFRESH_TOKEN=...          # YouTube account — step 5
+GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN=...    # Drive account — step 5 (optional if it is the same account)
 ```
 
-> **Where to get Google credentials:**
-> 1. Go to [Google Cloud Console](https://console.cloud.google.com/) → your project
-> 2. APIs & Services → Credentials → your OAuth 2.0 Client ID
-> 3. Enable **Google Drive API** and **YouTube Data API v3**
-> 4. To get a refresh token, run the OAuth flow once (see section 7 below)
+The optional Meet-folder housekeeping variables (`DRIVE_CONSOLIDATE_*`, `DRIVE_CLEANUP_APPLY`) are explained in [docs/operations.md](docs/operations.md). The student API additionally needs `JWT_SECRET`; it is only required if you run `student-api` locally.
+
+> **Google credentials:** in [Google Cloud Console](https://console.cloud.google.com/) → your project → *APIs & Services*: enable **Google Drive API** and **YouTube Data API v3**, and create an OAuth 2.0 Client ID (Credentials). Its ID and secret go in `.env`.
 
 ---
 
-## 5. Build the shared libraries
-
-```bash
-cd lib/db
-npx tsc -p tsconfig.json
-cd ../..
-```
-
----
-
-## 6. Run database migrations
+## 4. Create the tables
 
 ```bash
 cd lib/db
@@ -83,118 +66,75 @@ pnpm run push
 cd ../..
 ```
 
+This creates every table from the schema in `lib/db/src/schema`. After a schema change, rebuild the library types with `pnpm run typecheck:libs` from the repo root. (`push-force` skips the confirmation prompt and is needed for destructive changes such as dropping a column.)
+
 ---
 
-## 7. Import existing data (if migrating from another machine)
+## 5. Get the Google OAuth refresh tokens
 
-If you have a `drivetotube-export.sql` dump file, import it **instead of** (or after) step 6:
+The pipeline uses **two Google accounts** that share one OAuth app:
+
+| Token | Account | Scope |
+|---|---|---|
+| `GOOGLE_OAUTH_REFRESH_TOKEN` | the YouTube channel owner (uploads) | `https://www.googleapis.com/auth/youtube` |
+| `GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN` | the account that owns the Meet recordings (reads and tidies Drive) | `https://www.googleapis.com/auth/drive` |
+
+If both are the same account, leave the Drive one empty and the YouTube token is reused (the account then needs the `drive` scope as well).
+
+For each token:
+
+1. Open the [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/).
+2. Settings gear → tick **Use your own OAuth credentials** → enter the Client ID and Secret. Access type **Offline**.
+3. Under *Step 1*, enter the scope from the table (use the *Input your own scopes* box).
+4. **Authorize APIs** and sign in as the right account. Use a private window and *Use another account* so you do not pick up the wrong one.
+5. Click **Exchange authorization code for tokens** and copy the **Refresh token** (starts with `1//`) into `.env`.
+
+While the OAuth app is in **Testing** (Google Cloud → *Google Auth Platform → Audience*), only listed test users can authorise, and **refresh tokens expire after about 7 days**. Add the second account as a test user, and publish the app (*Publish app*) so tokens stop expiring. Tokens minted *before* publishing keep the 7-day limit, so mint them after. The `drive` scope is a *restricted* scope; for a two-user app you simply stay unverified and click through the "unverified app" warning (*Advanced → Go to … (unsafe)*).
+
+Do not remove the app's access at `myaccount.google.com/permissions` after minting — that revokes the token at once.
+
+---
+
+## 6. Build and start
 
 ```bash
-# Windows (PowerShell) — replace XX with your PostgreSQL version (e.g. 17)
-$env:PGPASSWORD = "YOUR_POSTGRES_PASSWORD"
-& "C:\Program Files\PostgreSQL\XX\bin\psql.exe" `
-    --host=localhost --port=5432 `
-    --username=postgres `
-    --dbname=drivetotube `
-    --file="path\to\drivetotube-export.sql"
-
-# macOS / Linux
-PGPASSWORD=your_password psql -h localhost -U postgres -d drivetotube -f drivetotube-export.sql
+pnpm run build
 ```
 
-> The export file contains all jobs, lecture names, and settings — you'll continue exactly where you left off.
-
----
-
-## 8. Get Google OAuth refresh tokens (first time only — skip if you have them)
-
-The pipeline can use **two separate Google accounts**: one for YouTube uploads
-(`GOOGLE_OAUTH_REFRESH_TOKEN`), and optionally a different one for Drive access
-(`GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN`) — useful when the account that actually
-hosts the Meet recordings isn't the same as the YouTube channel's account, so
-Drive folders owned by that account can be listed directly instead of relying
-on link-shared access. If `GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN` isn't set, Drive
-access falls back to the YouTube token (single-account setup).
-
-Both accounts authorize against the **same** Client ID/Secret (they identify
-the OAuth app itself, not the consenting user) — only the refresh token
-differs per account. If either token has expired (`invalid_grant` error),
-repeat these steps for that account only:
-
-1. Go to [Google OAuth 2.0 Playground](https://developers.google.com/oauthplayground/)
-2. Click the settings gear (top right) → check **"Use your own OAuth credentials"**
-3. Enter your Client ID and Client Secret
-4. In Step 1, select scopes:
-   - For the YouTube token: `https://www.googleapis.com/auth/youtube`
-   - For the Drive token: `https://www.googleapis.com/auth/drive` (or `drive.readonly` for read-only access)
-5. Click **Authorize APIs** → sign in with the Google account for that token (YouTube channel owner, or Drive/recordings host)
-6. Click **Exchange authorization code for tokens**
-7. Copy the **Refresh token** value → paste it into `.env` as `GOOGLE_OAUTH_REFRESH_TOKEN` (YouTube) or `GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN` (Drive)
-
-> If refresh tokens keep expiring after ~7 days, the OAuth consent screen is
-> still in **Testing** publishing status in Google Cloud Console. Go to
-> **APIs & Services → OAuth consent screen** and click **Publish App** to move
-> it to Production — this app's scopes (`drive`/`drive.readonly`, `youtube`)
-> are "sensitive" but not "restricted", so this doesn't require Google's full
-> security-assessment review. Users will see an "unverified app" warning
-> during consent, which is fine for an app you administer yourself. Re-run
-> the steps above once more afterward to mint a non-expiring refresh token.
-
----
-
-## 9. Start the servers
-
-### Option A — PM2 (recommended, keeps servers alive)
+### Option A — PM2 (recommended, restarts on crash)
 
 ```bash
-# Install PM2 globally (one time)
-npm install -g pm2 pm2-windows-startup
-
-# Start both servers
+npm install -g pm2 pm2-windows-startup   # one time
 pm2 start ecosystem.config.cjs
-
-# Save so they restart on login
 pm2 save
-pm2-startup install    # Windows only
+pm2-startup install                      # Windows: start on login
 ```
 
-### Option B — Manual (for development)
+### Option B — manually
 
-**Terminal 1 — API server:**
 ```bash
+# Terminal 1 — API + worker
 cd artifacts/api-server
 node --enable-source-maps --env-file=../../.env ./dist/index.mjs
-```
 
-> Build first if dist/ is missing:
-> ```bash
-> pnpm run build
-> ```
-
-**Terminal 2 — Frontend:**
-```bash
+# Terminal 2 — dashboard
 cd artifacts/pipeline
 pnpm run dev
 ```
 
----
+The API runs the **built** `dist/index.mjs`, so rebuild (`node build.mjs` in `artifacts/api-server`) before restarting after a code change.
 
-## 10. Open the app
-
-- **Dashboard**: http://localhost:5173
-- **API**: http://localhost:5000
+Open the dashboard at http://localhost:5173 (API on http://localhost:5000). In **Settings**, add the Drive source folder(s) and choose the YouTube playlist; new top-level "Google Meet" folders are then registered automatically.
 
 ---
 
 ## PM2 quick reference
 
 ```bash
-pm2 list                    # see status of both servers
-pm2 logs dtt-api            # API server logs
-pm2 logs dtt-frontend       # Frontend logs
-pm2 restart all             # restart both
-pm2 restart dtt-api         # restart just the API
-pm2 stop all                # stop both
+pm2 list                      # status
+pm2 logs dtt-api              # API logs
+pm2 restart dtt-api --update-env   # restart and re-read .env
+pm2 stop all
 ```
 
 ---
@@ -202,54 +142,43 @@ pm2 stop all                # stop both
 ## Project structure
 
 ```
-Drive-To-Tube/
-├── .env                        # secrets — never commit this
-├── ecosystem.config.cjs        # PM2 process config
+.
+├── .env                       # secrets — never commit (template: .env.example)
+├── ecosystem.config.cjs       # PM2 config
 ├── artifacts/
-│   ├── api-server/             # Express 5 API + pipeline worker
-│   │   ├── src/
-│   │   │   ├── lib/
-│   │   │   │   ├── schedule.ts     # class schedule + title builder
-│   │   │   │   ├── pipeline.ts     # Drive scan + slot assignment
-│   │   │   │   └── googleAuth.ts   # OAuth2 singleton
-│   │   │   └── routes/
-│   │   │       └── jobs.ts         # job CRUD, approve, reject, restore
-│   │   └── populate-playlist.mjs   # one-off: fills YouTube playlist from channel
-│   └── pipeline/               # React 19 + Vite frontend (port 5173)
-│       └── start.mjs           # Vite programmatic entry (used by PM2)
+│   ├── api-server/            # admin API + pipeline worker (port 5000)
+│   ├── pipeline/              # React/Vite app: admin dashboard, and the student portal when VITE_APP_MODE=student
+│   └── student-api/           # student API (hosted on Render)
 ├── lib/
-│   ├── db/                     # Drizzle ORM schema + client (@workspace/db)
-│   └── api-client-react/       # Generated React Query hooks (@workspace/api-client-react)
-└── scripts/
-    └── cleanup-duplicates.mjs  # one-off: removes duplicate YouTube uploads
+│   ├── db/                    # Drizzle schema + client (@workspace/db)
+│   ├── api-zod/               # request/response schemas
+│   └── api-client-react/      # React Query hooks
+└── docs/                      # architecture, operations, diagram, agent context
 ```
 
 ---
 
-## Deployment plan (future)
-
-See [DEPLOYMENT.md](DEPLOYMENT.md) once created. Recommended free stack:
+## Hosted deployment (what we run)
 
 | Layer | Service | Notes |
 |---|---|---|
-| Frontend | Vercel / Cloudflare Pages | Deploy `artifacts/pipeline` |
-| API | Render (free web service) | Spins down after 15 min idle — cold start ~30s |
-| Database | Neon (free PostgreSQL) | 0.5 GB, no expiry |
+| Student API (`student-api`) | Render | Auto-deploys from `main`; free tier sleeps when idle |
+| Student portal (`pipeline`, student mode) | Vercel | Config in `artifacts/pipeline/vercel.json`; set `VITE_APP_MODE=student` and `VITE_API_URL` |
+| Database | Neon PostgreSQL | Shared by both APIs |
+| Admin API + dashboard | your own machine (PM2) | not public |
 
-Set all `.env` values as environment variables in each platform's dashboard. The `.env` file is never deployed.
+Set the environment variables in each platform's dashboard; `.env` is never deployed. Details in [docs/operations.md](docs/operations.md).
 
 ---
 
 ## Troubleshooting
 
-**`invalid_grant` error when scanning**
-→ The OAuth refresh token has expired. Re-run the OAuth flow (section 7) and update `GOOGLE_OAUTH_REFRESH_TOKEN` in `.env`, then restart the API server.
+**`invalid_grant` in the logs** → that refresh token has expired or been revoked. Mint a new one (step 5), update `.env`, then `pm2 restart dtt-api --update-env`. If it keeps happening weekly, publish the OAuth app.
 
-**Port 5000 already in use**
-→ Kill the old process: `Stop-Process -Id (Get-NetTCPConnection -LocalPort 5000).OwningProcess -Force` (PowerShell)
+**Port 5000 already in use** → `Stop-Process -Id (Get-NetTCPConnection -LocalPort 5000).OwningProcess -Force` (PowerShell).
 
-**`lib/db` type errors after schema changes**
-→ Rebuild: `cd lib/db && npx tsc -p tsconfig.json`
+**Type errors after a schema change** → `pnpm run typecheck:libs` from the repo root.
 
-**Frontend shows "Component Preview Server"**
-→ You started `artifacts/mockup-sandbox` instead of `artifacts/pipeline`. Use PM2 or start from the correct directory.
+**The scan finds nothing** → check the registered folders in Settings (`GET /api/drive-folders`) and that the Drive token belongs to the account that owns them.
+
+More in [docs/operations.md](docs/operations.md).

@@ -6,21 +6,25 @@ Auto-uploads Google Drive class recordings (a madrasa/Islamic institute in Pakis
 
 ## Project layout
 
-The working directory is `Drive-To-Tube\Drive-To-Tube\` (one level inside the clone root — the outer folder is just the workspace container).
+The repo root is the project root — run all commands from there.
 
 ```
-Drive-To-Tube/          ← git repo root / Claude Code workspace
-└── Drive-To-Tube/      ← actual project root (run all commands from here)
-    ├── .env            ← secrets, never committed
-    ├── ecosystem.config.cjs  ← PM2 config for both servers
-    ├── SETUP.md        ← full setup guide for new machines
-    ├── artifacts/
-    │   ├── api-server/     ← Express 5 API + background pipeline worker (port 5000)
-    │   └── pipeline/       ← React 19 + Vite frontend (port 5173)
-    └── lib/
-        ├── db/             ← Drizzle ORM schema (@workspace/db)
-        └── api-client-react/  ← generated React Query hooks (@workspace/api-client-react)
+.                       ← git repo root / Claude Code workspace
+├── .env                ← secrets, never committed (template: .env.example)
+├── ecosystem.config.cjs  ← PM2 config for the admin API and dashboard
+├── README.md · SETUP.md  ← overview · installing on a new machine
+├── docs/               ← architecture.md, operations.md, app-flow.html, agent-context.json
+├── artifacts/
+│   ├── api-server/     ← Express 5 admin API + background pipeline worker (port 5000)
+│   ├── pipeline/       ← React 19 + Vite app: admin dashboard (5173) and, built with VITE_APP_MODE=student, the student portal
+│   └── student-api/    ← student API (hosted on Render)
+└── lib/
+    ├── db/             ← Drizzle ORM schema (@workspace/db)
+    ├── api-zod/        ← request/response schemas
+    └── api-client-react/  ← React Query hooks (hand-maintained)
 ```
+
+Docs for humans live in `README.md`, `SETUP.md` and `docs/`. **Read `docs/operations.md` before touching the Drive/Meet housekeeping or the OAuth tokens.**
 
 ---
 
@@ -49,7 +53,9 @@ API: http://localhost:5000
 |---|---|
 | `artifacts/api-server/src/lib/schedule.ts` | Class schedule, title builder, serial numbers |
 | `artifacts/api-server/src/lib/pipeline.ts` | Drive scan, positional slot assignment |
-| `artifacts/api-server/src/lib/googleAuth.ts` | OAuth2 singleton (cached, auto-refresh) |
+| `artifacts/api-server/src/lib/googleAuth.ts` | Two OAuth2 singletons: YouTube and Drive (cached, auto-refresh) |
+| `artifacts/api-server/src/lib/meetConsolidation.ts` | Daily merge of Meet session folders + trashing of emptied folders |
+| `artifacts/student-api/src/lib/subjects.ts` | Groups lectures into subjects (live union of schedule + lecture names) |
 | `artifacts/api-server/src/routes/jobs.ts` | Job CRUD, approve, reject/restore, cascade slot |
 | `lib/db/src/schema/jobs.ts` | Job table schema (status enum includes "rejected") |
 | `lib/api-client-react/src/generated/api.ts` | React Query hooks (manually extended) |
@@ -126,7 +132,8 @@ done → removed (video left the playlist; self-heals or restore-done)
 
 - **Never mock the DB** — the project uses real Drizzle + PostgreSQL only
 - **After schema changes**: rebuild `lib/db` with `npx tsc -p tsconfig.json` from `lib/db/`
-- **Frontend is `artifacts/pipeline`** — not `artifacts/mockup-sandbox` (that's a component preview server)
+- **One frontend, two builds** — `artifacts/pipeline` is both the admin dashboard and (with `VITE_APP_MODE=student`) the student portal; Vercel builds the latter
+- **No OpenAPI spec / codegen** — `lib/api-spec` was removed; the `generated/` folders are edited by hand
 - **The `generated/` files are hand-maintained** — `lib/api-client-react/src/generated/` and `lib/api-zod/src/generated/` carry an orval "do not edit manually" header, but nothing regenerates them here. Edit them directly.
 - **After editing `lib/db`, `lib/api-zod` or `lib/api-client-react`**: run `pnpm run typecheck:libs` from the repo root, or the per-package typechecks won't see the change
 - **Meet creates a new top-level "Google Meet" folder whenever its current one is shared.** A folder is reused across days until its sharing changes (several hold 3+ days of sessions); sharing each new folder made Meet start another at the next recording (12 appeared in one day). So `DRIVE_SHARE_APPLY` is left **`false`**, and public access comes from one already-shared folder instead.

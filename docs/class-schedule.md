@@ -17,10 +17,7 @@
 
 ## Automation
 
-Class recordings from this schedule are auto-uploaded to YouTube by a Drive-to-Tube pipeline. See how it works:
-
-- **Live diagram**: https://arahmanmdmajid.github.io/gdrive-youtube-sync/app-flow.html
-- **Source**: [`docs/app-flow.html`](docs/app-flow.html) · [`docs/agent-context.json`](docs/agent-context.json)
+Class recordings from this schedule are auto-uploaded to YouTube by the Drive-To-Tube pipeline. See the [project README](../README.md), the [live pipeline diagram](https://arahmanmdmajid.github.io/gdrive-youtube-sync/app-flow.html) and [architecture](architecture.md).
 
 ---
 
