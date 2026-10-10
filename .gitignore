@@ -61,3 +61,4 @@ Thumbs.db
 !/artifacts/api-server/thumbnails/.gitkeep
 
 meet-moves.jsonl
+docs/presentation/
