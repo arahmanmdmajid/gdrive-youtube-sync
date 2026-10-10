@@ -38,7 +38,7 @@ pnpm workspace, TypeScript throughout. After editing any `lib/*` package run `pn
 
 ## The pipeline
 
-1. **Scan** (`lib/pipeline.ts` → `runPipelineScan`). For each registered Drive folder, `collectVideoFiles` lists videos directly in it and in subfolders whose name starts with a known meeting code (`lib/schedule.ts` → `extractMeetingCode`).
+1. **Scan** (`lib/scan.ts` → `runPipelineScan`). For each registered Drive folder, `collectVideoFiles` lists videos directly in it and in subfolders whose name starts with a known meeting code (`lib/schedule.ts` → `extractMeetingCode`).
 2. **Filter** (`lib/filter.ts`). Drops files before the cutoff date, with an unknown meeting code, or on the wrong weekday for their code.
 3. **Group and name.** Files are grouped by (PKT date, meeting code), sorted by creation time and assigned that day's schedule slots **by position**, not by timestamp, so a late-starting class still gets the right subject. This produces `proposedTitle` in the form `{serial} {subject} | {teacher} | {DD-MM-YYYY}`.
 4. **Review** (admin dashboard → Jobs). A human confirms or corrects the lecture name. Correcting one cascades down the rest of that day's unconfirmed jobs; a name that collides with another job returns `409` and the reviewer chooses *swap* or *merge* (`routes/jobs.ts`, `applyLectureNameChange`).

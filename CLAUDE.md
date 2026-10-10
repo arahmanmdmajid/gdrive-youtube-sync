@@ -52,7 +52,9 @@ API: http://localhost:5000
 | File | Purpose |
 |---|---|
 | `artifacts/api-server/src/lib/schedule.ts` | Class schedule, title builder, serial numbers |
-| `artifacts/api-server/src/lib/pipeline.ts` | Drive scan, positional slot assignment |
+| `artifacts/api-server/src/lib/scan.ts` · `titles.ts` | Drive scan and job creation · positional slot assignment (`computeGroupAssignments`, `reflowGroupTitles`) |
+| `artifacts/api-server/src/lib/upload.ts` · `youtubeMatch.ts` | YouTube upload · retry and title-match helpers (a match only counts if the upload completed) |
+| `artifacts/api-server/src/lib/reconcile.ts` · `reclaim.ts` · `worker.ts` | Playlist reconcile · stranded-`processing` recovery · the tick loop. `pipeline.ts` only re-exports all of them |
 | `artifacts/api-server/src/lib/googleAuth.ts` | Two OAuth2 singletons: YouTube and Drive (cached, auto-refresh) |
 | `artifacts/api-server/src/lib/meetConsolidation.ts` | Daily merge of Meet session folders + trashing of emptied folders |
 | `artifacts/student-api/src/lib/subjects.ts` | Groups lectures into subjects (live union of schedule + lecture names) |
