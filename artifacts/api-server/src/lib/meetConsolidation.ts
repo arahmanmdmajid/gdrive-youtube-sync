@@ -88,7 +88,7 @@ export async function consolidateMeetFolders(
         const items = (await listChildren(drive, s.id)).map((i) => i.id);
         if (items.length) batches.push({ from: s.id, items });
       }
-      if (!rename && !dest && batches.length === 0) continue; // nothing to gather
+      if (!rename && batches.length === 0) continue; // nothing to rename or move, so not counted as a group
       summary.groups++;
 
       if (!apply) {

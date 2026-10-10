@@ -56,10 +56,18 @@ function OpenInDrive({ value }: { value?: string | null }) {
   );
 }
 
+// The library/audio scans take the saved value as a bare folder ID, so a pasted Drive URL is
+// accepted here but reduced to its ID on save (see onSubmit); anything else is rejected.
+const folderField = z
+  .string()
+  .nullable()
+  .optional()
+  .refine((v) => !v || extractFolderId(v) !== null, "Enter a Drive folder ID or a folder URL");
+
 const formSchema = z.object({
   youtubePlaylistId: z.string().nullable().optional(),
-  libraryFolderId: z.string().nullable().optional(),
-  audioFolderId: z.string().nullable().optional(),
+  libraryFolderId: folderField,
+  audioFolderId: folderField,
   autoSync: z.boolean().default(false),
   syncIntervalMinutes: z.coerce.number().min(5).max(1440).default(60),
 });
@@ -249,8 +257,8 @@ export default function Settings() {
         youtubePlaylistName: playlistName,
         // Send null if empty string
         youtubePlaylistId: values.youtubePlaylistId || null,
-        libraryFolderId: values.libraryFolderId || null,
-        audioFolderId: values.audioFolderId || null,
+        libraryFolderId: values.libraryFolderId ? extractFolderId(values.libraryFolderId) : null,
+        audioFolderId: values.audioFolderId ? extractFolderId(values.audioFolderId) : null,
       }
     });
   };
@@ -422,7 +430,9 @@ export default function Settings() {
                   <FormItem>
                     <FormLabel className="font-mono">YouTube Playlist (Optional)</FormLabel>
                     <Select
-                      onValueChange={(v) => field.onChange(v === "none" ? null : v)}
+                      // Radix emits "" (not "none") when the saved ID is applied before its option has
+                      // mounted; treating that as a choice cleared the playlist on every save.
+                      onValueChange={(v) => { if (v !== "") field.onChange(v === "none" ? null : v); }}
                       value={field.value || "none"}
                       disabled={playlistsLoading}
                     >

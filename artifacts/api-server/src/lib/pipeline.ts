@@ -374,6 +374,7 @@ export async function runPipelineScan(): Promise<{
       status: jobsTable.status,
       proposedTitle: jobsTable.proposedTitle,
       lectureNameConfirmed: jobsTable.lectureNameConfirmed,
+      durationSeconds: jobsTable.durationSeconds,
     })
     .from(jobsTable);
   const queuedIds = new Set(existingJobs.map((j) => j.driveFileId));
@@ -457,12 +458,18 @@ export async function runPipelineScan(): Promise<{
 
   for (const file of eligible) {
     if (!file.id) continue;
+    const durationMillis = file.videoMediaMetadata?.durationMillis;
+    const durationSeconds = durationMillis ? Math.round(parseInt(durationMillis, 10) / 1000) : null;
     if (queuedIds.has(file.id)) {
       alreadyQueued++;
+      // Drive works out a video's length a little after upload, so a file scanned right after a
+      // recording ends has no duration yet and the job is created without one. Fill it in later.
+      const existing = existingByFileId.get(file.id);
+      if (existing && existing.durationSeconds == null && durationSeconds != null) {
+        await db.update(jobsTable).set({ durationSeconds }).where(eq(jobsTable.id, existing.id));
+      }
     } else {
       const sizeBytes = file.size ? parseInt(file.size, 10) : null;
-      const durationMillis = file.videoMediaMetadata?.durationMillis;
-      const durationSeconds = durationMillis ? Math.round(parseInt(durationMillis, 10) / 1000) : null;
       const isSuspiciousSize = sizeBytes !== null && sizeBytes > BATCH_RECORDING_SIZE_BYTES;
       const assignment = positionalAssignments.get(file.id) ?? {
         title: await buildYoutubeTitle(file.name ?? "Untitled", file.createdTime ?? null),
