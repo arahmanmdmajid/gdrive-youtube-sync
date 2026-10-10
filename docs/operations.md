@@ -10,7 +10,7 @@ For first-time installation see [SETUP.md](../SETUP.md); for how the code fits t
 |---|---|---|
 | Admin API + pipeline worker (`api-server`) | Your Windows machine, PM2 process `dtt-api`, port 5000 | Runs the built `dist/index.mjs` — **rebuild before restarting** (`cd artifacts/api-server && node build.mjs`, then `pm2 restart dtt-api --update-env`) |
 | Admin dashboard (`pipeline`) | Your machine, PM2 process `dtt-frontend`, port 5173 | Local only, not public |
-| Student API (`student-api`) | Render — https://gdrive-youtube-sync.onrender.com | Auto-deploys from every push to `main` |
+| Student API (`student-api`) | Render — https://gdrive-youtube-sync.onrender.com | Auto-deploys from pushes to `main`, but a **build filter** (Render → Settings → Build Filters) only rebuilds when `artifacts/student-api/**`, `lib/db/**`, or `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `tsconfig.base.json`, `tsconfig.json` change. If the student API starts to import another `lib/*` package, add it there or its changes will silently not deploy |
 | Student portal (`pipeline` built with `VITE_APP_MODE=student`) | Vercel — https://hidaya-portal.vercel.app | Auto-deploys from `main`; config in `artifacts/pipeline/vercel.json` |
 | Pipeline diagram | GitHub Pages — https://arahmanmdmajid.github.io/gdrive-youtube-sync/app-flow.html | Served from `main` `/docs` |
 | Database | Neon PostgreSQL | Shared by both APIs |
