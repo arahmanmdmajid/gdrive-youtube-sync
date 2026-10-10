@@ -29,7 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Save, Plus, Trash2, Pencil, Check, X, ImageUp, ImageOff } from "lucide-react";
+import { Loader2, Save, Plus, Trash2, Pencil, Check, X, ImageUp, ImageOff, ExternalLink } from "lucide-react";
 
 /** Mirrors the backend's parser (routes/driveFolders.ts) so duplicates can be caught client-side before a network round trip. */
 function extractFolderId(input: string): string | null {
@@ -293,12 +293,19 @@ export default function Settings() {
                   key={folder.id}
                   className="flex items-center gap-2 rounded-md border border-border px-3 py-2 bg-muted/20"
                 >
-                  <span className="flex-1 min-w-0 text-sm truncate">
+                  <a
+                    href={`https://drive.google.com/drive/folders/${folder.folderId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={`Open in Google Drive: ${folder.folderName ?? folder.folderId}`}
+                    className="group/link flex-1 min-w-0 text-sm truncate hover:text-primary transition-colors"
+                  >
                     {folder.folderName ?? <span className="font-mono text-muted-foreground">{folder.folderId}</span>}
                     {folder.folderName && (
                       <span className="ml-2 font-mono text-xs text-muted-foreground">…{folder.folderId.slice(-8)}</span>
                     )}
-                  </span>
+                    <ExternalLink className="ml-1.5 inline h-3 w-3 opacity-0 group-hover/link:opacity-60 transition-opacity" />
+                  </a>
                   <Button
                     variant="ghost"
                     size="icon"
