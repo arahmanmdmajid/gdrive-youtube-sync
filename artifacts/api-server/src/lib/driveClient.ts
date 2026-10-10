@@ -29,6 +29,25 @@ export interface DriveChildFile {
 
 export const FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
 
+/** Every top-level "Google Meet" folder the Drive account can see (Meet creates several; they share a name, so identify them by ID). */
+export async function listTopLevelMeetFolders(
+  drive: NonNullable<ReturnType<typeof getDriveClient>>,
+): Promise<{ id: string; createdTime: string }[]> {
+  const folders: { id: string; createdTime: string }[] = [];
+  let pageToken: string | undefined;
+  do {
+    const res = await drive.files.list({
+      q: `name = 'Google Meet' and mimeType = '${FOLDER_MIME_TYPE}' and trashed = false`,
+      fields: "nextPageToken, files(id, createdTime)",
+      pageSize: 100,
+      ...(pageToken ? { pageToken } : {}),
+    });
+    for (const f of res.data.files ?? []) if (f.id) folders.push({ id: f.id, createdTime: f.createdTime ?? "" });
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return folders;
+}
+
 /** Lists all children of a Drive folder, optionally filtered by mimeType (e.g. "mimeType = 'application/pdf'"). */
 export async function listChildren(
   drive: NonNullable<ReturnType<typeof getDriveClient>>,

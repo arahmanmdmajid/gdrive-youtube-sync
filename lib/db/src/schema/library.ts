@@ -1,6 +1,4 @@
 import { pgTable, serial, text, bigint, boolean, timestamp } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
 
 export const libraryResourcesTable = pgTable("library_resources", {
   id: serial("id").primaryKey(),
@@ -14,10 +12,4 @@ export const libraryResourcesTable = pgTable("library_resources", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertLibraryResourceSchema = createInsertSchema(libraryResourcesTable).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-export type InsertLibraryResource = z.infer<typeof insertLibraryResourceSchema>;
 export type LibraryResource = typeof libraryResourcesTable.$inferSelect;

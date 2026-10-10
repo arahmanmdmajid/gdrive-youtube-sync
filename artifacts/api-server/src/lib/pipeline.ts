@@ -1,7 +1,7 @@
 import { db, jobsTable, settingsTable, driveSourceFoldersTable } from "@workspace/db";
 import { eq, asc, isNotNull, notInArray } from "drizzle-orm";
 import fs from "node:fs";
-import { getDriveClient, streamDriveFile, listChildren, FOLDER_MIME_TYPE, type DriveChildFile } from "./driveClient";
+import { getDriveClient, streamDriveFile, listChildren, listTopLevelMeetFolders, FOLDER_MIME_TYPE, type DriveChildFile } from "./driveClient";
 import { getYoutubeClient } from "./youtubeClient";
 import {
   buildYoutubeTitle,
@@ -305,107 +305,30 @@ export async function reflowGroupTitles(driveCreatedTime: string, driveFileName:
 }
 
 /**
- * Finds every "Google Meet" folder owned by the Drive account and registers
- * any not already in driveSourceFoldersTable. Google creates a fresh one of
- * these under some accounts as part of its July 2026 Meet-recordings
- * restructuring (the old "Meet Recordings" folder became "Legacy Meet
- * Recordings", nested inside a new per-account "Google Meet" folder) — this
- * only works for the account whose refresh token Drive access uses
- * (GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN), since a plain owned-files search can't
- * see folders merely shared with that account via a link. Runs at the start
- * of every scan so a newly discovered folder is included in that same cycle.
+ * Registers any top-level "Google Meet" folder the Drive account can see that isn't in
+ * driveSourceFoldersTable yet, so a day's recordings are scanned before the daily
+ * consolidation moves them. Only finds folders owned by the account behind
+ * GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN; a plain search can't see folders merely link-shared
+ * with it. Runs at the start of every scan.
+ *
+ * Folders are deliberately not link-shared: sharing a Meet folder makes Meet start a new
+ * one at the next recording. Public access comes from the one shared consolidation target.
  */
 export async function discoverDriveSourceFolders(
   drive: NonNullable<ReturnType<typeof getDriveClient>>,
-): Promise<{ discovered: number; share: Record<ShareResult, number> }> {
-  const found: { id?: string | null; name?: string | null }[] = [];
-  let pageToken: string | undefined;
-  do {
-    const res = await drive.files.list({
-      q: "name = 'Google Meet' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-      fields: "nextPageToken, files(id, name)",
-      pageSize: 100,
-      ...(pageToken ? { pageToken } : {}),
-    });
-    found.push(...(res.data.files ?? []));
-    pageToken = res.data.nextPageToken ?? undefined;
-  } while (pageToken);
-
-  const share: Record<ShareResult, number> = { "already-ok": 0, "would-apply": 0, applied: 0, blocked: 0, failed: 0 };
-  if (found.length === 0) return { discovered: 0, share };
-
+): Promise<{ discovered: number }> {
+  const found = await listTopLevelMeetFolders(drive);
   const existing = await db.select({ folderId: driveSourceFoldersTable.folderId }).from(driveSourceFoldersTable);
-  const existingIds = new Set(existing.map((f) => f.folderId));
+  const known = new Set(existing.map((f) => f.folderId));
 
   let discovered = 0;
-  for (const folder of found) {
-    if (!folder.id) continue;
-    if (!existingIds.has(folder.id)) {
-      await db.insert(driveSourceFoldersTable).values({ folderId: folder.id, folderName: folder.name ?? "Google Meet" });
-      discovered++;
-    }
-    if (shareResolved.has(folder.id)) continue;
-    const result = await ensureLinkViewer(drive, folder.id);
-    share[result]++;
-    // "failed" is retried on the next scan; every other outcome is final for this process.
-    if (result !== "failed") shareResolved.add(folder.id);
+  for (const { id } of found) {
+    if (known.has(id)) continue;
+    await db.insert(driveSourceFoldersTable).values({ folderId: id, folderName: "Google Meet" });
+    discovered++;
   }
-
-  if (discovered > 0 || share.applied + share["would-apply"] + share.blocked + share.failed > 0) {
-    logger.info({ discovered, share, dryRun: !shareApplyEnabled() }, "Drive folder discovery summary");
-  }
-  return { discovered, share };
-}
-
-export type ShareResult = "already-ok" | "would-apply" | "applied" | "blocked" | "failed";
-
-/** Folder IDs whose sharing was already settled in this process, so each scan doesn't re-query all of them. */
-const shareResolved = new Set<string>();
-
-// Dry-run unless explicitly enabled, so the first run only reports what it would change.
-const shareApplyEnabled = () => process.env.DRIVE_SHARE_APPLY === "true";
-
-/**
- * Makes a folder readable by "anyone with the link" (viewer, not searchable),
- * so the recordings stay reachable by accounts other than the owner. Never
- * touches the folder's name, location or contents, and never fails the scan:
- * Workspace policy can forbid link sharing, which is reported as "blocked".
- */
-async function ensureLinkViewer(
-  drive: NonNullable<ReturnType<typeof getDriveClient>>,
-  folderId: string,
-): Promise<ShareResult> {
-  const read = () =>
-    drive.files.get({ fileId: folderId, fields: "capabilities(canShare), permissions(type, role)", supportsAllDrives: true });
-  const hasLink = (perms?: { type?: string | null }[]) => (perms ?? []).some((p) => p.type === "anyone");
-  try {
-    const before = (await read()).data;
-    if (hasLink(before.permissions)) return "already-ok";
-    if (!before.capabilities?.canShare) {
-      logger.warn({ folderId }, "Drive folder cannot be shared by this account");
-      return "blocked";
-    }
-    if (!shareApplyEnabled()) {
-      logger.info({ folderId }, "Dry run: would set Anyone with the link → Viewer");
-      return "would-apply";
-    }
-    await drive.permissions.create({
-      fileId: folderId,
-      supportsAllDrives: true,
-      requestBody: { type: "anyone", role: "reader", allowFileDiscovery: false },
-    });
-    if (!hasLink((await read()).data.permissions)) {
-      logger.error({ folderId }, "Sharing change did not take effect");
-      return "failed";
-    }
-    logger.info({ folderId }, "Drive folder set to Anyone with the link → Viewer");
-    return "applied";
-  } catch (err) {
-    // A domain policy that forbids link sharing answers 403; retrying every minute can't fix it.
-    const status = (err as { code?: number }).code;
-    logger.warn({ folderId, status, err }, "Drive folder sharing check failed");
-    return status === 403 ? "blocked" : "failed";
-  }
+  if (discovered > 0) logger.info({ discovered }, "Registered new Google Meet folders");
+  return { discovered };
 }
 
 export async function runPipelineScan(): Promise<{

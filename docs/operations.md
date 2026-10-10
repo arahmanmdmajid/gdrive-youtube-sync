@@ -50,7 +50,6 @@ The "ran today" marker is in memory, so a restart after 06:00 triggers one extra
 | `DRIVE_CONSOLIDATE_TARGET_FOLDER_ID` | Unset → the daily job does not run at all |
 | `DRIVE_CONSOLIDATE_APPLY` | `true` to move files; otherwise it only logs what it would do |
 | `DRIVE_CLEANUP_APPLY` | `true` to trash emptied folders; otherwise dry-run |
-| `DRIVE_SHARE_APPLY` | Leave `false` (see above). When `true`, each new folder is set to "Anyone with the link → Viewer" |
 
 **Run it by hand** (dry-run unless `apply` is true; `all` sweeps every date instead of the last 14 days; `cleanup` includes the trash step):
 
@@ -82,7 +81,7 @@ If either returns `invalid_grant`, mint a new one (SETUP.md §8) and put it in `
 
 **`invalid_grant` in the logs.** See OAuth tokens above. The error message in the logs names the failing call: playlists/uploads → YouTube token, Drive listing → Drive token.
 
-**Many new top-level "Google Meet" folders appear.** Check that `DRIVE_SHARE_APPLY` is `false`. A folder being shared (by anyone) is what makes Meet start a new one.
+**Many new top-level "Google Meet" folders appear.** A folder being shared (by anyone, including manually in Drive) is what makes Meet start a new one, so avoid sharing the top-level folders; share only the consolidation target.
 
 **Scan finds no files after a Drive change.** `GET /api/drive-folders` lists what the scan watches. A trashed or unshared folder returns nothing; remove its registration in Settings.
 

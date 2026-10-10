@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { db, driveSourceFoldersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { getDriveClient, listChildren, FOLDER_MIME_TYPE } from "./driveClient";
+import { getDriveClient, listChildren, listTopLevelMeetFolders, FOLDER_MIME_TYPE } from "./driveClient";
 import { logger } from "./logger";
 
 type Drive = NonNullable<ReturnType<typeof getDriveClient>>;
@@ -29,22 +29,6 @@ const pktDate = (ms: number) => new Date(ms + 5 * 3600e3).toISOString().slice(0,
 // Every move is appended here (file, old parent, new parent) so a bad run can be reversed by
 // swapping the two parents. Lives next to the process, not in git.
 const MOVE_LOG = process.env.MEET_MOVE_LOG ?? path.join(process.cwd(), "meet-moves.jsonl");
-
-async function listTopLevelMeetFolders(drive: Drive): Promise<{ id: string; createdTime: string }[]> {
-  const folders: { id: string; createdTime: string }[] = [];
-  let pageToken: string | undefined;
-  do {
-    const res = await drive.files.list({
-      q: `name = 'Google Meet' and mimeType = '${FOLDER_MIME_TYPE}' and trashed = false`,
-      fields: "nextPageToken, files(id, createdTime)",
-      pageSize: 100,
-      ...(pageToken ? { pageToken } : {}),
-    });
-    for (const f of res.data.files ?? []) if (f.id) folders.push({ id: f.id, createdTime: f.createdTime ?? "" });
-    pageToken = res.data.nextPageToken ?? undefined;
-  } while (pageToken);
-  return folders;
-}
 
 /**
  * Gathers Meet's per-session folders from every top-level "Google Meet" folder into one

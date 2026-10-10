@@ -1,6 +1,4 @@
 import { pgTable, serial, text, integer, bigint, timestamp, boolean } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
 
 export const jobsTable = pgTable("jobs", {
   id: serial("id").primaryKey(),
@@ -23,14 +21,11 @@ export const jobsTable = pgTable("jobs", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertJobSchema = createInsertSchema(jobsTable).omit({ id: true, createdAt: true, updatedAt: true });
-
 export const lectureNamesTable = pgTable("lecture_names", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
-export type InsertJob = z.infer<typeof insertJobSchema>;
 export type Job = typeof jobsTable.$inferSelect;
 
 export const settingsTable = pgTable("settings", {
@@ -47,6 +42,4 @@ export const settingsTable = pgTable("settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertSettingsSchema = createInsertSchema(settingsTable).omit({ id: true, updatedAt: true });
-export type InsertSettings = z.infer<typeof insertSettingsSchema>;
 export type Settings = typeof settingsTable.$inferSelect;

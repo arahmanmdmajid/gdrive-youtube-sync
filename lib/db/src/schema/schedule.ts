@@ -1,6 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
 
 export const scheduleSlotsTable = pgTable("schedule_slots", {
   id: serial("id").primaryKey(),
@@ -15,10 +13,4 @@ export const scheduleSlotsTable = pgTable("schedule_slots", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (t) => [uniqueIndex("schedule_slots_day_time_idx").on(t.dayOfWeek, t.timeSlot)]);
 
-export const insertScheduleSlotSchema = createInsertSchema(scheduleSlotsTable).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-export type InsertScheduleSlot = z.infer<typeof insertScheduleSlotSchema>;
 export type ScheduleSlot = typeof scheduleSlotsTable.$inferSelect;
