@@ -23,7 +23,7 @@ The worker ticks every `WORKER_TICK_MS` (10 minutes in our `.env`), so "at 06:00
 
 | When | What | Where in code |
 |---|---|---|
-| Every tick (if Auto Sync is on) | Scan the registered Drive folders, create `needs_review` jobs, upload `pending` ones, reconcile the playlist | `lib/pipeline.ts` (`runPipelineScan`, `processNextPendingJob`, `reconcilePlaylist`) |
+| Every tick (if Auto Sync is on) | Scan the registered Drive folders, create `needs_review` jobs, upload `pending` ones, reconcile the playlist | `lib/worker.ts` (`runPipelineScan` in `scan.ts`, `processNextPendingJob` in `upload.ts`, `reconcilePlaylist` in `reconcile.ts`) |
 | Every scan | Find new top-level "Google Meet" folders and register them | `discoverDriveSourceFolders` |
 | Worker start | Resolve jobs stranded in `processing` by a crash/restart | `reclaimOrphanedJobs` |
 | Once a day, first tick after 06:00 PKT | Merge Meet session folders into one folder per code and day | `lib/meetConsolidation.ts` → `consolidateMeetFolders` |
