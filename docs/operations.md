@@ -73,6 +73,33 @@ If either returns `invalid_grant`, mint a new one (SETUP.md §8) and put it in `
 
 **Tokens expiring about weekly means the consent screen is still in "Testing".** Publish it (Google Cloud → Google Auth Platform → Audience → *Publish app*; the button stays greyed until Branding has the home-page and privacy-policy links, which are `docs/index.html` and `docs/privacy.html` served by GitHub Pages, so keep those pages online), then re-mint both tokens — tokens created while in Testing keep the 7-day limit. The `drive` scope is "restricted"; staying unverified is fine for two users (you only see an "unverified app" warning at sign-in). Do not remove the app's access at `myaccount.google.com/permissions` after minting — that revokes the token immediately.
 
+## Student portal admin sign-in
+
+There is one admin account (username **`admin`**, role `admin`). It signs in at https://hidaya-portal.vercel.app and sees the class-progress and student-management pages. The local dashboard at `localhost:5173` has no login at all. Passwords are stored only as bcrypt hashes, so a forgotten password **cannot be recovered, only reset**.
+
+**If you are locked out**, run the reset tool from this machine (it needs `.env`, which is the safeguard: only someone with this computer can use it). In PowerShell, one line at a time, typing the same password twice at the hidden prompts (8+ characters; keep it easy to type):
+
+```powershell
+cd D:\Dev\gdrive-youtube-sync\artifacts\student-api
+$env:NEW_ADMIN_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR((Read-Host 'New admin password' -AsSecureString)))
+$env:NEW_ADMIN_PASSWORD_CONFIRM = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR((Read-Host 'Type it again' -AsSecureString)))
+node --env-file=../../.env reset-admin-password.mjs
+Remove-Item Env:NEW_ADMIN_PASSWORD, Env:NEW_ADMIN_PASSWORD_CONFIRM
+```
+
+It prints `Password updated for "admin". New password verifies: true`. It refuses to run if the two entries differ, the password is shorter than 8 characters, or there is not exactly one admin account. It takes effect immediately; anyone already signed in stays signed in until their 30-day token expires. A wrong password on the sign-in page shows "Incorrect username or password" and keeps what you typed; if the correct one is rejected, suspect a typo at the hidden prompt or the browser autofilling an old saved password.
+
+**Test a password without the browser** (isolates autofill from a real mismatch):
+
+```powershell
+$pw = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR((Read-Host 'Admin password' -AsSecureString)))
+Invoke-RestMethod -Method Post -Uri https://gdrive-youtube-sync.onrender.com/api/auth/login -ContentType 'application/json' -Body (@{username='admin';password=$pw} | ConvertTo-Json) | Select-Object -ExpandProperty user
+```
+
+A user object means it works; `401 Unauthorized` means it does not match. The free Render instance can take about 50 seconds to wake up.
+
+**Students' passwords** are different: signed in as admin, use the *Reset password* button on the Students page. Prevention: keep the admin password in a password manager.
+
 ## Troubleshooting
 
 **A job is stuck in `processing`.** It means the process died mid-upload. Restart `dtt-api`; `reclaimOrphanedJobs` adopts the upload if YouTube really has the finished video, otherwise requeues the job. Do not delete the YouTube video first — in past cases the upload had actually succeeded.
