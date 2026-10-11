@@ -1,0 +1,42 @@
+name: Meet merge
+
+# Runs the daily Meet folder merge and cleanup without the admin PC.
+# 01:00 UTC is 06:00 PKT. Scheduled runs can start a few minutes late.
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never two runs at once: two runners could create duplicate day folders.
+concurrency:
+  group: meet-merge
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter @workspace/api-server...
+      - run: pnpm --filter @workspace/api-server run build
+      - name: Merge and clean up
+        run: node artifacts/api-server/dist/scripts/runMeetMerge.mjs
+        env:
+          NODE_ENV: production
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DRIVE_CONSOLIDATE_TARGET_FOLDER_ID: ${{ secrets.DRIVE_CONSOLIDATE_TARGET_FOLDER_ID }}
+          # Dry-run unless the repository variable is exactly "true".
+          DRIVE_CONSOLIDATE_APPLY: ${{ vars.DRIVE_CONSOLIDATE_APPLY || 'false' }}
+          DRIVE_CLEANUP_APPLY: ${{ vars.DRIVE_CLEANUP_APPLY || 'false' }}

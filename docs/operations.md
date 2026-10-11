@@ -60,6 +60,22 @@ curl -s -X POST localhost:5000/api/drive-folders/consolidate -H "Content-Type: a
 
 **Undo.** Every move, rename and trash is recorded in the `drive_move_log` table (kind, fileId, fromId, toId; for a rename toId is the new name) and also appended to `meet-moves.jsonl` (next to the api-server process; git-ignored) as `{kind, fileId, fromId, toId}`. Older lines in the file use `{fileId, from, to}`. Reverse a move with Drive's `files.update` using `addParents: from, removeParents: to`. Trashed folders are in the Drive trash (Drive → Trash → Restore); the log lists their IDs.
 
+## Running the merge from GitHub Actions
+
+`.github/workflows/meet-merge.yml` runs the same merge and cleanup (`dist/scripts/runMeetMerge.mjs`) at 01:00 UTC, which is 06:00 PKT, without the PC. Scheduled runs can start a few minutes late, and GitHub pauses scheduled workflows after 60 days with no repository activity. Start one by hand from Actions → Meet merge → Run workflow. A run fails (red) if any group failed.
+
+Set these under Settings → Secrets and variables → Actions:
+
+| Kind | Name | Value |
+|---|---|---|
+| Secret | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | same as `.env` |
+| Secret | `GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN` | the Drive token (full `drive` scope) from `.env` |
+| Secret | `DATABASE_URL` | same as `.env` |
+| Secret | `DRIVE_CONSOLIDATE_TARGET_FOLDER_ID` | same as `.env` |
+| Variable | `DRIVE_CONSOLIDATE_APPLY`, `DRIVE_CLEANUP_APPLY` | `true` to apply; unset or anything else is a dry-run |
+
+Only one runner may apply. While the PC worker still has `DRIVE_CONSOLIDATE_APPLY=true` in `.env`, keep both variables unset (dry-run) in GitHub, or two runners could create duplicate day folders. When the token expires (`invalid_grant`), update it in `.env` and in the GitHub secret.
+
 ## Google OAuth tokens
 
 Two accounts share one OAuth app:
