@@ -1,3 +1,4 @@
+export * from "./driveRecordings";
 export * from "./driveSourceFolders";
 export * from "./jobs";
 export * from "./library";
