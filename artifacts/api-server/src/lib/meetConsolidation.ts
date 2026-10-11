@@ -129,56 +129,73 @@ export async function consolidateMeetFolders(
   return summary;
 }
 
-export interface CleanupSummary { dryRun: boolean; eligible: number; trashed: number; unregistered: number; failed: number }
+export interface CleanupSummary { dryRun: boolean; eligible: number; trashed: number; unregistered: number; emptySessions: number; sessionsTrashed: number; failed: number }
 
 /**
  * Moves to the Drive TRASH (recoverable for ~30 days, never a permanent delete) the top-level
  * "Google Meet" folders that consolidation has left holding nothing but empty session folders,
- * and drops their registration in the app so the scan stops listing them.
+ * and drops their registration in the app so the scan stops listing them. Empty session folders
+ * that are left in a folder that stays (the newest one, or one holding anything else) are
+ * trashed on their own.
  *
- * A folder is only eligible when EVERY child is a session folder with no items in it, so the
- * legacy "Meet Recordings" archive and anything unexpected keep their parent alive. Also never
- * touched: the target, the newest top-level folder (Meet's likely active one), and any session
- * on today's PKT date, because an empty session folder there may be a recording still being
- * processed.
+ * A top-level folder is only eligible when EVERY child is a session folder with no items in
+ * it, so the legacy "Meet Recordings" archive and anything unexpected keep their parent alive.
+ * Never touched: the target, the top-level folders themselves when newest, any non-empty
+ * session, and any session on today's PKT date, because an empty session folder there may be
+ * a recording still being processed.
  */
 export async function cleanupEmptyMeetFolders(
   drive: Drive,
   opts: { targetFolderId: string; apply: boolean },
 ): Promise<CleanupSummary> {
-  const summary: CleanupSummary = { dryRun: !opts.apply, eligible: 0, trashed: 0, unregistered: 0, failed: 0 };
+  const summary: CleanupSummary = { dryRun: !opts.apply, eligible: 0, trashed: 0, unregistered: 0, emptySessions: 0, sessionsTrashed: 0, failed: 0 };
   const all = await listTopLevelMeetFolders(drive);
   const tops = all.filter((f) => f.id !== opts.targetFolderId);
-  if (tops.length < 2) return summary;
+  if (tops.length === 0) return summary;
   const newest = tops.reduce((a, f) => (f.createdTime > a.createdTime ? f : a)).id;
 
   // Same freshness rule as consolidation: sessions dated today may still be in progress.
   const today = pktDate(Date.now());
 
   for (const { id } of tops) {
-    if (id === newest) continue;
     try {
       const kids = await listChildren(drive, id);
-      if (kids.length === 0) continue;
-      let eligible = true;
+      const empties: typeof kids = [];
       for (const k of kids) {
         const m = k.name.match(SESSION_RE);
-        if (k.mimeType !== FOLDER_MIME_TYPE || !m || m[2] === today || (await listChildren(drive, k.id)).length > 0) {
-          eligible = false;
-          break;
-        }
+        if (k.mimeType === FOLDER_MIME_TYPE && m && m[2] !== today && (await listChildren(drive, k.id)).length === 0) empties.push(k);
       }
-      if (!eligible) continue;
-      summary.eligible++;
-      if (!opts.apply) {
-        logger.info({ folderId: id, sessions: kids.length }, "Meet cleanup (dry run): would trash");
+      if (empties.length === 0) continue;
+
+      // Everything inside is an empty session: the whole folder goes, unless it is the newest
+      // (Meet's likely active one) or the only one.
+      if (empties.length === kids.length && id !== newest && tops.length > 1) {
+        summary.eligible++;
+        if (!opts.apply) {
+          logger.info({ folderId: id, sessions: kids.length }, "Meet cleanup (dry run): would trash");
+          continue;
+        }
+        await drive.files.update({ fileId: id, requestBody: { trashed: true }, supportsAllDrives: true, fields: "id" });
+        fs.appendFileSync(MOVE_LOG, JSON.stringify({ trashed: id }) + "\n");
+        summary.trashed++;
+        const removed = await db.delete(driveSourceFoldersTable).where(eq(driveSourceFoldersTable.folderId, id)).returning();
+        summary.unregistered += removed.length;
         continue;
       }
-      await drive.files.update({ fileId: id, requestBody: { trashed: true }, supportsAllDrives: true, fields: "id" });
-      fs.appendFileSync(MOVE_LOG, JSON.stringify({ trashed: id }) + "\n");
-      summary.trashed++;
-      const removed = await db.delete(driveSourceFoldersTable).where(eq(driveSourceFoldersTable.folderId, id)).returning();
-      summary.unregistered += removed.length;
+
+      // Otherwise trash just the empty sessions and leave the folder itself.
+      for (const s of empties) {
+        summary.emptySessions++;
+        if (!opts.apply) {
+          logger.info({ folderId: s.id, name: s.name }, "Meet cleanup (dry run): would trash empty session");
+          continue;
+        }
+        // Look again right before trashing: a late file may have landed since the first check.
+        if ((await listChildren(drive, s.id)).length > 0) continue;
+        await drive.files.update({ fileId: s.id, requestBody: { trashed: true }, supportsAllDrives: true, fields: "id" });
+        fs.appendFileSync(MOVE_LOG, JSON.stringify({ trashed: s.id }) + "\n");
+        summary.sessionsTrashed++;
+      }
     } catch (err) {
       summary.failed++; // retried on the next run
       logger.warn({ folderId: id, err }, "Meet cleanup: folder failed");

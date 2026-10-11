@@ -27,7 +27,7 @@ The worker ticks every `WORKER_TICK_MS` (10 minutes in our `.env`), so "at 06:00
 | Every scan | Find new top-level "Google Meet" folders and register them | `discoverDriveSourceFolders` |
 | Worker start | Resolve jobs stranded in `processing` by a crash/restart | `reclaimOrphanedJobs` |
 | Once a day, first tick after 06:00 PKT | Merge Meet session folders into one folder per code and day | `lib/meetConsolidation.ts` → `consolidateMeetFolders` |
-| Straight after the merge | Trash top-level folders left holding only empty sessions | `cleanupEmptyMeetFolders` |
+| Straight after the merge | Trash top-level folders left holding only empty sessions, and empty session folders left elsewhere | `cleanupEmptyMeetFolders` |
 
 The "ran today" marker is in memory, so a restart after 06:00 triggers one extra run. That is harmless — both steps do nothing when there is nothing to do.
 
@@ -41,7 +41,7 @@ The "ran today" marker is in memory, so a restart after 06:00 triggers one extra
 - Sessions on **today's PKT date are skipped**, because Meet may still be writing to them. Everything earlier is merged, so each day's sessions are merged the following morning (Saturday's on Sunday, even if there are no classes in between).
 - Nothing is ever deleted.
 
-**What the cleanup does.** A top-level `Google Meet` folder whose children are *all* empty session folders goes to the Drive **trash** (recoverable for about 30 days) and its registration in the app is removed. Never touched: the target, the newest top-level folder, any folder holding a latest-date/today session, and any folder with unexpected contents (for example the legacy `Meet Recordings` archive).
+**What the cleanup does.** A top-level `Google Meet` folder whose children are *all* empty session folders goes to the Drive **trash** (recoverable for about 30 days) and its registration in the app is removed. Empty session folders left inside a folder that stays (the newest top-level folder, or one holding anything else) are trashed on their own too, after a second check that they are still empty. Never touched: the target, the top-level folders themselves when newest, non-empty sessions, sessions dated today, and any folder with unexpected contents (for example the legacy `Meet Recordings` archive).
 
 **Flags** (all in `.env`, restart `dtt-api --update-env` after changing):
 

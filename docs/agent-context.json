@@ -205,7 +205,7 @@
     { "method": "GET", "path": "/drive/files", "purpose": "List videos across all configured Drive source folders, with eligibility flags", "file": "routes/drive.ts" },
     { "method": "GET", "path": "/drive-folders", "purpose": "List the configured Drive source folders the scanner watches", "file": "routes/driveFolders.ts" },
     { "method": "POST", "path": "/drive-folders", "purpose": "Add a source folder (accepts a raw folder ID or a full Drive folder URL)", "file": "routes/driveFolders.ts" },
-    { "method": "POST", "path": "/drive-folders/consolidate", "purpose": "Run the Meet-folder consolidation now (dry-run unless apply:true; all:true sweeps every date, default last 14 days; cleanup:true also trashes emptied top-level folders)", "file": "routes/driveFolders.ts" },
+    { "method": "POST", "path": "/drive-folders/consolidate", "purpose": "Run the Meet-folder consolidation now (dry-run unless apply:true; all:true sweeps every date, default last 14 days; cleanup:true also trashes emptied session and top-level folders)", "file": "routes/driveFolders.ts" },
     { "method": "DELETE", "path": "/drive-folders/:id", "purpose": "Stop watching a source folder", "file": "routes/driveFolders.ts" },
     { "method": "POST", "path": "/library/scan", "purpose": "Scan for new library resources", "file": "routes/library.ts" },
     { "method": "GET", "path": "/library/resources", "purpose": "List library resources", "file": "routes/library.ts" },
