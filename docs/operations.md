@@ -38,7 +38,7 @@ The "ran today" marker is in memory, so a restart after 06:00 triggers one extra
 **What the merge does.** Every `<meeting-code> - YYYY/MM/DD HH:mm PKT` session folder is emptied into `<meeting-code> - YYYY/MM/DD` under `DRIVE_CONSOLIDATE_TARGET_FOLDER_ID`.
 - Every item moves (videos, Gemini notes, transcripts); file IDs do not change, so jobs keyed by `driveFileId` are unaffected.
 - A session already inside the target is renamed in place.
-- Sessions on **today's PKT date and on the newest date in Drive are skipped**, because Meet may still be writing to them. A day therefore merges once a newer day exists, usually the morning after the next class day.
+- Sessions on **today's PKT date are skipped**, because Meet may still be writing to them. Everything earlier is merged, so each day's sessions are merged the following morning (Saturday's on Sunday, even if there are no classes in between).
 - Nothing is ever deleted.
 
 **What the cleanup does.** A top-level `Google Meet` folder whose children are *all* empty session folders goes to the Drive **trash** (recoverable for about 30 days) and its registration in the app is removed. Never touched: the target, the newest top-level folder, any folder holding a latest-date/today session, and any folder with unexpected contents (for example the legacy `Meet Recordings` archive).

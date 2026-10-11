@@ -20,7 +20,7 @@ export interface ConsolidationSummary {
   created: number;
   renamed: number;
   moved: number;
-  skippedLatest: number;
+  skippedToday: number;
   failed: number;
 }
 
@@ -37,16 +37,17 @@ const MOVE_LOG = process.env.MEET_MOVE_LOG ?? path.join(process.cwd(), "meet-mov
  *
  * Moves every item in a session folder (videos, Gemini notes, transcripts) so nothing is
  * left behind; file IDs don't change, so jobs keyed by driveFileId are unaffected. Never
- * deletes: emptied session folders are left for a human. Sessions on today's PKT date and on
- * the newest date in Drive are skipped, since Meet may still be writing to them. Safe to
- * re-run: a day already merged is a no-op, and a failed move is simply retried next run.
+ * deletes: emptied session folders are left for a human. Sessions on today's PKT date are
+ * skipped, since Meet may still be writing to them; everything earlier is merged, so each
+ * day's sessions are merged the following morning. Safe to re-run: a day already merged is a
+ * no-op, and a failed move is simply retried next run.
  */
 export async function consolidateMeetFolders(
   drive: Drive,
   opts: { targetFolderId: string; apply: boolean; lookbackDays?: number },
 ): Promise<ConsolidationSummary> {
   const { targetFolderId, apply } = opts;
-  const summary: ConsolidationSummary = { dryRun: !apply, groups: 0, created: 0, renamed: 0, moved: 0, skippedLatest: 0, failed: 0 };
+  const summary: ConsolidationSummary = { dryRun: !apply, groups: 0, created: 0, renamed: 0, moved: 0, skippedToday: 0, failed: 0 };
 
   const sessions: Session[] = [];
   for (const { id: parent } of await listTopLevelMeetFolders(drive)) {
@@ -57,15 +58,14 @@ export async function consolidateMeetFolders(
   }
 
   const today = pktDate(Date.now());
-  const latest = sessions.reduce((a, s) => (s.date > a ? s.date : a), "");
   // ponytail: a bounded lookback keeps the daily run small as emptied folders pile up; pass
   // none (manual "all") to sweep the whole backlog.
   const since = opts.lookbackDays ? pktDate(Date.now() - opts.lookbackDays * 86400e3) : "";
-  summary.skippedLatest = sessions.filter((s) => s.date === today || s.date === latest).length;
+  summary.skippedToday = sessions.filter((s) => s.date === today).length;
 
   const groups = new Map<string, Session[]>();
   for (const s of sessions) {
-    if (s.date === today || s.date === latest || s.date < since) continue;
+    if (s.date === today || s.date < since) continue;
     const key = `${s.code} - ${s.date}`;
     groups.set(key, [...(groups.get(key) ?? []), s]);
   }
@@ -139,8 +139,8 @@ export interface CleanupSummary { dryRun: boolean; eligible: number; trashed: nu
  * A folder is only eligible when EVERY child is a session folder with no items in it, so the
  * legacy "Meet Recordings" archive and anything unexpected keep their parent alive. Also never
  * touched: the target, the newest top-level folder (Meet's likely active one), and any session
- * on today's or the newest date, because an empty session folder there may be a recording still
- * being processed.
+ * on today's PKT date, because an empty session folder there may be a recording still being
+ * processed.
  */
 export async function cleanupEmptyMeetFolders(
   drive: Drive,
@@ -152,15 +152,8 @@ export async function cleanupEmptyMeetFolders(
   if (tops.length < 2) return summary;
   const newest = tops.reduce((a, f) => (f.createdTime > a.createdTime ? f : a)).id;
 
-  // Same freshness rule as consolidation: sessions on these dates may still be in progress.
-  const dates: string[] = [];
-  for (const f of all) {
-    for (const s of await listChildren(drive, f.id, `mimeType = '${FOLDER_MIME_TYPE}'`)) {
-      const m = s.name.match(SESSION_RE);
-      if (m) dates.push(m[2]!);
-    }
-  }
-  const protectedDates = new Set([pktDate(Date.now()), dates.reduce((a, d) => (d > a ? d : a), "")]);
+  // Same freshness rule as consolidation: sessions dated today may still be in progress.
+  const today = pktDate(Date.now());
 
   for (const { id } of tops) {
     if (id === newest) continue;
@@ -170,7 +163,7 @@ export async function cleanupEmptyMeetFolders(
       let eligible = true;
       for (const k of kids) {
         const m = k.name.match(SESSION_RE);
-        if (k.mimeType !== FOLDER_MIME_TYPE || !m || protectedDates.has(m[2]!) || (await listChildren(drive, k.id)).length > 0) {
+        if (k.mimeType !== FOLDER_MIME_TYPE || !m || m[2] === today || (await listChildren(drive, k.id)).length > 0) {
           eligible = false;
           break;
         }
