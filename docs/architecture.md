@@ -56,7 +56,7 @@ Job states: `needs_review → pending → processing → done` (`failed` is retr
 `lib/googleAuth.ts` keeps two independent OAuth clients sharing one OAuth app: the YouTube channel owner (uploads) and the Drive owner (reading, moving files). `getDriveClient()` uses the Drive identity and falls back to the YouTube one if no separate Drive token is set.
 
 ### Meet folder housekeeping (`lib/meetConsolidation.ts`)
-Meet creates a new top-level "Google Meet" folder whenever its current one is shared, with one subfolder per session. A daily job gathers those into a single already-shared folder as one `<code> - YYYY/MM/DD` folder per code and day, then trashes the emptied session folders and top-level folders. Rules, flags and undo steps are in [operations.md](operations.md). Newly seen top-level folders are still registered automatically by `discoverDriveSourceFolders` so a day's recordings are scanned before they are merged.
+Meet creates a new top-level "Google Meet" folder whenever its current one is shared, with one subfolder per session. A daily GitHub Actions job gathers those into a single already-shared folder as one `<code> - YYYY/MM/DD` folder per code and day, then trashes the emptied session folders and top-level folders. Rules, flags and undo steps are in [operations.md](operations.md). Newly seen top-level folders are still registered automatically by `discoverDriveSourceFolders` so a day's recordings are scanned before they are merged.
 
 ## Student portal
 

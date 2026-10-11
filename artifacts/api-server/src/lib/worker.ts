@@ -1,6 +1,5 @@
 import { db, settingsTable } from "@workspace/db";
 import { logger } from "./logger";
-import { maybeRunDailyConsolidation } from "./meetConsolidation";
 import { runPipelineScan } from "./scan";
 import { processNextPendingJob } from "./upload";
 import { reconcilePlaylist } from "./reconcile";
@@ -19,8 +18,6 @@ export function startPipelineWorker() {
   });
 
   workerInterval = setInterval(async () => {
-    // Independent of autoSync and of the scan below, so a failure here never blocks uploads.
-    await maybeRunDailyConsolidation().catch((err) => logger.error({ err }, "Meet consolidation failed"));
     try {
       const [settings] = await db.select().from(settingsTable).limit(1);
       if (!settings?.autoSync) return;
