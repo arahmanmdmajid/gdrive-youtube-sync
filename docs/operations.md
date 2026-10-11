@@ -19,17 +19,15 @@ A fix to student-facing behaviour usually needs only a push (Render/Vercel redep
 
 ## The daily timeline
 
-The worker ticks every `WORKER_TICK_MS` (10 minutes in our `.env`), so "at 06:00" really means the first tick after 06:00 PKT.
+The worker ticks every `WORKER_TICK_MS` (10 minutes in our `.env`), The Meet folder merge is not part of the worker any more; it runs from GitHub Actions (see below).
 
 | When | What | Where in code |
 |---|---|---|
 | Every tick (if Auto Sync is on) | Scan the registered Drive folders, create `needs_review` jobs, upload `pending` ones, reconcile the playlist | `lib/worker.ts` (`runPipelineScan` in `scan.ts`, `processNextPendingJob` in `upload.ts`, `reconcilePlaylist` in `reconcile.ts`) |
 | Every scan | Find new top-level "Google Meet" folders and register them | `discoverDriveSourceFolders` |
 | Worker start | Resolve jobs stranded in `processing` by a crash/restart | `reclaimOrphanedJobs` |
-| Once a day, first tick after 06:00 PKT | Merge Meet session folders into one folder per code and day | `lib/meetConsolidation.ts` → `consolidateMeetFolders` |
-| Straight after the merge | Trash top-level folders left holding only empty sessions, and empty session folders left elsewhere | `cleanupEmptyMeetFolders` |
-
-The "ran today" marker is in memory, so a restart after 06:00 triggers one extra run. That is harmless — both steps do nothing when there is nothing to do.
+| Once a day, 01:00 UTC (06:00 PKT), in GitHub Actions | Merge Meet session folders into one folder per code and day | `.github/workflows/meet-merge.yml` → `lib/meetConsolidation.ts` `consolidateMeetFolders` |
+| Straight after the merge, same job | Trash top-level folders left holding only empty sessions, and empty session folders left elsewhere | `cleanupEmptyMeetFolders` |
 
 ## Google Meet folder housekeeping
 
@@ -43,12 +41,12 @@ The "ran today" marker is in memory, so a restart after 06:00 triggers one extra
 
 **What the cleanup does.** A top-level `Google Meet` folder whose children are *all* empty session folders goes to the Drive **trash** (recoverable for about 30 days) and its registration in the app is removed. Empty session folders left inside a folder that stays (the newest top-level folder, or one holding anything else) are trashed on their own too, after a second check that they are still empty. Never touched: the target, the top-level folders themselves when newest, non-empty sessions, sessions dated today, and any folder with unexpected contents (for example the legacy `Meet Recordings` archive).
 
-**Flags** (all in `.env`, restart `dtt-api --update-env` after changing):
+**Flags** (for the scheduled run these are GitHub repository variables and secrets, see below; the target folder ID is also read from `.env` by the manual route):
 
 | Variable | Effect |
 |---|---|
-| `DRIVE_CONSOLIDATE_TARGET_FOLDER_ID` | Unset → the daily job does not run at all |
-| `DRIVE_CONSOLIDATE_APPLY` | `true` to move files; otherwise it only logs what it would do |
+| `DRIVE_CONSOLIDATE_TARGET_FOLDER_ID` | Where merged day folders go. Required |
+| `DRIVE_CONSOLIDATE_APPLY` | `true` to move files; otherwise the scheduled run only logs what it would do |
 | `DRIVE_CLEANUP_APPLY` | `true` to trash emptied folders; otherwise dry-run |
 
 **Run it by hand** (dry-run unless `apply` is true; `all` sweeps every date instead of the last 14 days; `cleanup` includes the trash step):
@@ -74,7 +72,7 @@ Set these under Settings → Secrets and variables → Actions:
 | Secret | `DRIVE_CONSOLIDATE_TARGET_FOLDER_ID` | same as `.env` |
 | Variable | `DRIVE_CONSOLIDATE_APPLY`, `DRIVE_CLEANUP_APPLY` | `true` to apply; unset or anything else is a dry-run |
 
-Only one runner may apply. While the PC worker still has `DRIVE_CONSOLIDATE_APPLY=true` in `.env`, keep both variables unset (dry-run) in GitHub, or two runners could create duplicate day folders. When the token expires (`invalid_grant`), update it in `.env` and in the GitHub secret.
+The PC worker no longer runs the merge, so the workflow is the only scheduled runner. Do not apply the manual route (`POST /drive-folders/consolidate`) around 01:00 UTC while the workflow runs, or two runners could create duplicate day folders. When the token expires (`invalid_grant`), update it in `.env` and in the GitHub secret.
 
 ## Google OAuth tokens
 
@@ -128,7 +126,7 @@ A user object means it works; `401 Unauthorized` means it does not match. The fr
 
 **Scan finds no files after a Drive change.** `GET /api/drive-folders` lists what the scan watches. A trashed or unshared folder returns nothing; remove its registration in Settings.
 
-**Daily job did not run.** Check `WORKER_TICK_MS`, that `DRIVE_CONSOLIDATE_TARGET_FOLDER_ID` is set, and `pm2 logs dtt-api | grep "Meet consolidation"`. Each run logs a `Meet consolidation summary` and a `Meet cleanup summary` line.
+**Daily job did not run.** Open GitHub → Actions → Meet merge. No run at about 01:00 UTC means GitHub skipped or paused it (60 days without repo activity pauses scheduled workflows; use Run workflow). A red run means a group failed or the credentials are wrong; the log has a `Meet consolidation summary` and a `Meet cleanup summary` line.
 
 **Port in use / type errors after a schema change.** See SETUP.md → Troubleshooting.
 

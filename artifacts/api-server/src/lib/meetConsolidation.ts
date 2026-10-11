@@ -214,22 +214,7 @@ export async function cleanupEmptyMeetFolders(
   return summary;
 }
 
-let lastRunDay = "";
-
-/** Runs once per PKT day, from 06:00, so the previous day's recordings are finished processing. */
-export async function maybeRunDailyConsolidation(): Promise<void> {
-  const target = process.env.DRIVE_CONSOLIDATE_TARGET_FOLDER_ID;
-  if (!target) return;
-  const pktNow = new Date(Date.now() + 5 * 3600e3);
-  const day = pktDate(Date.now());
-  if (pktNow.getUTCHours() < 6 || lastRunDay === day) return;
-  const drive = getDriveClient();
-  if (!drive) return;
-  lastRunDay = day; // set first: a failure is retried tomorrow rather than every minute
-  await runMeetMerge(drive, target);
-}
-
-/** One daily pass: merge, then cleanup. Shared by the worker and the scheduled script. */
+/** One pass: merge, then cleanup. Run by the scheduled GitHub Actions script (src/scripts/runMeetMerge.ts). */
 export async function runMeetMerge(drive: Drive, targetFolderId: string) {
   const consolidation = await consolidateMeetFolders(drive, {
     targetFolderId,
