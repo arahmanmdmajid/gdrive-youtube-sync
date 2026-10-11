@@ -58,7 +58,7 @@ curl -s -X POST localhost:5000/api/drive-folders/consolidate -H "Content-Type: a
 curl -s -X POST localhost:5000/api/drive-folders/consolidate -H "Content-Type: application/json" -d '{"apply":true,"cleanup":true}'
 ```
 
-**Undo.** Every move and rename is appended to `meet-moves.jsonl` (next to the api-server process; git-ignored) as `{fileId, from, to}`. Reverse a move with Drive's `files.update` using `addParents: from, removeParents: to`. Trashed folders are in the Drive trash (Drive → Trash → Restore); the log lists their IDs.
+**Undo.** Every move, rename and trash is recorded in the `drive_move_log` table (kind, fileId, fromId, toId; for a rename toId is the new name) and also appended to `meet-moves.jsonl` (next to the api-server process; git-ignored) as `{kind, fileId, fromId, toId}`. Older lines in the file use `{fileId, from, to}`. Reverse a move with Drive's `files.update` using `addParents: from, removeParents: to`. Trashed folders are in the Drive trash (Drive → Trash → Restore); the log lists their IDs.
 
 ## Google OAuth tokens
 

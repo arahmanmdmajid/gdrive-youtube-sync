@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { db, driveSourceFoldersTable } from "@workspace/db";
+import { db, driveMoveLogTable, driveSourceFoldersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getDriveClient, listChildren, listTopLevelMeetFolders, FOLDER_MIME_TYPE } from "./driveClient";
 import { logger } from "./logger";
@@ -29,6 +29,15 @@ const pktDate = (ms: number) => new Date(ms + 5 * 3600e3).toISOString().slice(0,
 // Every move is appended here (file, old parent, new parent) so a bad run can be reversed by
 // swapping the two parents. Lives next to the process, not in git.
 const MOVE_LOG = process.env.MEET_MOVE_LOG ?? path.join(process.cwd(), "meet-moves.jsonl");
+
+type MoveEntry = { kind: "move" | "rename" | "trash"; fileId: string; fromId?: string; toId?: string };
+
+// Also kept in the database, because a scheduled job has no disk that outlives the run. For a
+// rename, toId holds the new name.
+async function logMove(e: MoveEntry): Promise<void> {
+  fs.appendFileSync(MOVE_LOG, JSON.stringify(e) + "\n");
+  await db.insert(driveMoveLogTable).values(e);
+}
 
 /**
  * Gathers Meet's per-session folders from every top-level "Google Meet" folder into one
@@ -100,7 +109,7 @@ export async function consolidateMeetFolders(
         await drive.files.update({ fileId: rename.id, requestBody: { name }, supportsAllDrives: true, fields: "id" });
         dest = rename.id;
         summary.renamed++;
-        fs.appendFileSync(MOVE_LOG, JSON.stringify({ rename: rename.id, to: name }) + "\n");
+        await logMove({ kind: "rename", fileId: rename.id, toId: name });
       } else if (!dest) {
         dest = (await drive.files.create({
           requestBody: { name, mimeType: FOLDER_MIME_TYPE, parents: [targetFolderId] },
@@ -114,7 +123,7 @@ export async function consolidateMeetFolders(
       for (const b of batches) {
         for (const fileId of b.items) {
           await drive.files.update({ fileId, addParents: dest, removeParents: b.from, supportsAllDrives: true, fields: "id" });
-          fs.appendFileSync(MOVE_LOG, JSON.stringify({ fileId, from: b.from, to: dest }) + "\n");
+          await logMove({ kind: "move", fileId, fromId: b.from, toId: dest });
           summary.moved++;
         }
       }
@@ -176,7 +185,7 @@ export async function cleanupEmptyMeetFolders(
           continue;
         }
         await drive.files.update({ fileId: id, requestBody: { trashed: true }, supportsAllDrives: true, fields: "id" });
-        fs.appendFileSync(MOVE_LOG, JSON.stringify({ trashed: id }) + "\n");
+        await logMove({ kind: "trash", fileId: id });
         summary.trashed++;
         const removed = await db.delete(driveSourceFoldersTable).where(eq(driveSourceFoldersTable.folderId, id)).returning();
         summary.unregistered += removed.length;
@@ -193,7 +202,7 @@ export async function cleanupEmptyMeetFolders(
         // Look again right before trashing: a late file may have landed since the first check.
         if ((await listChildren(drive, s.id)).length > 0) continue;
         await drive.files.update({ fileId: s.id, requestBody: { trashed: true }, supportsAllDrives: true, fields: "id" });
-        fs.appendFileSync(MOVE_LOG, JSON.stringify({ trashed: s.id }) + "\n");
+        await logMove({ kind: "trash", fileId: s.id });
         summary.sessionsTrashed++;
       }
     } catch (err) {
@@ -217,11 +226,17 @@ export async function maybeRunDailyConsolidation(): Promise<void> {
   const drive = getDriveClient();
   if (!drive) return;
   lastRunDay = day; // set first: a failure is retried tomorrow rather than every minute
-  await consolidateMeetFolders(drive, {
-    targetFolderId: target,
+  await runMeetMerge(drive, target);
+}
+
+/** One daily pass: merge, then cleanup. Shared by the worker and the scheduled script. */
+export async function runMeetMerge(drive: Drive, targetFolderId: string) {
+  const consolidation = await consolidateMeetFolders(drive, {
+    targetFolderId,
     apply: process.env.DRIVE_CONSOLIDATE_APPLY === "true",
     lookbackDays: 14,
   });
   // Cleanup has its own flag so it can be dry-run (and trusted) independently of the moves.
-  await cleanupEmptyMeetFolders(drive, { targetFolderId: target, apply: process.env.DRIVE_CLEANUP_APPLY === "true" });
+  const cleanup = await cleanupEmptyMeetFolders(drive, { targetFolderId, apply: process.env.DRIVE_CLEANUP_APPLY === "true" });
+  return { consolidation, cleanup };
 }
