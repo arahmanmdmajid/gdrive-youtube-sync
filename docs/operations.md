@@ -62,6 +62,16 @@ curl -s -X POST localhost:5000/api/drive-folders/consolidate -H "Content-Type: a
 
 `.github/workflows/meet-merge.yml` runs the same merge and cleanup (`dist/scripts/runMeetMerge.mjs`) at 03:30 UTC, which is 08:30 PKT, without the PC. Scheduled runs can start a few minutes late, and GitHub pauses scheduled workflows after 60 days with no repository activity. Start one by hand from Actions → Meet merge → Run workflow. A run fails (red) if any group failed.
 
+**What starts it.** GitHub's own `schedule` trigger is not reliable: it did not fire at all on 12 Oct 2026 (issue #15), and GitHub does not guarantee scheduled runs. So a free cron-job.org job named `meet-merge-dispatch` calls GitHub's API every day at **03:30 UTC** (06:30 Saudi, 08:30 PKT), which starts the workflow just like the Run workflow button. The GitHub `schedule` is kept as a backup. A second run on the same day does nothing harmful: runs go one at a time and a repeat merge finds nothing to move.
+
+The cron-job.org job sends:
+
+- `POST https://api.github.com/repos/arahmanmdmajid/gdrive-youtube-sync/actions/workflows/meet-merge.yml/dispatches`, body `{"ref":"main"}`, time zone UTC
+- headers `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`, `Content-Type: application/json` (a `User-Agent` header is set too, but cron-job.org says it ignores it, and the calls work)
+- success is `204 No Content`; cron-job.org emails if a call fails and disables a job after 25 failures in a row
+
+The token is a fine-grained personal access token (name `meet-merge-dispatch`, this repository only, permission Actions: read and write, nothing else). It has **no expiry date set**, so rotate it once a year: create a new one with the same settings, put it in the `Authorization` header of the cron-job.org job, press Test run (expect 204 and a new `workflow_dispatch` run in Actions), then delete the old token under GitHub → Settings → Developer settings. If the token stops working, the daily run falls back to GitHub's own schedule only.
+
 Set these under Settings → Secrets and variables → Actions:
 
 | Kind | Name | Value |
@@ -126,7 +136,7 @@ A user object means it works; `401 Unauthorized` means it does not match. The fr
 
 **Scan finds no files after a Drive change.** `GET /api/drive-folders` lists what the scan watches. A trashed or unshared folder returns nothing; remove its registration in Settings.
 
-**Daily job did not run.** Open GitHub → Actions → Meet merge. No run at about 03:30 UTC means GitHub skipped or paused it (60 days without repo activity pauses scheduled workflows; use Run workflow). A red run means a group failed or the credentials are wrong; the log has a `Meet consolidation summary` and a `Meet cleanup summary` line.
+**Daily job did not run.** Open GitHub → Actions → Meet merge and the cron-job.org job history. No `workflow_dispatch` run at about 03:30 UTC means the cron-job.org call failed (expired or deleted token, job disabled) and no `schedule` run means GitHub skipped or paused it (60 days without repo activity pauses scheduled workflows; use Run workflow). A red run means a group failed or the credentials are wrong; the log has a `Meet consolidation summary` and a `Meet cleanup summary` line.
 
 **Port in use / type errors after a schema change.** See SETUP.md → Troubleshooting.
 
