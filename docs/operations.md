@@ -26,7 +26,7 @@ The worker ticks every `WORKER_TICK_MS` (10 minutes in our `.env`), The Meet fol
 | Every tick (if Auto Sync is on) | Scan the registered Drive folders, create `needs_review` jobs, upload `pending` ones, reconcile the playlist | `lib/worker.ts` (`runPipelineScan` in `scan.ts`, `processNextPendingJob` in `upload.ts`, `reconcilePlaylist` in `reconcile.ts`) |
 | Every scan | Find new top-level "Google Meet" folders and register them | `discoverDriveSourceFolders` |
 | Worker start | Resolve jobs stranded in `processing` by a crash/restart | `reclaimOrphanedJobs` |
-| Once a day, 01:00 UTC (06:00 PKT), in GitHub Actions | Merge Meet session folders into one folder per code and day | `.github/workflows/meet-merge.yml` → `lib/meetConsolidation.ts` `consolidateMeetFolders` |
+| Once a day, 03:30 UTC (08:30 PKT), in GitHub Actions | Merge Meet session folders into one folder per code and day | `.github/workflows/meet-merge.yml` → `lib/meetConsolidation.ts` `consolidateMeetFolders` |
 | Straight after the merge, same job | Trash top-level folders left holding only empty sessions, and empty session folders left elsewhere | `cleanupEmptyMeetFolders` |
 
 ## Google Meet folder housekeeping
@@ -60,7 +60,7 @@ curl -s -X POST localhost:5000/api/drive-folders/consolidate -H "Content-Type: a
 
 ## Running the merge from GitHub Actions
 
-`.github/workflows/meet-merge.yml` runs the same merge and cleanup (`dist/scripts/runMeetMerge.mjs`) at 01:00 UTC, which is 06:00 PKT, without the PC. Scheduled runs can start a few minutes late, and GitHub pauses scheduled workflows after 60 days with no repository activity. Start one by hand from Actions → Meet merge → Run workflow. A run fails (red) if any group failed.
+`.github/workflows/meet-merge.yml` runs the same merge and cleanup (`dist/scripts/runMeetMerge.mjs`) at 03:30 UTC, which is 08:30 PKT, without the PC. Scheduled runs can start a few minutes late, and GitHub pauses scheduled workflows after 60 days with no repository activity. Start one by hand from Actions → Meet merge → Run workflow. A run fails (red) if any group failed.
 
 Set these under Settings → Secrets and variables → Actions:
 
@@ -72,7 +72,7 @@ Set these under Settings → Secrets and variables → Actions:
 | Secret | `DRIVE_CONSOLIDATE_TARGET_FOLDER_ID` | same as `.env` |
 | Variable | `DRIVE_CONSOLIDATE_APPLY`, `DRIVE_CLEANUP_APPLY` | `true` to apply; unset or anything else is a dry-run |
 
-The PC worker no longer runs the merge, so the workflow is the only scheduled runner. Do not apply the manual route (`POST /drive-folders/consolidate`) around 01:00 UTC while the workflow runs, or two runners could create duplicate day folders. When the token expires (`invalid_grant`), update it in `.env` and in the GitHub secret.
+The PC worker no longer runs the merge, so the workflow is the only scheduled runner. Do not apply the manual route (`POST /drive-folders/consolidate`) around 03:30 UTC while the workflow runs, or two runners could create duplicate day folders. When the token expires (`invalid_grant`), update it in `.env` and in the GitHub secret.
 
 ## Google OAuth tokens
 
@@ -126,7 +126,7 @@ A user object means it works; `401 Unauthorized` means it does not match. The fr
 
 **Scan finds no files after a Drive change.** `GET /api/drive-folders` lists what the scan watches. A trashed or unshared folder returns nothing; remove its registration in Settings.
 
-**Daily job did not run.** Open GitHub → Actions → Meet merge. No run at about 01:00 UTC means GitHub skipped or paused it (60 days without repo activity pauses scheduled workflows; use Run workflow). A red run means a group failed or the credentials are wrong; the log has a `Meet consolidation summary` and a `Meet cleanup summary` line.
+**Daily job did not run.** Open GitHub → Actions → Meet merge. No run at about 03:30 UTC means GitHub skipped or paused it (60 days without repo activity pauses scheduled workflows; use Run workflow). A red run means a group failed or the credentials are wrong; the log has a `Meet consolidation summary` and a `Meet cleanup summary` line.
 
 **Port in use / type errors after a schema change.** See SETUP.md → Troubleshooting.
 

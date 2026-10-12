@@ -1,10 +1,10 @@
 name: Meet merge
 
 # Runs the daily Meet folder merge and cleanup without the admin PC.
-# 01:00 UTC is 06:00 PKT. Scheduled runs can start a few minutes late.
+# 03:30 UTC is 08:30 PKT and 06:30 Saudi time. Scheduled runs can start a few minutes late.
 on:
   schedule:
-    - cron: "0 1 * * *"
+    - cron: "30 3 * * *"
   workflow_dispatch:
 
 permissions:
@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - run: echo "Triggered by ${{ github.event_name }}"
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
