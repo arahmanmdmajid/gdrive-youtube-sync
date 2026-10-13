@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A newer push to the same branch or PR makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - name: Build api-server
+        run: pnpm --filter @workspace/api-server run build
+      - name: Build student-api
+        run: pnpm --filter @workspace/student-api run build
+      - name: Build pipeline (admin dashboard)
+        run: pnpm --filter @workspace/pipeline run build
+      - name: Build pipeline (student portal)
+        run: pnpm --filter @workspace/pipeline run build
+        env:
+          VITE_APP_MODE: student
