@@ -84,6 +84,19 @@ Set these under Settings → Secrets and variables → Actions:
 
 The PC worker no longer runs the merge, so the workflow is the only scheduled runner. Do not apply the manual route (`POST /drive-folders/consolidate`) around 03:30 UTC while the workflow runs, or two runners could create duplicate day folders. When the token expires (`invalid_grant`), update it in `.env` and in the GitHub secret.
 
+## One-off: filing the old "Meet Recordings" archive
+
+The flat `Meet Recordings` folder from before the daily merge (files named `<code> (YYYY-MM-DD HH:mm GMT+5)` plus Gemini notes) is not touched by the daily merge. `src/scripts/mergeArchive.ts` files it into the same `<code> - YYYY/MM/DD` day folders under the target. It only moves, never deletes, and logs every move to `drive_move_log` and `meet-moves.jsonl`. Gemini notes have no meeting code, so a note goes to the recording that started in the same minute; if none or several did, it stays. Files not named like Meet recordings, and subfolders, stay too, and the run lists them.
+
+Run it from `artifacts/api-server` after `node build.mjs`, not around 03:30 UTC while the daily merge runs. It is a dry-run unless `--apply` is given; `--only YYYY-MM-DD` limits it to one date, and it is safe to rerun:
+
+```bash
+NODE_ENV=production node --env-file=../../.env dist/scripts/mergeArchive.mjs --source <archive folder id>
+NODE_ENV=production node --env-file=../../.env dist/scripts/mergeArchive.mjs --source <archive folder id> --only 2026-08-18 --apply
+```
+
+`--source` is the `Meet Recordings` folder, or the folder that holds it. Undo a date by swapping `fromId` and `toId` of its rows in `drive_move_log`.
+
 ## Google OAuth tokens
 
 Two accounts share one OAuth app:
