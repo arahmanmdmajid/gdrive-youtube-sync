@@ -1,18 +1,19 @@
 import { z } from "zod/v4";
 
 export const registerSchema = z.object({
-  inviteCode: z.string().min(1),
+  inviteCode: z.string().trim().min(1),
   username: z
     .string()
+    .trim()
     .min(3)
     .max(30)
     .regex(/^[a-zA-Z0-9_.-]+$/, "Username may only contain letters, numbers, and _ . -"),
   password: z.string().min(6).max(100),
-  displayName: z.string().min(1).max(60),
+  displayName: z.string().trim().min(1).max(60),
 });
 
 export const loginSchema = z.object({
-  username: z.string().min(1),
+  username: z.string().trim().min(1),
   password: z.string().min(1),
 });
 
