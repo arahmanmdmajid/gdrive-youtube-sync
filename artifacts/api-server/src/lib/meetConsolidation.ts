@@ -34,7 +34,7 @@ type MoveEntry = { kind: "move" | "rename" | "trash"; fileId: string; fromId?: s
 
 // Also kept in the database, because a scheduled job has no disk that outlives the run. For a
 // rename, toId holds the new name.
-async function logMove(e: MoveEntry): Promise<void> {
+export async function logMove(e: MoveEntry): Promise<void> {
   fs.appendFileSync(MOVE_LOG, JSON.stringify(e) + "\n");
   await db.insert(driveMoveLogTable).values(e);
 }
