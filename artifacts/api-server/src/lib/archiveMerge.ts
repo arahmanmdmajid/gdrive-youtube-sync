@@ -11,6 +11,14 @@ const RECORDING_RE = /^([a-z]{3}-[a-z]{4}-[a-z]{3}) \((\d{4})-(\d{2})-(\d{2}) (\
 // Gemini notes carry a date and time but no meeting code.
 const NOTE_RE = /^Meeting started (\d{4})\/(\d{2})\/(\d{2}) (\d{2}:\d{2}) PKT - Notes by Gemini/;
 
+/** The PKT day ("YYYY/MM/DD") in a Meet recording, transcript or Gemini note name, if it has one. */
+export function fileDay(name: string): string | undefined {
+  const r = name.match(RECORDING_RE);
+  if (r) return `${r[2]}/${r[3]}/${r[4]}`;
+  const n = name.match(NOTE_RE);
+  return n ? `${n[1]}/${n[2]}/${n[3]}` : undefined;
+}
+
 export function dayFolderName(code: string, y: string, m: string, d: string): string {
   return `${code} - ${y}/${m}/${d}`;
 }
