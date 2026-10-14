@@ -4,6 +4,7 @@ import { db, driveMoveLogTable, driveSourceFoldersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getDriveClient, listChildren, listTopLevelMeetFolders, FOLDER_MIME_TYPE } from "./driveClient";
 import { logger } from "./logger";
+import { fileDay } from "./archiveMerge";
 
 type Drive = NonNullable<ReturnType<typeof getDriveClient>>;
 
@@ -45,11 +46,14 @@ export async function logMove(e: MoveEntry): Promise<void> {
  * folder, so everyone has a single link).
  *
  * Moves every item in a session folder (videos, Gemini notes, transcripts) so nothing is
- * left behind; file IDs don't change, so jobs keyed by driveFileId are unaffected. Never
- * deletes: emptied session folders are left for a human. Sessions on today's PKT date are
- * skipped, since Meet may still be writing to them; everything earlier is merged, so each
- * day's sessions are merged the following morning. Safe to re-run: a day already merged is a
- * no-op, and a failed move is simply retried next run.
+ * left behind; file IDs don't change, so jobs keyed by driveFileId are unaffected. Each item
+ * goes to the day in its own name, not the session folder's: Meet reuses one session folder
+ * for a meeting code across several days, so the folder's date is only the first day. An item
+ * whose name has no date falls back to the session's date. Never deletes: emptied session
+ * folders are left for a human. Sessions on today's PKT date are skipped, and so are items
+ * dated today, since Meet may still be writing them; everything earlier is merged, so each
+ * day's recordings are merged the following morning. Safe to re-run: a day already merged is
+ * a no-op, and a failed move is simply retried next run.
  */
 export async function consolidateMeetFolders(
   drive: Drive,
@@ -72,11 +76,28 @@ export async function consolidateMeetFolders(
   const since = opts.lookbackDays ? pktDate(Date.now() - opts.lookbackDays * 86400e3) : "";
   summary.skippedToday = sessions.filter((s) => s.date === today).length;
 
-  const groups = new Map<string, Session[]>();
+  // Day folder name -> the session folders that hold files for it, with those files.
+  const byDay = new Map<string, { from: string; items: string[] }[]>();
+  // A session already in the target can be renamed in place when everything in it is its own day.
+  const renameable = new Map<string, Session>();
   for (const s of sessions) {
     if (s.date === today || s.date < since) continue;
-    const key = `${s.code} - ${s.date}`;
-    groups.set(key, [...(groups.get(key) ?? []), s]);
+    const perDay = new Map<string, string[]>();
+    try {
+      for (const i of await listChildren(drive, s.id)) {
+        const day = fileDay(i.name) ?? s.date;
+        if (day === today) continue; // maybe still processing: the next run moves it
+        const name = `${s.code} - ${day}`;
+        perDay.set(name, [...(perDay.get(name) ?? []), i.id]);
+      }
+    } catch (err) {
+      summary.failed++; // this session is read again on the next run
+      logger.warn({ session: s.id, err }, "Meet consolidation: could not list a session");
+      continue;
+    }
+    for (const [name, items] of perDay) byDay.set(name, [...(byDay.get(name) ?? []), { from: s.id, items }]);
+    const own = `${s.code} - ${s.date}`;
+    if (s.parent === targetFolderId && [...perDay.keys()].every((n) => n === own)) renameable.set(own, s);
   }
 
   const merged = new Map<string, string>();
@@ -84,19 +105,13 @@ export async function consolidateMeetFolders(
     if (MERGED_RE.test(f.name)) merged.set(f.name, f.id);
   }
 
-  for (const [name, group] of [...groups].sort()) {
+  for (const name of [...new Set([...byDay.keys(), ...renameable.keys()])].sort()) {
     try {
       let dest = merged.get(name);
       // A session already sitting in the target is renamed in place instead of being emptied
       // into a new folder next to it.
-      const rename = dest ? undefined : group.find((s) => s.parent === targetFolderId);
-      const sources = group.filter((s) => s.id !== rename?.id);
-
-      const batches: { from: string; items: string[] }[] = [];
-      for (const s of sources) {
-        const items = (await listChildren(drive, s.id)).map((i) => i.id);
-        if (items.length) batches.push({ from: s.id, items });
-      }
+      const rename = dest ? undefined : renameable.get(name);
+      const batches = (byDay.get(name) ?? []).filter((b) => b.from !== rename?.id);
       if (!rename && batches.length === 0) continue; // nothing to rename or move, so not counted as a group
       summary.groups++;
 

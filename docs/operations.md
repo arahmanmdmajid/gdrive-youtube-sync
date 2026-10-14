@@ -33,10 +33,10 @@ The worker ticks every `WORKER_TICK_MS` (10 minutes in our `.env`), The Meet fol
 
 **Why it exists.** Meet creates a new top-level `Google Meet` folder whenever its current one is shared. A folder is otherwise reused across days. Link-sharing every new folder therefore made Meet start another one at the next recording (12 appeared in one day), so we do the opposite: nothing is shared per-folder, and sessions are moved into one already-shared folder.
 
-**What the merge does.** Every `<meeting-code> - YYYY/MM/DD HH:mm PKT` session folder is emptied into `<meeting-code> - YYYY/MM/DD` under `DRIVE_CONSOLIDATE_TARGET_FOLDER_ID`.
+**What the merge does.** Every `<meeting-code> - YYYY/MM/DD HH:mm PKT` session folder is emptied into `<meeting-code> - YYYY/MM/DD` under `DRIVE_CONSOLIDATE_TARGET_FOLDER_ID`. The day is the one **in each file's own name** (`<code> (YYYY-MM-DD HH:mm GMT+5)`, or `Meeting started YYYY/MM/DD ...` for a Gemini note), not the session folder's date, because Meet reuses one session folder for a meeting code across several days. A file with no readable date falls back to the session folder's date.
 - Every item moves (videos, Gemini notes, transcripts); file IDs do not change, so jobs keyed by `driveFileId` are unaffected.
-- A session already inside the target is renamed in place.
-- Sessions on **today's PKT date are skipped**, because Meet may still be writing to them. Everything earlier is merged, so each day's sessions are merged the following morning (Saturday's on Sunday, even if there are no classes in between).
+- A session already inside the target is renamed in place when everything in it belongs to that session's own day.
+- Sessions on **today's PKT date are skipped**, and so are files dated today, because Meet may still be writing to them. Everything earlier is merged, so each day's sessions are merged the following morning (Saturday's on Sunday, even if there are no classes in between).
 - Nothing is ever deleted.
 
 **What the cleanup does.** A top-level `Google Meet` folder whose children are *all* empty session folders goes to the Drive **trash** (recoverable for about 30 days) and its registration in the app is removed. Empty session folders left inside a folder that stays (the newest top-level folder, or one holding anything else) are trashed on their own too, after a second check that they are still empty. Never touched: the target, the top-level folders themselves when newest, non-empty sessions, sessions dated today, and any folder with unexpected contents (for example the legacy `Meet Recordings` archive).
