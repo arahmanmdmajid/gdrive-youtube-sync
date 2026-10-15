@@ -1,5 +1,7 @@
 # Drive-To-Tube
 
+## Introduction
+
 Uploads a madrasa's Google Meet class recordings from Google Drive to YouTube, titled from the weekly timetable, behind a human review step. A separate student portal then serves the finished lectures.
 
 Built for Hidayah Academy for Islamic Education (Section B/H, 6th year Dars-e-Nizami). The institute works in **PKT (UTC+5)**; the timetable is in [docs/class-schedule.md](docs/class-schedule.md).
