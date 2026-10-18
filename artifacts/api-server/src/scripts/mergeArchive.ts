@@ -7,6 +7,7 @@
 import { getDriveClient, listChildren, FOLDER_MIME_TYPE } from "../lib/driveClient";
 import { planArchive } from "../lib/archiveMerge";
 import { logMove } from "../lib/meetConsolidation";
+import { withRetry } from "../lib/driveRetry";
 
 const args = process.argv.slice(2);
 const arg = (name: string) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
@@ -18,21 +19,6 @@ let source = arg("--source");
 if (!source || !target || !drive) {
   console.error("Needs --source <folderId>, DRIVE_CONSOLIDATE_TARGET_FOLDER_ID and Drive credentials");
   process.exit(1);
-}
-
-// Drive rate-limit and server errors are worth a few retries; anything else is a real failure.
-async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
-  for (let i = 0; ; i++) {
-    try {
-      return await fn();
-    } catch (err) {
-      const e = err as { code?: number; errors?: { reason?: string }[] };
-      const reason = e.errors?.[0]?.reason ?? "";
-      const retryable = e.code === 429 || (typeof e.code === "number" && e.code >= 500) || /ateLimit|uotaExceeded/.test(reason);
-      if (i >= 5 || !retryable) throw err;
-      await new Promise((r) => setTimeout(r, 1000 * 2 ** i));
-    }
-  }
 }
 
 const inner = (await listChildren(drive, source, `mimeType = '${FOLDER_MIME_TYPE}'`)).find((f) => f.name === "Meet Recordings");
