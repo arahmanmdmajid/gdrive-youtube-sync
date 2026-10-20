@@ -97,6 +97,19 @@ NODE_ENV=production node --env-file=../../.env dist/scripts/mergeArchive.mjs --s
 
 `--source` is the `Meet Recordings` folder, or the folder that holds it. Undo a date by swapping `fromId` and `toId` of its rows in `drive_move_log`.
 
+## One-off: refiling files from the wrong day folder
+
+Before the daily merge filed files by their own date (#22), a day folder could hold files from several days, because Meet reuses a session folder across days. `src/scripts/refileMixedDays.ts` moves each file whose own day (from its name) differs from its folder's day into `<meeting-code> - <its day>` under the target, creating that folder if needed. It only moves, never deletes, and logs every move to `drive_move_log` and `meet-moves.jsonl`. Names with no readable date and files dated today stay where they are.
+
+Run it from `artifacts/api-server` after `node build.mjs`, not around 03:30 UTC while the daily merge runs. It is a dry-run unless `--apply` is given; `--only YYYY-MM-DD` limits it to files of that day, and it is safe to rerun:
+
+```bash
+NODE_ENV=production node --env-file=../../.env dist/scripts/refileMixedDays.mjs
+NODE_ENV=production node --env-file=../../.env dist/scripts/refileMixedDays.mjs --only 2026-08-22 --apply
+```
+
+A folder can end up empty if all its files belonged to other days; it is left for a human. Undo a day by swapping `fromId` and `toId` of its rows in `drive_move_log`.
+
 ## Google OAuth tokens
 
 Two accounts share one OAuth app:
