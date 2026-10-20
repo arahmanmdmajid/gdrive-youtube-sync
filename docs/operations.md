@@ -166,6 +166,19 @@ A user object means it works; `401 Unauthorized` means it does not match. The fr
 
 **Port in use / type errors after a schema change.** See SETUP.md → Troubleshooting.
 
+## Decision history
+
+Every proposal and review decision is appended to the `job_decisions` table (who, when, old and new title, old and new status, and the other jobs a cascade, swap or merge changed, linked by `group_event_id`). Nothing is overwritten. History before this table existed cannot be recovered, and a failed write is logged (`Could not write decision history`) without blocking the review action.
+
+After pulling a version that adds the table, create it once with `pnpm --filter @workspace/db run push` (additive), then rebuild and restart `dtt-api`. Until the table exists, review still works and the logs show the warning above.
+
+Read a job's history (read-only):
+
+```sql
+select created_at, event_type, role, detail, from_title, to_title, from_status, to_status
+from job_decisions where job_id = <id> order by id;
+```
+
 ## Checking health
 
 ```bash

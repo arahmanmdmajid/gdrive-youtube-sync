@@ -1,5 +1,6 @@
 export * from "./driveMoveLog";
 export * from "./driveSourceFolders";
+export * from "./jobDecisions";
 export * from "./jobs";
 export * from "./library";
 export * from "./schedule";

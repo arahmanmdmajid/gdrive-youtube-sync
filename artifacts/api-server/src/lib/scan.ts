@@ -5,6 +5,7 @@ import { buildYoutubeTitle, buildYoutubeDescription, extractMeetingCode, getPktI
 import { isEligible, BATCH_RECORDING_SIZE_BYTES } from "./filter";
 import { logger } from "./logger";
 import { computeGroupAssignments, type GroupMember } from "./titles";
+import { recordDecisions, snapshotJobs } from "./decisions";
 
 /**
  * Collects candidate video files from a Drive source folder, handling both
@@ -85,6 +86,14 @@ export async function runPipelineScan(): Promise<{
   }
 
   const totalScanned = allFiles.length;
+
+  // Snapshot after the slow Drive listing, so what the scan changes is diffed over a short window.
+  let decisionsBefore: Awaited<ReturnType<typeof snapshotJobs>> | null = null;
+  try {
+    decisionsBefore = await snapshotJobs();
+  } catch (err) {
+    logger.warn({ err }, "Could not snapshot jobs for decision history");
+  }
 
   const eligible = allFiles.filter(
     (f) => f.id && f.name && isEligible(f.name, f.createdTime)
@@ -217,6 +226,15 @@ export async function runPipelineScan(): Promise<{
       });
       newJobsCreated++;
     }
+  }
+
+  if (decisionsBefore) {
+    await recordDecisions(decisionsBefore, {
+      eventType: "proposal",
+      actor: "system",
+      subjectId: null,
+      onlyNeedsReview: true,
+    });
   }
 
   return { newJobsCreated, alreadyQueued, totalScanned, filtered };

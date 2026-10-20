@@ -29,6 +29,7 @@ pnpm workspace, TypeScript throughout. After editing any `lib/*` package run `pn
 | Table | Purpose |
 |---|---|
 | `jobs` | One row per recording: Drive file, proposed/final YouTube title, status, YouTube video ID, duration |
+| `job_decisions` | Append-only history of proposals and review decisions (approve, edit, reject, restore, and every job a cascade, swap or merge changed), written by `lib/decisions.ts`. Rows are never updated or deleted; a write failure is logged and never blocks a review action |
 | `lecture_names` | Admin-editable "Serial Subject \| Teacher" picklist used when reviewing |
 | `schedule_slots` | The weekly timetable (day + time slot → subject/teacher, English and Arabic) |
 | `settings` | Single row: playlist, library/audio folders, auto-sync, interval, student invite code |

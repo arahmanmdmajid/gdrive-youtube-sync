@@ -22,6 +22,7 @@ import {
   deleteJobThumbnail,
 } from "../lib/thumbnails";
 import { logger } from "../lib/logger";
+import { withDecisionLog } from "../lib/decisions";
 
 const uploadThumbnail = multer({
   storage: multer.memoryStorage(),
@@ -343,16 +344,19 @@ router.delete("/jobs/:id", async (req, res) => {
   }
   // Soft-delete needs_review jobs so the pipeline won't re-scan them
   if (job.status === "needs_review") {
-    const [updated] = await db
-      .update(jobsTable)
-      .set({ status: "rejected", updatedAt: new Date() })
-      .where(eq(jobsTable.id, id))
-      .returning();
-    // Removing this job (often a junk duplicate) frees up its slot for the
-    // rest of the day's group — reflow now instead of waiting for a rescan.
-    if (job.contentType !== "audio" && job.driveCreatedTime && job.driveFileName) {
-      await reflowGroupTitles(job.driveCreatedTime, job.driveFileName);
-    }
+    const updated = await withDecisionLog({ eventType: "reject", actor: "admin", subjectId: id }, async () => {
+      const [row] = await db
+        .update(jobsTable)
+        .set({ status: "rejected", updatedAt: new Date() })
+        .where(eq(jobsTable.id, id))
+        .returning();
+      // Removing this job (often a junk duplicate) frees up its slot for the
+      // rest of the day's group — reflow now instead of waiting for a rescan.
+      if (job.contentType !== "audio" && job.driveCreatedTime && job.driveFileName) {
+        await reflowGroupTitles(job.driveCreatedTime, job.driveFileName);
+      }
+      return row;
+    });
     res.json(formatJob(updated));
     return;
   }
@@ -376,11 +380,14 @@ router.post("/jobs/:id/restore", async (req, res) => {
     res.status(409).json({ error: "Job is not rejected" });
     return;
   }
-  const [updated] = await db
-    .update(jobsTable)
-    .set({ status: "needs_review", updatedAt: new Date() })
-    .where(eq(jobsTable.id, id))
-    .returning();
+  const updated = await withDecisionLog({ eventType: "restore", actor: "admin", subjectId: id }, async () => {
+    const [row] = await db
+      .update(jobsTable)
+      .set({ status: "needs_review", updatedAt: new Date() })
+      .where(eq(jobsTable.id, id))
+      .returning();
+    return row;
+  });
   res.json(formatJob(updated));
 });
 
@@ -434,16 +441,23 @@ router.post("/jobs/:id/approve", async (req, res) => {
   const updates: Record<string, unknown> = { status: "pending", updatedAt: new Date() };
   if (bodyParsed.data.proposedDescription !== undefined) updates.proposedDescription = bodyParsed.data.proposedDescription;
 
-  if (bodyParsed.data.lectureName) {
-    const conflict = await applyLectureNameChange(id, job, bodyParsed.data.lectureName, bodyParsed.data.conflictResolution);
-    if (conflict) {
-      res.status(409).json(conflict);
-      return;
-    }
-    await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
-  } else {
-    if (bodyParsed.data.proposedTitle !== undefined) updates.proposedTitle = bodyParsed.data.proposedTitle;
-    await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
+  const conflict = await withDecisionLog(
+    { eventType: "approve", actor: "admin", subjectId: id, conflictResolution: bodyParsed.data.conflictResolution },
+    async () => {
+      if (bodyParsed.data.lectureName) {
+        const c = await applyLectureNameChange(id, job, bodyParsed.data.lectureName, bodyParsed.data.conflictResolution);
+        if (c) return c;
+        await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
+      } else {
+        if (bodyParsed.data.proposedTitle !== undefined) updates.proposedTitle = bodyParsed.data.proposedTitle;
+        await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
+      }
+      return null;
+    },
+  );
+  if (conflict) {
+    res.status(409).json(conflict);
+    return;
   }
 
   const [updated] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
@@ -474,18 +488,25 @@ router.patch("/jobs/:id", async (req, res) => {
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (bodyParsed.data.proposedDescription !== undefined) updates.proposedDescription = bodyParsed.data.proposedDescription;
 
-  if (bodyParsed.data.lectureName) {
-    const conflict = await applyLectureNameChange(id, job, bodyParsed.data.lectureName, bodyParsed.data.conflictResolution);
-    if (conflict) {
-      res.status(409).json(conflict);
-      return;
-    }
-    if (Object.keys(updates).length > 1) {
-      await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
-    }
-  } else {
-    if (bodyParsed.data.proposedTitle !== undefined) updates.proposedTitle = bodyParsed.data.proposedTitle;
-    await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
+  const conflict = await withDecisionLog(
+    { eventType: "edit", actor: "admin", subjectId: id, conflictResolution: bodyParsed.data.conflictResolution },
+    async () => {
+      if (bodyParsed.data.lectureName) {
+        const c = await applyLectureNameChange(id, job, bodyParsed.data.lectureName, bodyParsed.data.conflictResolution);
+        if (c) return c;
+        if (Object.keys(updates).length > 1) {
+          await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
+        }
+      } else {
+        if (bodyParsed.data.proposedTitle !== undefined) updates.proposedTitle = bodyParsed.data.proposedTitle;
+        await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
+      }
+      return null;
+    },
+  );
+  if (conflict) {
+    res.status(409).json(conflict);
+    return;
   }
 
   const [updated] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
