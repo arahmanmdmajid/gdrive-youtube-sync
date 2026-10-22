@@ -9,6 +9,7 @@ import libraryRouter from "./library";
 import thumbnailsRouter from "./thumbnails";
 import scheduleRouter from "./schedule";
 import driveFoldersRouter from "./driveFolders";
+import autoReviewRouter from "./autoReview";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(libraryRouter);
 router.use(thumbnailsRouter);
 router.use(scheduleRouter);
 router.use(driveFoldersRouter);
+router.use(autoReviewRouter);
 
 export default router;

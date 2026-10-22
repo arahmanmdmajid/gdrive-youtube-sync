@@ -7,6 +7,7 @@ import { reclaimOrphanedJobs } from "./reclaim";
 import { QuotaExceededError } from "./youtubeMatch";
 import { getYoutubeClient } from "./youtubeClient";
 import { markJobDone } from "./jobClaims";
+import { runAutoReview } from "./autoReviewRun";
 import { activeUploadJobIds, retryUnrecorded, unrecordedJobIds } from "./uploadRecovery";
 
 let workerInterval: ReturnType<typeof setInterval> | null = null;
@@ -62,6 +63,13 @@ export function startPipelineWorker() {
         logger.error({ err }, "Upload recovery failed");
       }
       await runPipelineScan();
+      try {
+        // Dry run of the day-approval rules: records verdicts, changes no job. Off unless AUTO_REVIEW_MODE=dry_run.
+        await runAutoReview();
+      } catch (err) {
+        // Never stops the uploads.
+        logger.error({ err }, "Auto-review dry run failed");
+      }
       await processNextPendingJob();
       await reconcilePlaylist();
     } catch (err) {

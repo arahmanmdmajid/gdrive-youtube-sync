@@ -177,6 +177,7 @@
     { "method": "GET", "path": "/jobs/:id", "purpose": "Get one job", "file": "routes/jobs.ts" },
     { "method": "DELETE", "path": "/jobs/:id", "purpose": "Soft-delete (needs_review → rejected) or hard-delete otherwise", "file": "routes/jobs.ts" },
     { "method": "POST", "path": "/jobs/:id/restore", "purpose": "rejected → needs_review", "file": "routes/jobs.ts" },
+    { "method": "GET", "path": "/auto-review/groups", "purpose": "live verdicts of the day-approval rules for every day with a needs_review job (read only, writes nothing)", "file": "routes/autoReview.ts" },
     { "method": "POST", "path": "/jobs/:id/undo", "purpose": "pending → needs_review, only while unclaimed (409 once processing)", "file": "routes/jobs.ts" },
     { "method": "DELETE", "path": "/jobs/:id/youtube", "purpose": "Delete the uploaded YouTube video and hard-delete the job", "file": "routes/jobs.ts" },
     { "method": "POST", "path": "/jobs/:id/approve", "purpose": "needs_review → pending, optionally retitling/cascading", "file": "routes/jobs.ts" },
