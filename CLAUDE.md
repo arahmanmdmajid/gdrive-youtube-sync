@@ -64,6 +64,7 @@ API: http://localhost:5000
 | `lib/api-client-react/src/generated/api.ts` | React Query hooks (manually extended) |
 | `artifacts/pipeline/src/pages/jobs.tsx` | Main review UI |
 | `artifacts/pipeline/src/pages/dashboard.tsx` | Stats + JobStatusBadge |
+| `artifacts/pipeline/src/pages/auto-review.tsx` | Read-only shadow-mode page: the rules' live verdicts per day, the agreement report and the activation gate |
 
 ---
 

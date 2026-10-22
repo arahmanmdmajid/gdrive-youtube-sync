@@ -301,3 +301,82 @@ export const ListJobsStatus = {
   removed: 'removed',
 } as const;
 
+
+// -- Auto-review (shadow mode, read only) --------------------------------------
+
+export interface AutoReviewReason {
+  check: string;
+  jobIds: number[];
+  message: string;
+}
+
+export interface AutoReviewLecture {
+  slotIndex: number;
+  slotTitle: string;
+  jobIds: number[];
+  titles: { jobId: number; title: string }[];
+}
+
+export interface AutoReviewGroup {
+  group: string;
+  date: string;
+  meetingCode: string;
+  verdict: 'clean' | 'hold';
+  fileCount: number;
+  reasons: AutoReviewReason[];
+  splitCount: number | null;
+  lectures: AutoReviewLecture[];
+  titleChanges: { jobId: number; from: string | null; to: string }[];
+  teachers?: Record<string, string | null>;
+  needsReviewJobIds: number[];
+}
+
+export interface AutoReviewGroups {
+  mode: string;
+  groups: AutoReviewGroup[];
+}
+
+export type AgreementOutcome = 'agreed' | 'false_clean' | 'held_correctly' | 'unnecessary_hold' | 'pending' | 'not_comparable';
+
+export interface AgreementTally {
+  days: number;
+  reviewedClean: number;
+  agreed: number;
+  falseClean: number;
+  heldCorrectly: number;
+  unnecessaryHold: number;
+  pending: number;
+  notComparable: number;
+}
+
+export interface AgreementDay {
+  key: string;
+  date: string;
+  code: string;
+  weekday: number;
+  verdict: 'clean' | 'hold' | null;
+  reasons: string[];
+  hard: boolean;
+  reviewed: boolean;
+  outcome: AgreementOutcome;
+  why: string;
+}
+
+export interface AgreementGateItem {
+  id: string;
+  text: string;
+  met: boolean | null;
+  value: string;
+}
+
+export interface AgreementReport {
+  generatedAt: string;
+  firstVerdictAt: string | null;
+  daysOfData: number | null;
+  totals: AgreementTally;
+  byCode: Record<string, AgreementTally>;
+  byWeekday: Record<string, AgreementTally>;
+  hardHeldCorrectly: number;
+  days: AgreementDay[];
+  gate: AgreementGateItem[];
+}
