@@ -78,6 +78,12 @@ export interface GroupFile {
   durationSec: number | null;
   sizeBytes: number | null;
   contentType?: "video" | "audio";
+  /**
+   * The teacher seen on screen in this recording (read from the name tile, see teacherTile.ts).
+   * undefined: no evidence was read. null: it was read and nobody was identified. Both count as "not
+   * identified". Never the text or the frames, only the verdict of the reading.
+   */
+  teacher?: string | null;
 }
 
 export interface GroupSlot {
@@ -85,6 +91,8 @@ export interface GroupSlot {
   title: string;
   /** Slot start in PKT as "HH:MM". */
   startTime: string;
+  /** The teacher scheduled for the slot, in the same spelling as the teacher evidence. Optional. */
+  teacher?: string;
 }
 
 export interface GroupInput {
@@ -111,6 +119,7 @@ export type CheckId =
   | "short_recording"
   | "no_valid_split"
   | "ambiguous_split"
+  | "teacher_mismatch"
   | "duplicate_suspected"
   | "recordings_overlap"
   | "start_order"
@@ -154,6 +163,17 @@ export interface SplitReading {
   capped: boolean;
 }
 
+/** How the teacher evidence was used for this day. */
+export interface TeacherEvidenceUse {
+  /** Recordings with an identified teacher, out of all non-rejected recordings. */
+  identified: number;
+  of: number;
+  /** How many of the length-valid groupings agree with the teachers seen. null when no evidence was used. */
+  consistentSplits: number | null;
+  /** True if the evidence narrowed several groupings down to one. Only possible when every recording is identified. */
+  resolvedAmbiguity: boolean;
+}
+
 export interface Verdict {
   verdict: "clean" | "hold";
   reasons: Reason[];
@@ -170,6 +190,7 @@ export interface Verdict {
   readings: SplitReading[];
   /** Up to a few alternative groupings (as lists of job ids per lecture) on an ambiguous day. */
   alternatives: number[][][];
+  teacherEvidence: TeacherEvidenceUse;
 }
 
 function parseDate(ddmmyyyy: string): number | null {
@@ -234,8 +255,9 @@ export function evaluateGroup(input: GroupInput, config: ReviewConfig = DEFAULT_
   const titleChanges: TitleChange[] = [];
   let readings: SplitReading[] = [];
   let alternatives: number[][][] = [];
+  let teacherEvidence: TeacherEvidenceUse = { identified: 0, of: 0, consistentSplits: null, resolvedAmbiguity: false };
 
-  const finish = (): Verdict => ({
+  const finish =(): Verdict => ({
     verdict: reasons.length === 0 ? "clean" : "hold",
     reasons,
     approvableJobIds: reasons.length === 0 ? files.filter((f) => f.status === "needs_review").map((f) => f.id) : [],
@@ -245,6 +267,7 @@ export function evaluateGroup(input: GroupInput, config: ReviewConfig = DEFAULT_
     titleChanges,
     readings,
     alternatives,
+    teacherEvidence,
   });
 
   // Rejected files do not count. Every other file counts, whatever its length. Work on a copy.
@@ -306,16 +329,52 @@ export function evaluateGroup(input: GroupInput, config: ReviewConfig = DEFAULT_
       ];
     } else if (asPart.splits.length === 0) {
       add("no_valid_split", [], `The ${files.length} recordings cannot be grouped into ${slotCount} lectures of normal length.`);
-    } else if (asPart.splits.length > 1) {
-      const toJobIds = (ends: number[]) => ends.map((end, i) => files.slice(i === 0 ? 0 : ends[i - 1], end).map((f) => f.id));
-      alternatives = asPart.splits.slice(0, config.alternativesListed).map(toJobIds);
-      add(
-        "ambiguous_split",
-        [],
-        `${asPart.splits.length}${asPart.capped ? "+" : ""} different ways to group the ${files.length} recordings into ${slotCount} lectures; the first ${alternatives.length} are listed.`,
-      );
     } else {
-      unique = asPart.splits[0];
+      // The teacher seen on screen (when it was read) says which lecture a recording belongs to: it must
+      // be the slot's teacher. Evidence can always add a hold; it can only RESOLVE an ambiguity when every
+      // recording is identified, because an unidentified one could belong anywhere.
+      const groupsOf = (ends: number[]) => ends.map((end, i) => files.slice(i === 0 ? 0 : ends[i - 1], end));
+      const seen = (f: GroupFile) => (typeof f.teacher === "string" && f.teacher !== "" ? f.teacher : null);
+      const disagreeing = (ends: number[]) =>
+        groupsOf(ends).flatMap((group, i) => {
+          const want = input.slots[i].teacher;
+          return want ? group.filter((f) => seen(f) !== null && seen(f) !== want).map((f) => f.id) : [];
+        });
+      const identified = files.filter((f) => seen(f) !== null).length;
+      teacherEvidence = { identified, of: files.length, consistentSplits: null, resolvedAmbiguity: false };
+
+      let candidates = asPart.splits;
+      let usedAllTeachers = false;
+      if (identified > 0 && input.slots.some((s) => s.teacher)) {
+        const agreeing = asPart.splits.filter((ends) => disagreeing(ends).length === 0);
+        teacherEvidence.consistentSplits = agreeing.length;
+        if (agreeing.length === 0) {
+          const ids = asPart.splits.length === 1 ? disagreeing(asPart.splits[0]) : [];
+          add(
+            "teacher_mismatch",
+            ids,
+            asPart.splits.length === 1
+              ? "The teacher seen on screen does not match the lecture this recording falls in."
+              : "No way to group the recordings agrees with the teachers seen on screen.",
+          );
+          candidates = [];
+        } else if (identified === files.length) {
+          candidates = agreeing;
+          usedAllTeachers = true;
+        }
+      }
+
+      if (candidates.length === 1) {
+        unique = candidates[0];
+        teacherEvidence.resolvedAmbiguity = usedAllTeachers && asPart.splits.length > 1;
+      } else if (candidates.length > 1) {
+        alternatives = candidates.slice(0, config.alternativesListed).map((ends) => groupsOf(ends).map((g) => g.map((f) => f.id)));
+        add(
+          "ambiguous_split",
+          [],
+          `${candidates.length}${asPart.capped && !usedAllTeachers ? "+" : ""} different ways to group the ${files.length} recordings into ${slotCount} lectures${usedAllTeachers ? " even after using the teachers seen on screen" : ""}; the first ${alternatives.length} are listed.`,
+        );
+      }
     }
   }
   if (short.length) {

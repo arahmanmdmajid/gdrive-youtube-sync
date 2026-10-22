@@ -143,6 +143,7 @@ test("dry run: verdict rows are written for the needs_review jobs and no job cha
     assert.equal(d.splitCount, 1);
     assert.equal(d.lectures.length, 6, "the grouping is recorded");
     assert.deepEqual(d.titleChanges, []);
+    assert.deepEqual(d.teacherEvidence, { identified: 0, of: 6, consistentSplits: null, resolvedAmbiguity: false }, "no evidence read yet");
     assert.equal(d.group, KEY);
     assert.ok(typeof d.signature === "string" && d.signature.length > 0);
   }
