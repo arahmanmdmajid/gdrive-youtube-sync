@@ -15,7 +15,7 @@ import {
   SidebarInset
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Activity, HardDrive, List, Settings, Play, Sun, Moon, BookOpen, CalendarDays } from "lucide-react";
+import { Activity, HardDrive, List, Settings, Play, Sun, Moon, BookOpen, CalendarDays, ListChecks } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -26,6 +26,7 @@ export function Layout({ children }: { children: ReactNode }) {
     { name: "Dashboard", href: "/", icon: Activity },
     { name: "Jobs", href: "/jobs", icon: List },
     { name: "Drive Files", href: "/drive", icon: HardDrive },
+    { name: "Auto-review", href: "/auto-review", icon: ListChecks },
     { name: "Library", href: "/library", icon: BookOpen },
     { name: "Schedule", href: "/schedule", icon: CalendarDays },
     { name: "Settings", href: "/settings", icon: Settings },

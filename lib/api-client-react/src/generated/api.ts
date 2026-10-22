@@ -18,6 +18,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AgreementReport,
+  AutoReviewGroups,
   ApproveJobInput,
   PatchJobInput,
   RenameYoutubeTitleInput,
@@ -376,3 +378,15 @@ export const useDeleteScheduleSlot = makeMutation(
   'deleteScheduleSlot',
   ({ dayOfWeek, timeSlot }: { dayOfWeek: number; timeSlot: string }, r) => deleteScheduleSlot(dayOfWeek, timeSlot, r),
 );
+
+// -- Auto-review (shadow mode, read only) --------------------------------------
+
+export const getAutoReviewGroups = (options?: RequestInit): Promise<AutoReviewGroups> =>
+  send<AutoReviewGroups>(`/api/auto-review/groups`, 'GET', options);
+export const getAutoReviewGroupsQueryKey = () => [`/api/auto-review/groups`] as const;
+export const useAutoReviewGroups = makeQuery(getAutoReviewGroupsQueryKey(), getAutoReviewGroups);
+
+export const getAutoReviewAgreement = (options?: RequestInit): Promise<AgreementReport> =>
+  send<AgreementReport>(`/api/auto-review/agreement`, 'GET', options);
+export const getAutoReviewAgreementQueryKey = () => [`/api/auto-review/agreement`] as const;
+export const useAutoReviewAgreement = makeQuery(getAutoReviewAgreementQueryKey(), getAutoReviewAgreement);

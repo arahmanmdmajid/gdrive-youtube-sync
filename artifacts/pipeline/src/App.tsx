@@ -22,6 +22,7 @@ const Layout = lazy(() => import("@/components/layout").then((m) => ({ default: 
 const Dashboard = lazy(() => import("@/pages/dashboard"));
 const Jobs = lazy(() => import("@/pages/jobs"));
 const Drive = lazy(() => import("@/pages/drive"));
+const AutoReview = lazy(() => import("@/pages/auto-review"));
 const Settings = lazy(() => import("@/pages/settings"));
 const Library = lazy(() => import("@/pages/library"));
 const Schedule = lazy(() => import("@/pages/schedule"));
@@ -130,6 +131,7 @@ function AdminRouter() {
           <Route path="/" component={Dashboard} />
           <Route path="/jobs" component={Jobs} />
           <Route path="/drive" component={Drive} />
+          <Route path="/auto-review" component={AutoReview} />
           <Route path="/settings" component={Settings} />
           <Route path="/library" component={Library} />
           <Route path="/schedule" component={Schedule} />

@@ -224,6 +224,8 @@ Invoke-RestMethod -Method Put -Uri http://localhost:5000/api/teacher-aliases -Co
 
 ## Agreement report (shadow mode)
 
+The same report, with the rules' live verdict for every day still waiting for review, is on the dashboard page **Auto-review** (`/auto-review`, read only: no button on it approves, rejects or uploads).
+
 While the rules only say clean or hold and you still decide, `GET /api/auto-review/agreement` measures how often they agreed with you and shows where the gate for turning them on stands (issue #27, section 7). It reads the history table and the jobs and writes nothing: `Invoke-RestMethod http://localhost:5000/api/auto-review/agreement | ConvertTo-Json -Depth 6`. It needs the `job_decisions` table (otherwise it answers 503 with the command to create it) and only covers days from when the dry run was on.
 
 Per day (PKT date and meeting code) it takes **the verdict you could have seen**: the latest one recorded before the first thing you did to any recording of that day (approve, edit, reject, restore, undo). A day is **reviewed** when none of its recordings is still in review and you acted at least once.
