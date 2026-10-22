@@ -371,3 +371,76 @@ test("the signature changes when a recording is read as someone else", { skip },
   const b = (await groupOf(ids, { useTeacher: true })).signature;
   assert.notEqual(a, b);
 });
+
+// ── The agreement report, end to end ───────────────────────────────────────
+
+/** Approves jobs the way the app does (a conditional update inside withDecisionLog), optionally retitling some. */
+async function approveLikeTheApp(ids: number[], newTitle: (i: number) => string | undefined = () => undefined) {
+  const { withDecisionLog } = await import("./decisions");
+  const claims = await import("./jobClaims");
+  for (const [i, id] of ids.entries()) {
+    await withDecisionLog({ eventType: "approve", actor: "admin", subjectId: id }, async () => {
+      const title = newTitle(i);
+      if (title) await m.db.update(m.jobsTable).set({ proposedTitle: title }).where(m.eq(m.jobsTable.id, id));
+      await claims.approveIfNeedsReview(id, {});
+    });
+  }
+}
+const reportDay = async () => (await (await import("./agreementData")).loadAgreementReport()).days.find((d) => d.key === KEY);
+
+test("agreement report: a clean day approved as the rules said is agreed", { skip }, async () => {
+  const ids = (await seedCleanDay()).map((j) => j.id);
+  await m.run.runAutoReview("dry_run");
+  assert.equal((await reportDay())?.outcome, "pending", "before the reviewer acts");
+  await approveLikeTheApp(ids);
+  const d = await reportDay();
+  assert.equal(d?.verdict, "clean");
+  assert.equal(d?.outcome, "agreed");
+  assert.equal(d?.reviewed, true);
+});
+
+test("agreement report: a title changed after a clean verdict is a false clean", { skip }, async () => {
+  const ids = (await seedCleanDay()).map((j) => j.id);
+  await m.run.runAutoReview("dry_run");
+  await approveLikeTheApp(ids, (i) => (i === 3 ? "A title typed by hand" : undefined));
+  const d = await reportDay();
+  assert.equal(d?.verdict, "clean");
+  assert.equal(d?.outcome, "false_clean");
+});
+
+test("agreement report: a hold approved unchanged is unnecessary, and with a title change it was held correctly", { skip }, async () => {
+  const day = buildDay(AMBIGUOUS);
+  const a = (await seedCleanDay("needs_review", day)).map((j) => j.id);
+  await m.run.runAutoReview("dry_run");
+  await approveLikeTheApp(a);
+  const unchanged = await reportDay();
+  assert.equal(unchanged?.verdict, "hold");
+  assert.equal(unchanged?.outcome, "unnecessary_hold");
+  assert.equal(unchanged?.hard, true, "an ambiguous split is a hard day");
+
+  await m.db.delete(m.decisions).where(m.inArray(m.decisions.jobId, a));
+  await m.db.delete(m.jobsTable).where(m.inArray(m.jobsTable.id, a));
+  jobIds.length = 0;
+
+  const b = (await seedCleanDay("needs_review", day)).map((j) => j.id);
+  await m.run.runAutoReview("dry_run");
+  await approveLikeTheApp(b, (i) => (i === 2 ? "A different title" : undefined));
+  assert.equal((await reportDay())?.outcome, "held_correctly");
+});
+
+test("agreement report: a day approved before any verdict was recorded is not comparable", { skip }, async () => {
+  const ids = (await seedCleanDay()).map((j) => j.id);
+  await approveLikeTheApp(ids);
+  await m.run.runAutoReview("dry_run"); // nothing in review any more: no verdict is recorded
+  const d = await reportDay();
+  assert.equal(d?.outcome, "not_comparable");
+});
+
+test("agreement report: building it changes nothing", { skip }, async () => {
+  const ids = (await seedCleanDay()).map((j) => j.id);
+  await m.run.runAutoReview("dry_run");
+  await approveLikeTheApp(ids);
+  const before = [await jobsSnapshot(ids), (await rowsFor(ids)).length];
+  await (await import("./agreementData")).loadAgreementReport();
+  assert.deepEqual([await jobsSnapshot(ids), (await rowsFor(ids)).length], before);
+});

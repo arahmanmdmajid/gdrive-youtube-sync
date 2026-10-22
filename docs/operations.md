@@ -222,6 +222,17 @@ Invoke-RestMethod -Method Put -Uri http://localhost:5000/api/teacher-aliases -Co
 - A day can be settled by teacher evidence only when every recording of the day has a usable read. At two recordings per tick and ticks every 10 minutes, a backlog of 100 recordings takes many hours to read, oldest first. Only recordings in review are read, so a day that already has a finished recording is judged by length only.
 - Nothing is approved or changed by any of this. Windows only (the OCR).
 
+## Agreement report (shadow mode)
+
+While the rules only say clean or hold and you still decide, `GET /api/auto-review/agreement` measures how often they agreed with you and shows where the gate for turning them on stands (issue #27, section 7). It reads the history table and the jobs and writes nothing: `Invoke-RestMethod http://localhost:5000/api/auto-review/agreement | ConvertTo-Json -Depth 6`. It needs the `job_decisions` table (otherwise it answers 503 with the command to create it) and only covers days from when the dry run was on.
+
+Per day (PKT date and meeting code) it takes **the verdict you could have seen**: the latest one recorded before the first thing you did to any recording of that day (approve, edit, reject, restore, undo). A day is **reviewed** when none of its recordings is still in review and you acted at least once.
+- **Clean verdict:** **agreed** if no recording the verdict covered was rejected and every one of them now has exactly the title the verdict gave it (so the `| Part N` titles count); otherwise **false clean**, which the gate allows none of. Approving the scan's own shifted titles on a day the rules said to change is a false clean too.
+- **Hold verdict:** **held correctly** if you changed a title or rejected something; **unnecessary hold** if you approved everything as proposed (harmless, it measures how much work the rules would not have saved); **pending** if not reviewed yet. Holds with a short recording, a possible skipped class, an ambiguous or impossible grouping, a count mismatch or a teacher mismatch are **hard days**.
+- **Not comparable:** reviewed with no verdict recorded before you acted (for example before the dry run was on). Counted separately and left out of the rates.
+
+The report gives totals, the same by meeting code and by weekday, every day with its verdict, reasons, outcome and one sentence of why, and the gate as a checklist: at least 28 days of verdicts, at least 30 clean days reviewed, both codes and Mon, Tue, Fri, Sat each covered by reviewed clean days (it lists what is missing), at least 5 hard days correctly held, and no false clean (not met until something has been measured). The backlog replay, the undo, recovery and kill-switch tests and your explicit approval are listed as manual. Active mode stays off until these are met and you approve.
+
 ## Checking health
 
 ```bash

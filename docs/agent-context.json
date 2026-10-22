@@ -181,6 +181,7 @@
     { "method": "PUT", "path": "/teacher-aliases", "purpose": "replace the whole alias table; body { aliases: [{ teacher, strong?, allOf?, weak? }] }", "file": "routes/teacherTile.ts" },
     { "method": "GET", "path": "/teacher-reads", "purpose": "stored results of reading recordings' name tiles (verdicts only)", "file": "routes/teacherTile.ts" },
     { "method": "POST", "path": "/teacher-reads/run", "purpose": "read up to ?limit (default 2, max 10) recordings now with ffmpeg and Windows OCR; one run at a time", "file": "routes/teacherTile.ts" },
+    { "method": "GET", "path": "/auto-review/agreement", "purpose": "how often the rules' verdicts agreed with the reviewer's decisions per day, by code and weekday, and the gate checklist for active mode (read only; 503 if job_decisions is missing)", "file": "routes/autoReview.ts" },
     { "method": "GET", "path": "/auto-review/groups", "purpose": "live verdicts of the day-approval rules for every day with a needs_review job (read only, writes nothing)", "file": "routes/autoReview.ts" },
     { "method": "POST", "path": "/jobs/:id/undo", "purpose": "pending → needs_review, only while unclaimed (409 once processing)", "file": "routes/jobs.ts" },
     { "method": "DELETE", "path": "/jobs/:id/youtube", "purpose": "Delete the uploaded YouTube video and hard-delete the job", "file": "routes/jobs.ts" },
