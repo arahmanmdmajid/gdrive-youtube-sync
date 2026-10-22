@@ -152,7 +152,9 @@ A user object means it works; `401 Unauthorized` means it does not match. The fr
 
 ## Troubleshooting
 
-**A job is stuck in `processing`.** It means the process died mid-upload. Restart `dtt-api`; `reclaimOrphanedJobs` adopts the upload if YouTube really has the finished video, otherwise requeues the job. Do not delete the YouTube video first — in past cases the upload had actually succeeded.
+**A job is stuck in `processing`.** It means the process died mid-upload, or YouTube accepted the video but the database would not record it. The worker sweeps these every tick (after 15 minutes) and at startup: it adopts the upload if YouTube really has the finished video, leaves the job alone if YouTube cannot be asked or the video is still processing, and requeues it only when the channel has no such video. Restart `dtt-api` to force a sweep. Do not delete the YouTube video first — in past cases the upload had actually succeeded.
+
+**Log line `UPLOADED TO YOUTUBE BUT NOT RECORDED`.** The video is on YouTube and the log names its video id; the job stays `processing` and is finished from that id on a later tick (look for `Recorded an upload that could not be saved earlier`). If the process is restarted first, the startup sweep matches by title instead. A job showing `Waiting for an earlier upload with this title to finish processing on YouTube` is not stuck: an earlier upload with the same title is still processing, and nothing is sent until it finishes (or is an hour old).
 
 **YouTube shows "processing will begin shortly" forever (duration `P0D`).** That upload was interrupted and is a dead husk, not a slow transcode. Never adopt it. The pipeline checks completeness before treating a title match as a success; delete husks in YouTube Studio by video ID and let the job re-upload.
 

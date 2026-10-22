@@ -7,7 +7,8 @@ import { buildYoutubeTitle, buildYoutubeDescription } from "./schedule";
 import { prepareAudioForYoutube } from "./audioMux";
 import { extractSerial, getSubjectThumbnailPath } from "./thumbnails";
 import { logger } from "./logger";
-import { claimPendingJob, uploadBlockReason } from "./jobClaims";
+import { claimPendingJob, markJobDone, uploadBlockReason } from "./jobClaims";
+import { markUploadActive, markUploadInactive, performUpload, UploadNotRecordedError } from "./uploadRecovery";
 import { withDecisionLog } from "./decisions";
 import { isTransient, isAuthError, isQuotaError, QuotaExceededError, findVideoOnYoutube, withRetry } from "./youtubeMatch";
 
@@ -25,6 +26,7 @@ async function uploadJob(queued: typeof jobsTable.$inferSelect): Promise<boolean
     return false;
   }
 
+  markUploadActive(job.id);
   try {
     const [settings] = await db.select().from(settingsTable).limit(1);
     const youtube = getYoutubeClient();
@@ -49,35 +51,6 @@ async function uploadJob(queued: typeof jobsTable.$inferSelect): Promise<boolean
       return false;
     }
 
-    // ── Dedup check ──────────────────────────────────────────────────────────
-    // If this job previously failed with a network/auth error, the video may
-    // have already been uploaded to YouTube but the response was lost. Check
-    // before uploading to avoid creating a duplicate.
-    if (job.errorMessage && (isTransient({ message: job.errorMessage } as Error) || isAuthError({ message: job.errorMessage } as Error))) {
-      logger.info({ jobId: job.id, title }, "Previous auth/network failure — checking YouTube for existing upload");
-      const match = await findVideoOnYoutube(youtube, title);
-      if (match && !match.complete) {
-        logger.warn(
-          { jobId: job.id, videoId: match.videoId },
-          "Found a same-titled but incomplete upload — ignoring it and uploading again",
-        );
-      }
-      if (match?.complete) {
-        const existingId = match.videoId;
-        logger.info({ jobId: job.id, existingId }, "Video already exists on YouTube — marking as done without re-uploading");
-        await db.update(jobsTable)
-          .set({
-            status: "done",
-            youtubeVideoId: existingId,
-            youtubeUrl: `https://www.youtube.com/watch?v=${existingId}`,
-            youtubeTitle: title,
-            updatedAt: new Date(),
-          })
-          .where(eq(jobsTable.id, job.id));
-        return true;
-      }
-    }
-
     logger.info({ jobId: job.id, title, contentType: job.contentType }, "Starting upload to YouTube");
 
     // Audio jobs have no video stream of their own — mux the source audio
@@ -88,42 +61,32 @@ async function uploadJob(queued: typeof jobsTable.$inferSelect): Promise<boolean
       ? await prepareAudioForYoutube(job.driveFileId, title)
       : null;
 
-    let uploadResponse;
+    let outcome;
     try {
-      const fileStream = audioMux
-        ? fs.createReadStream(audioMux.mp4Path)
-        : await streamDriveFile(job.driveFileId);
-
-      uploadResponse = await withRetry(() =>
-        youtube.videos.insert({
-          part: ["snippet", "status"],
-          requestBody: {
-            snippet: { title, description },
-            status: { privacyStatus: "unlisted" },
-          },
-          media: {
-            mimeType: "video/mp4",
-            body: fileStream,
-          },
-        })
+      // Looks for an existing upload first, every time, then adopts it, waits for it or uploads, and
+      // records the result with retries. The video is marked done before the best-effort playlist
+      // and thumbnail steps below. See uploadRecovery.ts.
+      outcome = await performUpload(
+        { id: job.id, title, description },
+        {
+          youtube,
+          openStream: async () => (audioMux ? fs.createReadStream(audioMux.mp4Path) : await streamDriveFile(job.driveFileId)),
+          write: markJobDone,
+        },
       );
     } finally {
       if (audioMux) await audioMux.cleanup();
     }
 
-    const videoId = uploadResponse.data.id ?? "";
-    const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-    // Save video as done first — playlist insertion and thumbnail are best-effort
-    await db.update(jobsTable)
-      .set({
-        status: "done",
-        youtubeVideoId: videoId,
-        youtubeUrl,
-        youtubeTitle: title,
-        updatedAt: new Date(),
-      })
-      .where(eq(jobsTable.id, job.id));
+    if (outcome.kind === "waiting") {
+      // A same-titled upload is still processing on YouTube, possibly this job's own earlier attempt.
+      // Back to pending (not failed) so the next tick looks again. Nothing was sent.
+      await db.update(jobsTable)
+        .set({ status: "pending", errorMessage: "Waiting for an earlier upload with this title to finish processing on YouTube", updatedAt: new Date() })
+        .where(eq(jobsTable.id, job.id));
+      return false;
+    }
+    const videoId = outcome.videoId;
 
     if (settings?.youtubePlaylistId && videoId) {
       try {
@@ -168,6 +131,11 @@ async function uploadJob(queued: typeof jobsTable.$inferSelect): Promise<boolean
     return true;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+
+    // The video is on YouTube but the database would not record it. Leave the job processing (never
+    // failed: a retry would upload a second copy). It is finished from the saved video id, see
+    // retryUnrecorded in the worker tick.
+    if (err instanceof UploadNotRecordedError) return true;
 
     // ── Quota exceeded: reset to pending and stop the batch ──────────────────
     if (isQuotaError(err)) {
@@ -228,6 +196,8 @@ async function uploadJob(queued: typeof jobsTable.$inferSelect): Promise<boolean
       .set({ status: "failed", errorMessage: message, updatedAt: new Date() })
       .where(eq(jobsTable.id, job.id));
     return true;
+  } finally {
+    markUploadInactive(job.id);
   }
 }
 

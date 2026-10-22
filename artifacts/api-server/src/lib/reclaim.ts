@@ -3,13 +3,8 @@ import { eq } from "drizzle-orm";
 import { getYoutubeClient } from "./youtubeClient";
 import { buildYoutubeTitle } from "./schedule";
 import { logger } from "./logger";
-import { findVideoOnYoutube, type YoutubeMatch } from "./youtubeMatch";
+import { findVideoOnYoutube, INCOMPLETE_UPLOAD_GRACE_MS, type YoutubeMatch } from "./youtubeMatch";
 
-/**
- * How long a same-titled but not-yet-complete upload is given to finish
- * transcoding before it's treated as a husk from an interrupted upload.
- */
-const INCOMPLETE_UPLOAD_GRACE_MS = 60 * 60 * 1000;
 
 /**
  * Reclaims jobs left stranded in "processing" by a process death.
@@ -30,8 +25,17 @@ const INCOMPLETE_UPLOAD_GRACE_MS = 60 * 60 * 1000;
  * title first and adopt the existing upload rather than re-uploading it, which
  * is what previously forced a manual delete-and-rescan.
  */
-export async function reclaimOrphanedJobs(): Promise<{ recovered: number; requeued: number }> {
-  const orphaned = await db.select().from(jobsTable).where(eq(jobsTable.status, "processing"));
+export async function reclaimOrphanedJobs(
+  opts: { excludeIds?: number[]; minAgeMs?: number } = {},
+): Promise<{ recovered: number; requeued: number }> {
+  // At worker start nothing is uploading, so every processing job is orphaned. Run later (the tick),
+  // skip the jobs this process is uploading or still has to record, and only take jobs that have
+  // sat in processing for a while.
+  const exclude = new Set(opts.excludeIds ?? []);
+  const cutoff = opts.minAgeMs ? Date.now() - opts.minAgeMs : null;
+  const orphaned = (await db.select().from(jobsTable).where(eq(jobsTable.status, "processing"))).filter(
+    (j) => !exclude.has(j.id) && (cutoff === null || j.updatedAt.getTime() <= cutoff),
+  );
   if (orphaned.length === 0) return { recovered: 0, requeued: 0 };
 
   logger.warn({ count: orphaned.length }, "Found jobs stranded in processing — reclaiming");
@@ -46,7 +50,7 @@ export async function reclaimOrphanedJobs(): Promise<{ recovered: number; requeu
     try {
       match = await findVideoOnYoutube(youtube, title);
     } catch (err) {
-      logger.warn({ jobId: job.id, err }, "Reclaim: YouTube lookup failed — leaving job as-is for the next restart");
+      logger.warn({ jobId: job.id, err }, "Reclaim: YouTube lookup failed — leaving job as-is for the next sweep");
       continue;
     }
 
@@ -60,7 +64,7 @@ export async function reclaimOrphanedJobs(): Promise<{ recovered: number; requeu
       if (ageMs < INCOMPLETE_UPLOAD_GRACE_MS) {
         logger.info(
           { jobId: job.id, videoId: match.videoId, ageMs },
-          "Reclaim: match still transcoding — leaving job processing, will re-check next startup",
+          "Reclaim: match still transcoding — leaving job processing, will re-check on the next sweep",
         );
         continue;
       }

@@ -23,6 +23,9 @@ await build({
   bundle: true,
   format: "esm",
   logLevel: "warning",
+  // The logger starts a pino-pretty worker thread outside production, which a bundled test cannot
+  // load, and its output would bury the test results.
+  define: { "process.env.NODE_ENV": '"production"', "process.env.LOG_LEVEL": '"silent"' },
   external: ["pg-native", "googleapis"],
   // pg and other CommonJS packages are bundled into an ES module, so give them require/__dirname.
   banner: {
