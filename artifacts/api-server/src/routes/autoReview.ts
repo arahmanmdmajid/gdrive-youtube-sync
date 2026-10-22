@@ -22,6 +22,7 @@ router.get("/auto-review/groups", async (_req, res) => {
       titleChanges: g.verdict.titleChanges,
       readings: g.verdict.readings,
       alternatives: g.verdict.alternatives,
+      teacherEvidence: g.verdict.teacherEvidence,
       needsReviewJobIds: g.needsReviewJobIds,
       approvableJobIds: g.verdict.approvableJobIds,
     })),
