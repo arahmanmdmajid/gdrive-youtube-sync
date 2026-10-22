@@ -42,7 +42,36 @@ const failed = (error: string, framesRead = 0): ReadResult => ({
   error,
 });
 
-const defaultMakeTempDir = () => fs.mkdtemp(path.join(os.tmpdir(), "dtt-tile-"));
+/** Prefix of the temporary folders that hold a recording's frames while it is being read. */
+export const TILE_DIR_PREFIX = "dtt-tile-";
+
+const defaultMakeTempDir = () => fs.mkdtemp(path.join(os.tmpdir(), TILE_DIR_PREFIX));
+
+/**
+ * Removes frame folders left behind when a read was cut short (the process was killed or crashed, so the
+ * `finally` never ran). Only folders with the reader's prefix that have not been touched for a while, so a
+ * read in progress is never disturbed. Returns how many were removed. Frames are real participants' faces:
+ * they must not be left on disk.
+ */
+export async function sweepTileFolders(opts: { baseDir?: string; olderThanMs?: number; now?: number } = {}): Promise<number> {
+  const base = opts.baseDir ?? os.tmpdir();
+  const olderThanMs = opts.olderThanMs ?? 10 * 60 * 1000;
+  const now = opts.now ?? Date.now();
+  let removed = 0;
+  for (const entry of await fs.readdir(base, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith(TILE_DIR_PREFIX)) continue;
+    const dir = path.join(base, entry.name);
+    try {
+      const { mtimeMs } = await fs.stat(dir);
+      if (now - mtimeMs < olderThanMs) continue;
+      await fs.rm(dir, { recursive: true, force: true });
+      removed++;
+    } catch {
+      /* in use or already gone: leave it, it is tried again next time */
+    }
+  }
+  return removed;
+}
 const defaultRemoveDir = (dir: string) => fs.rm(dir, { recursive: true, force: true });
 
 /** An error message that is safe to store: our own wording or a short cut of an error, never frame text. */

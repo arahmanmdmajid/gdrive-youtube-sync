@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { readRecordingTeacher, type ReaderDeps } from "./teacherReader";
+import { readRecordingTeacher, sweepTileFolders, TILE_DIR_PREFIX, type ReaderDeps } from "./teacherReader";
 import { parseOcrOutput } from "./windowsOcr";
 import { entriesFromRows, rowsFromEntries, aliasHash, parseAliasBody } from "./teacherAliasTable";
 import type { AliasEntry } from "./teacherTile";
@@ -162,4 +162,36 @@ test("the alias body is validated and normalized, and one problem rejects the ta
   assert.match(bad({ aliases: [{ teacher: "A", strong: ["two words"] }] }), /letters only/);
   assert.match(bad({ aliases: [{ teacher: "A", strong: ["a1"] }] }), /letters only/);
   assert.match(bad({ aliases: [{ teacher: "A", strong: "alpha" }] }), /list of words/);
+});
+
+// ── Frames left behind by a read that was cut short ────────────────────────
+
+test("a sweep removes old frame folders, keeps a recent one (a read in progress) and touches nothing else", async () => {
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), "dtt-sweep-test-"));
+  try {
+    const mk = async (name: string, ageMs: number) => {
+      const d = path.join(base, name);
+      await fs.mkdir(d);
+      await fs.writeFile(path.join(d, "frame1.jpg"), "not really a jpeg");
+      const t = new Date(Date.now() - ageMs);
+      await fs.utimes(d, t, t);
+      return d;
+    };
+    const old1 = await mk(`${TILE_DIR_PREFIX}old1`, 60 * 60 * 1000);
+    const old2 = await mk(`${TILE_DIR_PREFIX}old2`, 30 * 60 * 1000);
+    const recent = await mk(`${TILE_DIR_PREFIX}recent`, 60 * 1000);
+    const other = await mk("something-else", 24 * 60 * 60 * 1000);
+    await fs.writeFile(path.join(base, `${TILE_DIR_PREFIX}file-not-folder`), "x");
+
+    assert.equal(await sweepTileFolders({ baseDir: base }), 2);
+    assert.equal(existsSync(old1), false);
+    assert.equal(existsSync(old2), false);
+    assert.equal(existsSync(recent), true, "a recent folder may belong to a read in progress");
+    assert.equal(existsSync(other), true, "a folder without the reader's prefix is never touched");
+    assert.equal(existsSync(path.join(base, `${TILE_DIR_PREFIX}file-not-folder`)), true);
+    assert.equal(await sweepTileFolders({ baseDir: base }), 0, "nothing left to remove");
+    assert.equal(await sweepTileFolders({ baseDir: base, olderThanMs: 0 }), 1, "with no age limit the recent one goes too");
+  } finally {
+    await fs.rm(base, { recursive: true, force: true });
+  }
 });

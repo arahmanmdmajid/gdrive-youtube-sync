@@ -3,7 +3,7 @@ import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import { logger } from "./logger";
 import type { AliasEntry } from "./teacherTile";
 import { aliasHash, entriesFromRows, rowsFromEntries, type AliasRow } from "./teacherAliasTable";
-import { readRecordingTeacher, type ReadResult, type ReaderDeps } from "./teacherReader";
+import { readRecordingTeacher, sweepTileFolders, type ReadResult, type ReaderDeps } from "./teacherReader";
 import { extractTileFrames } from "./tileFrames";
 import { windowsOcr } from "./windowsOcr";
 
@@ -102,6 +102,8 @@ export async function runReads(
   if (running) return { skipped: "a run is already in progress", attempted: 0, results: [] };
   running = true;
   try {
+    // Frames left by a read that was cut short by a crash or a restart must not stay on disk.
+    await sweepTileFolders().catch(() => undefined);
     const aliases = await loadAliases();
     if (aliases.length === 0) return { skipped: "the alias table is empty", attempted: 0, results: [] };
     const hash = aliasHash(aliases);
@@ -134,4 +136,23 @@ export async function runReads(
 
 export async function listReads() {
   return db.select().from(recordingTeacherReadsTable).orderBy(asc(recordingTeacherReadsTable.jobId));
+}
+
+/**
+ * The teacher each recording was read with, for the reads that can be used: made with the CURRENT alias
+ * table and finished ok. A read that found nobody maps to null ("read, not identified"). A failed read, an
+ * out-of-date read and no read are simply absent: no evidence.
+ */
+export async function loadTeacherEvidence(jobIds: number[]): Promise<Map<number, string | null>> {
+  const evidence = new Map<number, string | null>();
+  if (jobIds.length === 0) return evidence;
+  const aliases = await loadAliases();
+  if (aliases.length === 0) return evidence;
+  const hash = aliasHash(aliases);
+  const reads = await db
+    .select({ jobId: recordingTeacherReadsTable.jobId, teacher: recordingTeacherReadsTable.teacher })
+    .from(recordingTeacherReadsTable)
+    .where(and(inArray(recordingTeacherReadsTable.jobId, jobIds), eq(recordingTeacherReadsTable.aliasHash, hash), eq(recordingTeacherReadsTable.status, "ok")));
+  for (const r of reads) evidence.set(r.jobId, r.teacher);
+  return evidence;
 }

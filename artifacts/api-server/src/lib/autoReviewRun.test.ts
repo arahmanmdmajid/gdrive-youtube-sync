@@ -20,6 +20,9 @@ type Mods = {
   decisions: typeof import("@workspace/db").jobDecisionsTable;
   slotsTable: typeof import("@workspace/db").scheduleSlotsTable;
   run: typeof import("./autoReviewRun");
+  reads: typeof import("@workspace/db").recordingTeacherReadsTable;
+  aliasesTable: typeof import("@workspace/db").teacherAliasesTable;
+  tr: typeof import("./teacherReads");
   eq: typeof import("drizzle-orm").eq;
   inArray: typeof import("drizzle-orm").inArray;
 };
@@ -40,6 +43,9 @@ before(async () => {
     decisions: dbMod.jobDecisionsTable,
     slotsTable: dbMod.scheduleSlotsTable,
     run: await import("./autoReviewRun"),
+    reads: dbMod.recordingTeacherReadsTable,
+    aliasesTable: dbMod.teacherAliasesTable,
+    tr: await import("./teacherReads"),
     eq: orm.eq,
     inArray: orm.inArray,
   };
@@ -56,7 +62,11 @@ before(async () => {
 
 // Each test starts from an empty day, so remove what it seeded.
 afterEach(async () => {
-  if (skip || !m || jobIds.length === 0) return;
+  if (skip || !m) return;
+  await m.db.delete(m.aliasesTable);
+  delete process.env.AUTO_REVIEW_TEACHER;
+  if (jobIds.length === 0) return;
+  await m.db.delete(m.reads).where(m.inArray(m.reads.jobId, jobIds));
   await m.db.delete(m.decisions).where(m.inArray(m.decisions.jobId, jobIds));
   await m.db.delete(m.jobsTable).where(m.inArray(m.jobsTable.id, jobIds));
   jobIds.length = 0;
@@ -65,6 +75,7 @@ afterEach(async () => {
 after(async () => {
   if (skip || !m) return;
   if (jobIds.length) {
+    await m.db.delete(m.reads).where(m.inArray(m.reads.jobId, jobIds));
     await m.db.delete(m.decisions).where(m.inArray(m.decisions.jobId, jobIds));
     await m.db.delete(m.jobsTable).where(m.inArray(m.jobsTable.id, jobIds));
   }
@@ -223,4 +234,140 @@ test("a day with a break: the grouping, the part titles and the title changes ar
   assert.equal((await rowsFor(ids)).length, 7);
 
   assert.equal(await jobsSnapshot(ids), before, "no job is changed: titles stay as they were");
+});
+
+// ── Teacher evidence from stored reads ─────────────────────────────────────
+
+const AMBIGUOUS = [[27], [26], [10, 17], [28], [27], [26]]; // the break could belong to several places by length alone
+const teacherOfTitle = (title: string) => title.split(" | ")[1];
+/** The teacher each recording of AMBIGUOUS really shows: the one scheduled for its lecture. */
+const trueTeachers = () => AMBIGUOUS.flatMap((parts, i) => parts.map(() => teacherOfTitle(cleanDay.slots[i].title)));
+
+/** Loads an alias table for the day's teachers and returns its hash (reads must be made with it to count). */
+async function loadDayAliases(): Promise<string> {
+  const { aliasHash } = await import("./teacherAliasTable");
+  const entries = [...new Set(cleanDay.slots.map((s) => teacherOfTitle(s.title)))].map((teacher) => ({ teacher, strong: [teacher.split(" ").pop()!.toLowerCase()] }));
+  await m.tr.replaceAliases(entries);
+  return aliasHash(entries);
+}
+
+const okRead = (teacher: string | null) => ({ status: "ok" as const, teacher, ambiguous: false, matched: teacher ? [teacher] : [], framesTotal: 4, framesRead: 4, framesMatched: teacher ? 3 : 0, error: null });
+
+async function seedAmbiguousDayWithReads(hash: string, over: (i: number) => "skip" | "fail" | "none" | "ok" = () => "ok") {
+  const jobs = await seedCleanDay("needs_review", buildDay(AMBIGUOUS));
+  const truth = trueTeachers();
+  for (const [i, j] of jobs.entries()) {
+    const how = over(i);
+    if (how === "skip") continue;
+    if (how === "fail") await m.tr.saveRead(j.id, { ...okRead(null), status: "failed", error: "no frame could be read from Drive", framesRead: 0 }, hash);
+    else await m.tr.saveRead(j.id, okRead(how === "none" ? null : truth[i]), hash);
+  }
+  return jobs.map((j) => j.id);
+}
+const groupOf = async (ids: number[], opts: import("./autoReviewRun").EvaluateOptions) => (await m.run.evaluateAllGroups(new Date(), opts)).find((g) => g.needsReviewJobIds.includes(ids[0]))!;
+
+test("teacher reads off (the default): stored reads are ignored and the day stays ambiguous", { skip }, async () => {
+  const hash = await loadDayAliases();
+  const ids = await seedAmbiguousDayWithReads(hash);
+  const plain = await groupOf(ids, {}); // no AUTO_REVIEW_TEACHER in the environment
+  assert.deepEqual(plain.verdict.reasons.map((r) => r.check), ["ambiguous_split"]);
+  assert.deepEqual(plain.verdict.teacherEvidence, { identified: 0, of: 7, consistentSplits: null, resolvedAmbiguity: false });
+  assert.deepEqual(plain.teachers, {});
+  const explicitOff = await groupOf(ids, { useTeacher: false });
+  assert.deepEqual(explicitOff.teachers, {});
+});
+
+test("teacher reads on, every recording read and identified: the ambiguous day resolves to one grouping", { skip }, async () => {
+  const hash = await loadDayAliases();
+  const ids = await seedAmbiguousDayWithReads(hash);
+  const g = await groupOf(ids, { useTeacher: true });
+  assert.equal(g.verdict.verdict, "clean", JSON.stringify(g.verdict.reasons));
+  assert.deepEqual(g.verdict.teacherEvidence, { identified: 7, of: 7, consistentSplits: 1, resolvedAmbiguity: true });
+  assert.deepEqual(g.verdict.lectures.map((l) => l.jobIds.length), [1, 1, 2, 1, 1, 1]);
+  assert.equal(Object.keys(g.teachers).length, 7);
+  assert.equal(g.teachers[ids[0]], teacherOfTitle(cleanDay.slots[0].title));
+});
+
+test("teacher reads on through the environment, and the verdict row records who each recording was read as", { skip }, async () => {
+  const hash = await loadDayAliases();
+  const ids = await seedAmbiguousDayWithReads(hash);
+  process.env.AUTO_REVIEW_TEACHER = "on";
+  await m.run.runAutoReview("dry_run");
+  const rows = await rowsFor(ids);
+  assert.equal(rows.length, 7);
+  const d = JSON.parse(rows[0].detail!);
+  assert.equal(d.verdict, "clean");
+  assert.equal(d.teacherEvidence.resolvedAmbiguity, true);
+  assert.equal(Object.keys(d.teachers).length, 7);
+  // reading the same again writes nothing; a different reading would
+  await m.run.runAutoReview("dry_run");
+  assert.equal((await rowsFor(ids)).length, 7);
+});
+
+test("a recording with no usable read (none, failed, or read nobody) keeps the day ambiguous", { skip }, async () => {
+  const hash = await loadDayAliases();
+  for (const how of ["skip", "fail", "none"] as const) {
+    const ids = await seedAmbiguousDayWithReads(hash, (i) => (i === 4 ? how : "ok"));
+    const g = await groupOf(ids, { useTeacher: true });
+    assert.ok(g.verdict.reasons.some((r) => r.check === "ambiguous_split"), how);
+    assert.equal(g.verdict.teacherEvidence.identified, 6, how);
+    assert.equal(g.verdict.teacherEvidence.resolvedAmbiguity, false, how);
+    assert.equal(ids[4] in g.teachers, how === "none", "a nobody-identified read is recorded as null, a missing or failed read is absent");
+    await m.db.delete(m.reads).where(m.inArray(m.reads.jobId, ids));
+    await m.db.delete(m.jobsTable).where(m.inArray(m.jobsTable.id, ids));
+    jobIds.length = 0;
+  }
+});
+
+test("reads made with an older alias table are ignored", { skip }, async () => {
+  const hash = await loadDayAliases();
+  const ids = await seedAmbiguousDayWithReads(hash);
+  assert.equal((await groupOf(ids, { useTeacher: true })).verdict.verdict, "clean");
+  await m.tr.replaceAliases([{ teacher: "Ustad Someone Else", strong: ["elsewhere"] }]); // the table changed
+  const g = await groupOf(ids, { useTeacher: true });
+  assert.deepEqual(g.teachers, {});
+  assert.ok(g.verdict.reasons.some((r) => r.check === "ambiguous_split"));
+});
+
+test("a teacher that contradicts the grouping holds the day as a mismatch", { skip }, async () => {
+  const hash = await loadDayAliases();
+  const ids = await seedAmbiguousDayWithReads(hash);
+  await m.tr.saveRead(ids[0], okRead(teacherOfTitle(cleanDay.slots[3].title)), hash); // recording 1 read as lecture 4's teacher
+  const g = await groupOf(ids, { useTeacher: true });
+  assert.equal(g.verdict.verdict, "hold");
+  assert.ok(g.verdict.reasons.some((r) => r.check === "teacher_mismatch"));
+});
+
+test("missing read tables do not stop the evaluation: it carries on without evidence", { skip }, async () => {
+  const ids = (await seedCleanDay("needs_review", buildDay(AMBIGUOUS))).map((j) => j.id);
+  const g = await groupOf(ids, {
+    useTeacher: true,
+    loadEvidence: async () => {
+      throw new Error('relation "recording_teacher_reads" does not exist');
+    },
+  });
+  assert.deepEqual(g.verdict.reasons.map((r) => r.check), ["ambiguous_split"]);
+  assert.deepEqual(g.teachers, {});
+});
+
+test("the signature changes when only the name a recording was read as changes", { skip }, async () => {
+  const hash = await loadDayAliases();
+  const ids = await seedAmbiguousDayWithReads(hash);
+  // recording 1 read as two different wrong teachers: the verdict, the failed check and the counts are the same
+  await m.tr.saveRead(ids[0], okRead(teacherOfTitle(cleanDay.slots[3].title)), hash);
+  const a = await groupOf(ids, { useTeacher: true });
+  await m.tr.saveRead(ids[0], okRead(teacherOfTitle(cleanDay.slots[4].title)), hash);
+  const b = await groupOf(ids, { useTeacher: true });
+  assert.deepEqual(a.verdict.reasons.map((r) => r.check), b.verdict.reasons.map((r) => r.check));
+  assert.deepEqual(a.verdict.teacherEvidence, b.verdict.teacherEvidence);
+  assert.notEqual(a.signature, b.signature, "only the name differs, and that is enough for a new verdict row");
+});
+
+test("the signature changes when a recording is read as someone else", { skip }, async () => {
+  const hash = await loadDayAliases();
+  const ids = await seedAmbiguousDayWithReads(hash);
+  const a = (await groupOf(ids, { useTeacher: true })).signature;
+  await m.tr.saveRead(ids[1], okRead(null), hash); // now read, nobody identified
+  const b = (await groupOf(ids, { useTeacher: true })).signature;
+  assert.notEqual(a, b);
 });
