@@ -26,7 +26,10 @@ export function signatureOf(verdict: Verdict, fileCount: number): string {
     .sort((a, b) => a.check.localeCompare(b.check))
     .map((r) => `${r.check}:${[...r.jobIds].sort((x, y) => x - y).join(",")}`)
     .join(";");
-  return `${verdict.ruleVersion}|${verdict.verdict}|${reasons}|n=${fileCount}`;
+  // The grouping is part of the result: a different split of the same recordings is a different verdict.
+  const grouping = verdict.lectures.map((l) => l.jobIds.join("+")).join(",");
+  const readings = verdict.readings.map((r) => `${r.reading}=${r.validSplits}`).join(",");
+  return `${verdict.ruleVersion}|${verdict.verdict}|${reasons}|n=${fileCount}|splits=${verdict.splitCount ?? "-"}|L=${grouping}|R=${readings}`;
 }
 
 /** Evaluates every (PKT date, meeting code) day that still has at least one needs_review job. Reads only. */
@@ -147,6 +150,11 @@ export async function runAutoReview(mode: AutoReviewMode = readMode()): Promise<
       signature: r.signature,
       group: r.key,
       reasons: r.verdict.reasons,
+      splitCount: r.verdict.splitCount,
+      lectures: r.verdict.lectures,
+      titleChanges: r.verdict.titleChanges,
+      readings: r.verdict.readings,
+      alternatives: r.verdict.alternatives,
     });
     for (const jobId of r.needsReviewJobIds) {
       if (lastSignature.get(jobId) === r.signature) continue;

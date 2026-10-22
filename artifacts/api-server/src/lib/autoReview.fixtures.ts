@@ -1,7 +1,7 @@
 // Real days from the pipeline's own data (20 Oct 2026), one per pattern, with job ids renumbered 1..n.
 // Nothing here identifies a person or a Drive file. Titles, times, lengths and sizes are as recorded.
 // "title" is the proposed title, or the YouTube title for a finished job.
-import type { GroupInput } from "./autoReview";
+import type { GroupFile, GroupInput } from "./autoReview";
 
 export const TODAY = "22-10-2026";
 
@@ -849,3 +849,38 @@ export const edgeDurationDay: GroupInput = {
   ]
 };
 
+/**
+ * Builds a day with exact recording lengths, so a test controls how lectures can be grouped.
+ * `lectures[i]` lists the lengths in minutes of the recordings that really make up lecture i. Recordings
+ * are in time order with a 4 minute break between them, every file is a distinct size and length, and
+ * each starts near its slot. Every title is the scan's positional proposal: file k gets slot k's title,
+ * and files beyond the slots get a fallback title.
+ */
+export function buildDay(lectures: number[][]): GroupInput {
+  const slots = cleanDay.slots;
+  const dayStartUtcMs = Date.UTC(2026, 9, 12) - 5 * 3600 * 1000; // 12 Oct 2026 00:00 PKT
+  const files: GroupFile[] = [];
+  let cursor = 0; // minutes since PKT midnight
+  let id = 0;
+  lectures.forEach((parts, i) => {
+    const [h, m] = slots[Math.min(i, slots.length - 1)].startTime.split(":").map(Number);
+    cursor = Math.max(cursor, h * 60 + m + 15);
+    for (const minutes of parts) {
+      id++;
+      const durationSec = minutes * 60 + id * 17;
+      const end = cursor + durationSec / 60;
+      files.push({
+        id,
+        status: "needs_review",
+        title: slots[id - 1]?.title ?? "Fallback title for an extra recording",
+        confirmed: false,
+        createdTime: new Date(dayStartUtcMs + (end + 2) * 60 * 1000).toISOString(),
+        durationSec,
+        sizeBytes: 100_000_000 + id * 7_000_000,
+        contentType: "video",
+      });
+      cursor = end + 4;
+    }
+  });
+  return { date: cleanDay.date, meetingCode: cleanDay.meetingCode, today: TODAY, otherTitles: [], slots, files };
+}

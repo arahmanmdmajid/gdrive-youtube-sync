@@ -195,7 +195,7 @@ select created_at, job_id, reason from job_decisions where event_type = 'auto_ve
 select detail::json->'reasons' from job_decisions where event_type = 'auto_verdict' and job_id = <id> order by id desc limit 1;
 ```
 
-A day is clean only if every check passes; otherwise the whole day is held with a named reason per failed check (count of recordings versus slots, a recording under 5 minutes, a split or duplicate, titles not matching the slots, two recordings at the same time, and so on). Thresholds are candidates from one sample and are not final.
+A lecture is often cut by a break into several recordings (Part 1, Part 2), so more recordings than slots is normal. The rules look for how the day's recordings group, in time order, into exactly as many lectures as there are slots, each of a normal combined length. A day is clean only if exactly one grouping exists and every other check passes; otherwise the whole day is held with a named reason per failed check: `ambiguous_split` (several groupings, listed in `alternatives`), `no_valid_split`, `count_mismatch` (fewer recordings than slots), `short_recording` (under 5 minutes: junk or a real part? `readings` shows how many groupings exist each way), `recordings_overlap`, `duplicate_suspected`, a title mismatch, and so on. The route and the recorded `detail` also carry `lectures` (which recordings make each lecture and the titles, `... | Part 1`, `... | Part 2`) and `titleChanges` (the titles in review that would change to match). Thresholds are candidates from one sample and are not final.
 
 ## Checking health
 
