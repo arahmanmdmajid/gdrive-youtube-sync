@@ -408,6 +408,7 @@ const DATA = {
     ["GET","/jobs/:id","Get one job"],
     ["DELETE","/jobs/:id","Soft-delete (needs_review → rejected) or hard-delete otherwise"],
     ["POST","/jobs/:id/restore","rejected → needs_review"],
+    ["POST","/jobs/:id/undo","pending → needs_review (only while unclaimed)"],
     ["DELETE","/jobs/:id/youtube","Delete the uploaded video and hard-delete the job"],
     ["POST","/jobs/:id/approve","needs_review → pending, optionally retitling/cascading"],
     ["PATCH","/jobs/:id","Edit proposed title/description without changing status"],

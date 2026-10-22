@@ -7,16 +7,23 @@ import { buildYoutubeTitle, buildYoutubeDescription } from "./schedule";
 import { prepareAudioForYoutube } from "./audioMux";
 import { extractSerial, getSubjectThumbnailPath } from "./thumbnails";
 import { logger } from "./logger";
+import { claimPendingJob, uploadBlockReason } from "./jobClaims";
+import { withDecisionLog } from "./decisions";
 import { isTransient, isAuthError, isQuotaError, QuotaExceededError, findVideoOnYoutube, withRetry } from "./youtubeMatch";
 
 /**
- * Core upload logic — shared by both processNextPendingJob and processJobById.
- * The job must already exist and be in "pending" status before calling this.
+ * Core upload logic — shared by processNextPendingJob, processJobById and processAllPendingJobs.
+ * The job is claimed first (pending -> processing in one conditional update). If it is no longer
+ * pending (undone, rejected, claimed by another caller) nothing is uploaded and this returns false.
+ * The claimed row, not the caller's copy, is used from here on, so a title edited after the
+ * caller read the job is the title that gets uploaded.
  */
-async function uploadJob(job: typeof jobsTable.$inferSelect): Promise<void> {
-  await db.update(jobsTable)
-    .set({ status: "processing", updatedAt: new Date() })
-    .where(eq(jobsTable.id, job.id));
+async function uploadJob(queued: typeof jobsTable.$inferSelect): Promise<boolean> {
+  const job = await claimPendingJob(queued.id);
+  if (!job) {
+    logger.info({ jobId: queued.id }, "Job is no longer pending — skipping upload");
+    return false;
+  }
 
   try {
     const [settings] = await db.select().from(settingsTable).limit(1);
@@ -28,6 +35,19 @@ async function uploadJob(job: typeof jobsTable.$inferSelect): Promise<void> {
 
     const title = job.proposedTitle ?? (await buildYoutubeTitle(job.driveFileName, job.driveCreatedTime));
     const description = job.proposedDescription ?? (await buildYoutubeDescription(job.driveFileName, job.driveCreatedTime));
+
+    // Last check before anything is sent: an empty title, or the same title already uploaded by
+    // another job. Back to review with the reason, so a person decides and the worker does not retry.
+    const blocked = await uploadBlockReason(job.id, title);
+    if (blocked) {
+      logger.warn({ jobId: job.id, title, blocked }, "Upload blocked before sending — returning job to review");
+      await withDecisionLog({ eventType: "upload_blocked", actor: "system", subjectId: job.id }, async () => {
+        await db.update(jobsTable)
+          .set({ status: "needs_review", errorMessage: blocked, updatedAt: new Date() })
+          .where(eq(jobsTable.id, job.id));
+      });
+      return false;
+    }
 
     // ── Dedup check ──────────────────────────────────────────────────────────
     // If this job previously failed with a network/auth error, the video may
@@ -54,7 +74,7 @@ async function uploadJob(job: typeof jobsTable.$inferSelect): Promise<void> {
             updatedAt: new Date(),
           })
           .where(eq(jobsTable.id, job.id));
-        return;
+        return true;
       }
     }
 
@@ -145,6 +165,7 @@ async function uploadJob(job: typeof jobsTable.$inferSelect): Promise<void> {
     }
 
     logger.info({ jobId: job.id, videoId, title }, "Job completed successfully");
+    return true;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
 
@@ -196,7 +217,7 @@ async function uploadJob(job: typeof jobsTable.$inferSelect): Promise<void> {
               });
             } catch (_) { /* non-fatal */ }
           }
-          return;
+          return true;
         }
       } catch (recoverErr) {
         logger.warn({ jobId: job.id, recoverErr }, "Recovery check failed — marking job as failed");
@@ -206,6 +227,7 @@ async function uploadJob(job: typeof jobsTable.$inferSelect): Promise<void> {
     await db.update(jobsTable)
       .set({ status: "failed", errorMessage: message, updatedAt: new Date() })
       .where(eq(jobsTable.id, job.id));
+    return true;
   }
 }
 
@@ -271,8 +293,8 @@ export async function processAllPendingJobs(): Promise<number> {
     let processed = 0;
     for (const job of pending) {
       try {
-        await uploadJob(job);
-        processed++;
+        // Each job is claimed on its own, so a job that left pending since the list was read is skipped.
+        if (await uploadJob(job)) processed++;
       } catch (err) {
         if (err instanceof QuotaExceededError) {
           logger.warn({ processed, remaining: pending.length - processed }, "Upload batch stopped: daily quota reached");

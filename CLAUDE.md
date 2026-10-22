@@ -124,6 +124,8 @@ rejected → needs_review (via Restore button)
 done → removed (video left the playlist; self-heals or restore-done)
 ```
 
+**Claiming and undo**: every status change that decides an upload is one conditional UPDATE (`lib/jobClaims.ts`). The uploader claims a job with `WHERE status='pending'` and uses the row it gets back; `POST /jobs/:id/undo` takes an unclaimed `pending` job back to `needs_review` and answers 409 once the job is `processing`. Before sending bytes it blocks a job whose title is empty or already held by a `processing`/`done` job and returns it to `needs_review` with the reason. Race tests need a local Postgres (`TEST_DATABASE_URL`, see `jobClaims.test.ts`).
+
 **Stranded `processing` jobs**: `uploadJob` handles errors, but not the process dying mid-upload — such a row keeps `processing` with no `errorMessage`, and both job processors select only `pending`, so nothing would ever pick it up. `reclaimOrphanedJobs()` sweeps these at worker startup (only one worker runs, so anything in `processing` then is orphaned by definition).
 
 ⚠️ **A matching title on YouTube does not mean the upload succeeded.** The video resource is created when an upload *starts*, so an interrupted upload leaves a husk stuck at `uploadStatus: "uploaded"` / duration `P0D` forever ("processing will begin shortly" in Studio). Always verify completeness before adopting a match — adopting a husk marks a job done against a video that will never play.
