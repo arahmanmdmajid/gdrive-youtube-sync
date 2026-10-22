@@ -5,6 +5,7 @@ import {
   useRetryJob,
   useRestoreJob,
   useRestoreDoneJob,
+  useUndoJob,
   useApproveJob,
   usePatchJob,
   useRenameYoutubeTitle,
@@ -29,7 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, RefreshCcw, ExternalLink, ClipboardCheck, Pencil, RotateCcw, Check, X, ImageUp, ImageMinus } from "lucide-react";
+import { Loader2, Trash2, RefreshCcw, ExternalLink, ClipboardCheck, Pencil, RotateCcw, Undo2, Check, X, ImageUp, ImageMinus } from "lucide-react";
 import { format } from "date-fns";
 import { JobStatusBadge } from "./dashboard";
 import {
@@ -122,6 +123,21 @@ export default function Jobs() {
     mutation: {
       onSuccess: () => { invalidate(); toast({ title: "Job restored to review queue" }); },
       onError: () => toast({ title: "Failed to restore job", variant: "destructive" })
+    }
+  });
+
+  // 409 means the worker already claimed the job. Refresh either way so the row shows its real status.
+  const undoMutation = useUndoJob({
+    mutation: {
+      onSuccess: () => { invalidate(); toast({ title: "Job taken back to review" }); },
+      onError: (err) => {
+        invalidate();
+        if (err instanceof ApiError && err.status === 409) {
+          toast({ title: "Too late to undo", description: "The upload has already started.", variant: "destructive" });
+          return;
+        }
+        toast({ title: "Failed to undo", variant: "destructive" });
+      }
     }
   });
 
@@ -510,6 +526,19 @@ export default function Jobs() {
                             {job.status === "needs_review"
                               ? <ClipboardCheck className="h-4 w-4" />
                               : <Pencil className="h-4 w-4 text-muted-foreground" />}
+                          </Button>
+                        )}
+
+                        {job.status === "pending" && (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => undoMutation.mutate({ id: job.id })}
+                            disabled={undoMutation.isPending}
+                            title="Undo approval (back to review, before the upload starts)"
+                            data-testid={`btn-undo-${job.id}`}
+                          >
+                            <Undo2 className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                           </Button>
                         )}
 
