@@ -181,6 +181,22 @@ select created_at, event_type, role, detail, from_title, to_title, from_status, 
 from job_decisions where job_id = <id> order by id;
 ```
 
+## Auto-review dry run
+
+The day-approval rules (issue #27) can run in the worker tick in **dry run**: they say, for every day that still has a job in review, whether the whole day would be clean to approve or must be held and why, and they record that. **They change nothing: no job is approved, rejected, retitled or uploaded.** It is for comparing what the rules say with what you decide.
+
+- **Turn on:** add `AUTO_REVIEW_MODE=dry_run` to `.env`, then `pm2 restart dtt-api --update-env`. **Turn off (the kill switch):** remove the line or set `AUTO_REVIEW_MODE=off`, restart. Unset, empty or any other value means off. It runs only while Auto Sync is on, after the scan.
+- **Needs** the `job_decisions` table (`pnpm --filter @workspace/db run push`, see Decision history). If the table is missing the run fails, logs `Auto-review dry run failed` and the scan and uploads carry on.
+- **See it now, no recording:** `curl -s localhost:5000/api/auto-review/groups` returns every day with its verdict, the failed checks (`reasons`, each with the jobs it is about) and which jobs would be approved. It works in any mode and writes nothing.
+- **See what was recorded:** each job in review gets an `auto_verdict` row when its day's result changes, with the verdict in `reason` (`clean`, or `hold: <checks>`) and the full result as JSON in `detail`:
+
+```sql
+select created_at, job_id, reason from job_decisions where event_type = 'auto_verdict' order by id desc limit 50;
+select detail::json->'reasons' from job_decisions where event_type = 'auto_verdict' and job_id = <id> order by id desc limit 1;
+```
+
+A day is clean only if every check passes; otherwise the whole day is held with a named reason per failed check (count of recordings versus slots, a recording under 5 minutes, a split or duplicate, titles not matching the slots, two recordings at the same time, and so on). Thresholds are candidates from one sample and are not final.
+
 ## Checking health
 
 ```bash

@@ -7,6 +7,8 @@ export interface ClassSlot {
   teacher: string;
   subjectEn: string;
   teacherEn: string;
+  /** Slot start in PKT as HH:MM (24h). */
+  timeSlot: string;
 }
 
 function toClassSlot(row: typeof scheduleSlotsTable.$inferSelect): ClassSlot {
@@ -16,6 +18,7 @@ function toClassSlot(row: typeof scheduleSlotsTable.$inferSelect): ClassSlot {
     teacher: row.teacherAr,
     subjectEn: row.subjectEn,
     teacherEn: row.teacherEn,
+    timeSlot: row.timeSlot,
   };
 }
 
