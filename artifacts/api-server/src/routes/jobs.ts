@@ -23,6 +23,7 @@ import {
 } from "../lib/thumbnails";
 import { logger } from "../lib/logger";
 import { withDecisionLog } from "../lib/decisions";
+import { approveIfNeedsReview, undoPendingJob } from "../lib/jobClaims";
 
 const uploadThumbnail = multer({
   storage: multer.memoryStorage(),
@@ -441,17 +442,19 @@ router.post("/jobs/:id/approve", async (req, res) => {
   const updates: Record<string, unknown> = { status: "pending", updatedAt: new Date() };
   if (bodyParsed.data.proposedDescription !== undefined) updates.proposedDescription = bodyParsed.data.proposedDescription;
 
+  // The status change only applies if the job is still in needs_review, so an approve cannot
+  // overwrite a reject or restore that happened after the check above.
+  let approved = false;
   const conflict = await withDecisionLog(
     { eventType: "approve", actor: "admin", subjectId: id, conflictResolution: bodyParsed.data.conflictResolution },
     async () => {
       if (bodyParsed.data.lectureName) {
         const c = await applyLectureNameChange(id, job, bodyParsed.data.lectureName, bodyParsed.data.conflictResolution);
         if (c) return c;
-        await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
-      } else {
-        if (bodyParsed.data.proposedTitle !== undefined) updates.proposedTitle = bodyParsed.data.proposedTitle;
-        await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
+      } else if (bodyParsed.data.proposedTitle !== undefined) {
+        updates.proposedTitle = bodyParsed.data.proposedTitle;
       }
+      approved = (await approveIfNeedsReview(id, updates)) !== null;
       return null;
     },
   );
@@ -459,9 +462,34 @@ router.post("/jobs/:id/approve", async (req, res) => {
     res.status(409).json(conflict);
     return;
   }
+  if (!approved) {
+    res.status(409).json({ error: "Job is no longer in needs_review status" });
+    return;
+  }
 
   const [updated] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
   res.json(formatJob(updated));
+});
+
+// Take a pending job back to review. Works only while the job is still pending: once the worker has
+// claimed it (processing) the upload is under way and this answers 409 without changing anything.
+router.post("/jobs/:id/undo", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  const undone = await withDecisionLog({ eventType: "undo", actor: "admin", subjectId: id }, () => undoPendingJob(id));
+  if (undone) {
+    res.json(formatJob(undone));
+    return;
+  }
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
+  if (!job) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  res.status(409).json({ error: `Cannot undo: job is ${job.status}, not pending (an upload may already have started)` });
 });
 
 // Edit proposed title/description for a needs_review or pending job (without changing its status)

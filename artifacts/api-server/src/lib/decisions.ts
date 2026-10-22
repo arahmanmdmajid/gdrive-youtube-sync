@@ -3,7 +3,15 @@ import { db, jobsTable, jobDecisionsTable } from "@workspace/db";
 import { diffSnapshots, type JobSnap } from "./decisionDiff";
 import { logger } from "./logger";
 
-export type DecisionEventType = "proposal" | "reproposal" | "approve" | "edit" | "reject" | "restore";
+export type DecisionEventType =
+  | "proposal"
+  | "reproposal"
+  | "approve"
+  | "edit"
+  | "reject"
+  | "restore"
+  | "undo"
+  | "upload_blocked";
 
 /** Current title, status and confirmed flag of every job. Small table, so one cheap read. */
 export async function snapshotJobs(): Promise<Map<number, JobSnap>> {
