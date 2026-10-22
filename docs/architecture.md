@@ -48,6 +48,9 @@ pnpm workspace, TypeScript throughout. After editing any `lib/*` package run `pn
 
 Job states: `needs_review → pending → processing → done` (`failed` is retryable, `rejected` is a soft delete, `removed` means it left the playlist).
 
+### Day-approval rules (`lib/autoReview.ts`, not wired in yet)
+`evaluateGroup` decides, from plain data only, whether one (PKT date, meeting code) group is safe to approve without a person looking. A group is clean only if every check passes: one recording per schedule slot whatever its length, every duration known and normal, no short recording (under 5 minutes holds the whole group), no split or duplicate, titles exactly the slots in order, no two recordings at the same time, no oversized file or `[REVIEW...]` marker, not dated today, no title collision, no human-confirmed title that differs, and no missing evidence. Otherwise the whole group holds with a named reason per failed check. It never approves, rejects or uploads; a later stage (dry run in the worker) will call it and record verdicts. Thresholds are candidates from one sample, in `DEFAULT_CONFIG`.
+
 ### Failure handling worth knowing
 - A job can be left in `processing` if the process dies mid-upload, or if YouTube accepted the video but the database write failed. `reclaimOrphanedJobs` fixes this at startup and on every worker tick, and a write that fails after the upload is retried and then finished from the saved video id (`lib/uploadRecovery.ts`). A lookup that fails is never taken as "no such video".
 - A video that exists on YouTube with the right title is **not** proof the upload finished: an interrupted upload leaves a zero-duration husk. `findVideoOnYoutube` reports whether the upload is complete and every caller checks it.
