@@ -8,6 +8,8 @@ import { QuotaExceededError } from "./youtubeMatch";
 import { getYoutubeClient } from "./youtubeClient";
 import { markJobDone } from "./jobClaims";
 import { runAutoReview } from "./autoReviewRun";
+import { runTeacherStep } from "./teacherStep";
+import { sweepTileFolders } from "./teacherReader";
 import { activeUploadJobIds, retryUnrecorded, unrecordedJobIds } from "./uploadRecovery";
 
 let workerInterval: ReturnType<typeof setInterval> | null = null;
@@ -48,6 +50,9 @@ export function startPipelineWorker() {
 
   // Sweep before the first tick so a job orphaned by the previous process is
   // resolved rather than sitting invisible until someone notices it by hand.
+  // Frame folders left by a read that was cut short by a crash or a restart (real faces: never leave them).
+  void sweepTileFolders().catch(() => undefined);
+
   void reclaimOrphanedJobs().catch((err) => {
     logger.error({ err }, "reclaimOrphanedJobs failed at startup");
   });
@@ -70,8 +75,14 @@ export function startPipelineWorker() {
         // Never stops the uploads.
         logger.error({ err }, "Auto-review dry run failed");
       }
-      await processNextPendingJob();
-      await reconcilePlaylist();
+      try {
+        await processNextPendingJob();
+        await reconcilePlaylist();
+      } finally {
+        // Last in the tick, so reading recordings never delays an upload, and it still runs when an upload
+        // fails. Off unless AUTO_REVIEW_MODE=dry_run and AUTO_REVIEW_TEACHER=on. Never throws.
+        await runTeacherStep();
+      }
     } catch (err) {
       if (err instanceof QuotaExceededError) {
         logger.warn("Pipeline worker: daily quota reached, skipping until next tick");

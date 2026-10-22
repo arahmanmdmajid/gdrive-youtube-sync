@@ -7,7 +7,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps --env-file=../../.env ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node buildTests.mjs && node --test \"dist/test/*.test.mjs\""
+    "test": "node buildTests.mjs && node --test --test-concurrency=1 \"dist/test/*.test.mjs\""
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",

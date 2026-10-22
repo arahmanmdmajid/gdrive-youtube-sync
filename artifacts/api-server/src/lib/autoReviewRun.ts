@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { db, jobsTable, jobDecisionsTable } from "@workspace/db";
 import { desc, eq, and, inArray } from "drizzle-orm";
 import { logger } from "./logger";
-import { readMode, type AutoReviewMode } from "./autoReviewMode";
+import { readMode, readTeacherMode, type AutoReviewMode } from "./autoReviewMode";
+import { loadTeacherEvidence } from "./teacherReads";
 import { evaluateGroup, RULE_VERSION, type GroupFile, type GroupSlot, type Verdict } from "./autoReview";
 import { buildYoutubeTitleFromSlot, extractMeetingCode, getOrderedSlotsForDay, getPktInfo } from "./schedule";
 
@@ -17,11 +18,13 @@ export interface GroupResult {
   verdict: Verdict;
   fileCount: number;
   needsReviewJobIds: number[];
+  /** Which teacher each recording was read with (null: read, nobody identified). Only recordings with a usable read. */
+  teachers: Record<number, string | null>;
   /** Changes when the verdict, a failed check, or a job a check is about changes. */
   signature: string;
 }
 
-export function signatureOf(verdict: Verdict, fileCount: number): string {
+export function signatureOf(verdict: Verdict, fileCount: number, teachersRead: Record<number, string | null> = {}): string {
   const reasons = [...verdict.reasons]
     .sort((a, b) => a.check.localeCompare(b.check))
     .map((r) => `${r.check}:${[...r.jobIds].sort((x, y) => x - y).join(",")}`)
@@ -31,11 +34,25 @@ export function signatureOf(verdict: Verdict, fileCount: number): string {
   const readings = verdict.readings.map((r) => `${r.reading}=${r.validSplits}`).join(",");
   const t = verdict.teacherEvidence;
   const teachers = `${t.identified}/${t.of}:${t.consistentSplits ?? "-"}:${t.resolvedAmbiguity ? "r" : "-"}`;
-  return `${verdict.ruleVersion}|${verdict.verdict}|${reasons}|n=${fileCount}|splits=${verdict.splitCount ?? "-"}|L=${grouping}|R=${readings}|T=${teachers}`;
+  // Who each recording was read as is part of the result: a new reading writes a new verdict row.
+  const who = Object.entries(teachersRead)
+    .sort((a, b) => Number(a[0]) - Number(b[0]))
+    .map(([id, name]) => `${id}=${name ?? "-"}`)
+    .join(",");
+  return `${verdict.ruleVersion}|${verdict.verdict}|${reasons}|n=${fileCount}|splits=${verdict.splitCount ?? "-"}|L=${grouping}|R=${readings}|T=${teachers}|W=${who}`;
 }
 
+export interface EvaluateOptions {
+  /** Use the stored teacher reads. Defaults to AUTO_REVIEW_TEACHER=on. With false the reads are ignored. */
+  useTeacher?: boolean;
+  /** For tests: where the reads come from. Defaults to the database. */
+  loadEvidence?: (jobIds: number[]) => Promise<Map<number, string | null>>;
+}
+
+let warnedEvidence = false;
+
 /** Evaluates every (PKT date, meeting code) day that still has at least one needs_review job. Reads only. */
-export async function evaluateAllGroups(now: Date = new Date()): Promise<GroupResult[]> {
+export async function evaluateAllGroups(now: Date = new Date(), opts: EvaluateOptions = {}): Promise<GroupResult[]> {
   const rows = await db
     .select({
       id: jobsTable.id,
@@ -72,6 +89,21 @@ export async function evaluateAllGroups(now: Date = new Date()): Promise<GroupRe
     groups.set(key, g);
   }
 
+  // The teacher each recording was read with, only when teacher evidence is switched on. If the tables are
+  // missing or the load fails, the evidence is empty and the rules carry on without it.
+  let evidence = new Map<number, string | null>();
+  if (opts.useTeacher ?? readTeacherMode() === "on") {
+    const ids = [...groups.values()].flatMap((g) => (g.rows.some((r) => r.status === "needs_review") ? g.rows.map((r) => r.id) : []));
+    try {
+      evidence = await (opts.loadEvidence ?? loadTeacherEvidence)(ids);
+    } catch (err) {
+      if (!warnedEvidence) {
+        warnedEvidence = true;
+        logger.warn({ err }, "Could not load teacher reads (tables missing?): continuing without teacher evidence");
+      }
+    }
+  }
+
   const today = getPktInfo(now.toISOString()).dateStr;
   const slotCache = new Map<number, Awaited<ReturnType<typeof getOrderedSlotsForDay>>>();
   const results: GroupResult[] = [];
@@ -92,7 +124,11 @@ export async function evaluateAllGroups(now: Date = new Date()): Promise<GroupRe
       durationSec: r.durationSeconds,
       sizeBytes: r.driveFileSizeBytes,
       contentType: r.contentType,
+      // undefined: no usable read. null: read, nobody identified. A name: the teacher seen on screen.
+      teacher: evidence.has(r.id) ? evidence.get(r.id) : undefined,
     }));
+    const teachers: Record<number, string | null> = {};
+    for (const r of g.rows) if (r.status !== "rejected" && evidence.has(r.id)) teachers[r.id] = evidence.get(r.id) ?? null;
 
     // A title counts as a collision only if a non-rejected job outside this group holds it.
     const own = new Map<string, number>();
@@ -104,7 +140,7 @@ export async function evaluateAllGroups(now: Date = new Date()): Promise<GroupRe
 
     const verdict = evaluateGroup({ date: g.date, meetingCode: g.code, files, slots, today, otherTitles });
     const fileCount = g.rows.filter((r) => r.status !== "rejected").length;
-    results.push({ key, date: g.date, meetingCode: g.code, verdict, fileCount, needsReviewJobIds, signature: signatureOf(verdict, fileCount) });
+    results.push({ key, date: g.date, meetingCode: g.code, verdict, fileCount, needsReviewJobIds, teachers, signature: signatureOf(verdict, fileCount, teachers) });
   }
   return results.sort((a, b) => a.key.localeCompare(b.key));
 }
@@ -158,6 +194,7 @@ export async function runAutoReview(mode: AutoReviewMode = readMode()): Promise<
       readings: r.verdict.readings,
       alternatives: r.verdict.alternatives,
       teacherEvidence: r.verdict.teacherEvidence,
+      teachers: r.teachers,
     });
     for (const jobId of r.needsReviewJobIds) {
       if (lastSignature.get(jobId) === r.signature) continue;
