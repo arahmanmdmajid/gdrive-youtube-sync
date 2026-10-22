@@ -10,6 +10,7 @@ import thumbnailsRouter from "./thumbnails";
 import scheduleRouter from "./schedule";
 import driveFoldersRouter from "./driveFolders";
 import autoReviewRouter from "./autoReview";
+import teacherTileRouter from "./teacherTile";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(thumbnailsRouter);
 router.use(scheduleRouter);
 router.use(driveFoldersRouter);
 router.use(autoReviewRouter);
+router.use(teacherTileRouter);
 
 export default router;

@@ -197,6 +197,29 @@ select detail::json->'reasons' from job_decisions where event_type = 'auto_verdi
 
 A lecture is often cut by a break into several recordings (Part 1, Part 2), so more recordings than slots is normal. The rules look for how the day's recordings group, in time order, into exactly as many lectures as there are slots, each of a normal combined length. A day is clean only if exactly one grouping exists and every other check passes; otherwise the whole day is held with a named reason per failed check: `ambiguous_split` (several groupings, listed in `alternatives`), `no_valid_split`, `count_mismatch` (fewer recordings than slots), `short_recording` (under 5 minutes: junk or a real part? `readings` shows how many groupings exist each way), `recordings_overlap`, `duplicate_suspected`, a title mismatch, and so on. The route and the recorded `detail` also carry `lectures` (which recordings make each lecture and the titles, `... | Part 1`, `... | Part 2`) and `titleChanges` (the titles in review that would change to match). When a recording's teacher on screen is known, a grouping must show each lecture's scheduled teacher: otherwise the day holds as `teacher_mismatch`, and when every recording is identified the evidence can settle which grouping is the real one (`teacherEvidence` in the route says how many were identified and how many groupings agreed). Nothing reads recordings for this yet, so the field shows 0 identified. Thresholds are candidates from one sample and are not final.
 
+## Teacher reads (alias table and reader)
+
+The rules can use the teacher seen on screen. The reader finds out who it is from the name tile on the right of a recording's frames. It runs on this PC and **keeps no frames and no text**: ffmpeg takes four frames by seeking in the Drive file (no full download) into a temporary folder, Windows OCR reads the cropped tile, the text is matched against the alias table and dropped, the folder is deleted, and only the verdict is stored (`recording_teacher_reads`). Logs carry the job id and the outcome, never frames, text or the token.
+
+- **Needs:** `ffmpeg` on PATH, an OCR language installed in Windows (English, and Arabic if you have it), the two new tables (`pnpm --filter @workspace/db run push`), and the Drive credentials already in `.env`. The ffmpeg command line carries the short-lived Drive access token, which other processes on this PC can see while it runs.
+- **Load the aliases** (a JSON file of yours, not in the repository). In PowerShell, with the file in the current folder:
+
+```powershell
+Invoke-RestMethod -Method Put -Uri http://localhost:5000/api/teacher-aliases -ContentType 'application/json' -InFile .\aliases.json
+```
+
+```json
+{ "aliases": [
+  { "teacher": "Ustad Haseeb", "strong": ["haseeb"], "weak": ["ahmed"] },
+  { "teacher": "Ustad Aslam Shah", "allOf": ["a", "sh"] }
+] }
+```
+
+  Teacher names must be spelled as in the schedule. `strong`: one of these words identifies the teacher. `allOf`: every word must appear (an alias like "A Sh"). `weak`: common names, counted only when two different ones appear. Words are letters only. The whole table is replaced; `GET /api/teacher-aliases` shows it and its hash.
+- **Read some recordings now:** `Invoke-RestMethod -Method Post "http://localhost:5000/api/teacher-reads/run?limit=2"` reads up to that many recordings that are in review, are videos, have a length and were not read with the current table (about 30 to 60 seconds each), and returns counts and the teacher found. Only one run at a time. A failed read is retried after 30 minutes. `GET /api/teacher-reads` lists the stored verdicts.
+- **Changing the aliases makes every read out of date** (the text is not kept, so the recording has to be read again).
+- Nothing runs this automatically yet and the dry run does not use the reads yet. Windows only (the OCR).
+
 ## Checking health
 
 ```bash

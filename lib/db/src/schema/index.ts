@@ -4,4 +4,5 @@ export * from "./jobDecisions";
 export * from "./jobs";
 export * from "./library";
 export * from "./schedule";
+export * from "./teacherTile";
 export * from "./users";
