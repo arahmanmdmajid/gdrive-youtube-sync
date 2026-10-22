@@ -154,6 +154,11 @@ export const restoreJob = (id: number, options?: RequestInit): Promise<Job> =>
   send<Job>(`/api/jobs/${id}/restore`, 'POST', options);
 export const useRestoreJob = makeMutation('restoreJob', ({ id }: { id: number }, r) => restoreJob(id, r));
 
+/** @summary Take a pending job back to review; 409 once the worker has started the upload */
+export const undoJob = (id: number, options?: RequestInit): Promise<Job> =>
+  send<Job>(`/api/jobs/${id}/undo`, 'POST', options);
+export const useUndoJob = makeMutation('undoJob', ({ id }: { id: number }, r) => undoJob(id, r));
+
 /** @summary Approve a needs_review job, optionally updating its proposed title/description */
 export const approveJob = (id: number, approveJobInput: ApproveJobInput, options?: RequestInit): Promise<Job> =>
   send<Job>(`/api/jobs/${id}/approve`, 'POST', options, approveJobInput);
