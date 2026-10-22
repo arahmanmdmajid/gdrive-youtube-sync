@@ -49,7 +49,7 @@ pnpm workspace, TypeScript throughout. After editing any `lib/*` package run `pn
 Job states: `needs_review → pending → processing → done` (`failed` is retryable, `rejected` is a soft delete, `removed` means it left the playlist).
 
 ### Failure handling worth knowing
-- A job can be left in `processing` if the process dies mid-upload. `reclaimOrphanedJobs` fixes this at startup.
+- A job can be left in `processing` if the process dies mid-upload, or if YouTube accepted the video but the database write failed. `reclaimOrphanedJobs` fixes this at startup and on every worker tick, and a write that fails after the upload is retried and then finished from the saved video id (`lib/uploadRecovery.ts`). A lookup that fails is never taken as "no such video".
 - A video that exists on YouTube with the right title is **not** proof the upload finished: an interrupted upload leaves a zero-duration husk. `findVideoOnYoutube` reports whether the upload is complete and every caller checks it.
 
 ## Google Drive and the two accounts

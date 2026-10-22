@@ -17,6 +17,21 @@ export async function claimPendingJob(id: number): Promise<Job | null> {
   return row ?? null;
 }
 
+/** Records that the job's video is on YouTube. Throws if the database write fails. */
+export async function markJobDone(jobId: number, videoId: string, title: string): Promise<void> {
+  await db
+    .update(jobsTable)
+    .set({
+      status: "done",
+      youtubeVideoId: videoId,
+      youtubeUrl: `https://www.youtube.com/watch?v=${videoId}`,
+      youtubeTitle: title,
+      errorMessage: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(jobsTable.id, jobId));
+}
+
 /** Takes a pending job back to review. Returns null if it was already claimed or is not pending. */
 export async function undoPendingJob(id: number): Promise<Job | null> {
   const [row] = await db

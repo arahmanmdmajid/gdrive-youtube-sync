@@ -59,8 +59,17 @@ export interface YoutubeMatch {
 }
 
 /**
+ * How long a same-titled but not-yet-complete upload is given to finish
+ * transcoding before it's treated as a husk from an interrupted upload.
+ */
+export const INCOMPLETE_UPLOAD_GRACE_MS = 60 * 60 * 1000;
+
+/**
  * Search the authenticated YouTube channel for a video whose title exactly
- * matches `title`. Returns the match if found, null otherwise.
+ * matches `title`. Returns the match if found, null if the channel has no such
+ * video. THROWS if the lookup itself fails (API error, network, no uploads
+ * playlist): "could not look" must never be read as "not there", because the
+ * caller would then upload a second copy of a video that may already exist.
  * Uses the cheap videos.list on the channel's uploads playlist — avoids
  * the expensive search.list quota cost.
  */
@@ -68,7 +77,7 @@ export async function findVideoOnYoutube(
   youtube: ReturnType<typeof getYoutubeClient>,
   title: string,
 ): Promise<YoutubeMatch | null> {
-  if (!youtube) return null;
+  if (!youtube) throw new Error("YouTube is not configured, cannot look for an existing upload");
   try {
     // Step 1: get the channel's uploads playlist ID (1 unit)
     const channelRes = await youtube.channels.list({
@@ -77,7 +86,7 @@ export async function findVideoOnYoutube(
     });
     const uploadsPlaylistId =
       channelRes.data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
-    if (!uploadsPlaylistId) return null;
+    if (!uploadsPlaylistId) throw new Error("Could not find the channel's uploads playlist");
 
     // Step 2: page through recent uploads looking for an exact title match
     // Each playlistItems.list call costs 1 unit; we check up to 3 pages (150 items)
@@ -113,7 +122,8 @@ export async function findVideoOnYoutube(
       pages++;
     } while (pageToken && pages < 3);
   } catch (err) {
-    logger.warn({ err }, "findVideoOnYoutube: search failed");
+    logger.warn({ err }, "findVideoOnYoutube: lookup failed");
+    throw err;
   }
   return null;
 }
