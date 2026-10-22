@@ -2,7 +2,8 @@
 // jobClaims.test.ts. The tests insert and delete their own rows (jobs, schedule slots, decision rows).
 import { test, before, after, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { cleanDay } from "./autoReview.fixtures";
+import { cleanDay, buildDay } from "./autoReview.fixtures";
+import type { GroupInput } from "./autoReview";
 import { readMode } from "./autoReviewMode";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -72,9 +73,9 @@ after(async () => {
 });
 
 /** Inserts the clean day's recordings as needs_review jobs. */
-async function seedCleanDay(status: "needs_review" | "done" = "needs_review") {
+async function seedCleanDay(status: "needs_review" | "done" = "needs_review", day: GroupInput = cleanDay) {
   const rows = [];
-  for (const f of cleanDay.files) {
+  for (const f of day.files) {
     const [row] = await m.db
       .insert(m.jobsTable)
       .values({
@@ -138,7 +139,10 @@ test("dry run: verdict rows are written for the needs_review jobs and no job cha
     assert.equal(r.reason, "clean");
     const d = JSON.parse(r.detail!);
     assert.equal(d.verdict, "clean");
-    assert.equal(d.ruleVersion, "1");
+    assert.equal(d.ruleVersion, "2");
+    assert.equal(d.splitCount, 1);
+    assert.equal(d.lectures.length, 6, "the grouping is recorded");
+    assert.deepEqual(d.titleChanges, []);
     assert.equal(d.group, KEY);
     assert.ok(typeof d.signature === "string" && d.signature.length > 0);
   }
@@ -186,4 +190,36 @@ test("a day with no needs_review job is not evaluated", { skip }, async () => {
   assert.ok(!groups.some((g) => g.key === KEY && g.needsReviewJobIds.some((id) => ids.includes(id))));
   await m.run.runAutoReview("dry_run");
   assert.equal((await rowsFor(ids)).length, 0);
+});
+
+test("a day with a break: the grouping, the part titles and the title changes are recorded, and nothing else changes", { skip }, async () => {
+  // lecture 3 was cut by a break; its neighbours are too long to join, so there is one grouping
+  const day = buildDay([[27], [50], [10, 17], [50], [30], [26]]);
+  const jobs = await seedCleanDay("needs_review", day);
+  const ids = jobs.map((j) => j.id);
+  const before = await jobsSnapshot(ids);
+
+  const res = await m.run.runAutoReview("dry_run");
+  assert.ok(res.clean >= 1);
+
+  const rows = await rowsFor(ids);
+  assert.equal(rows.length, 7, "one row per recording");
+  const d = JSON.parse(rows[0].detail!);
+  assert.equal(d.verdict, "clean");
+  assert.equal(d.splitCount, 1);
+  assert.equal(d.lectures.length, 6);
+  const withParts = d.lectures.filter((l: { jobIds: number[] }) => l.jobIds.length > 1);
+  assert.equal(withParts.length, 1);
+  assert.equal(withParts[0].jobIds.length, 2);
+  assert.match(withParts[0].titles[0].title, / \| Part 1$/);
+  assert.match(withParts[0].titles[1].title, / \| Part 2$/);
+  assert.equal(d.titleChanges.length, 5, "the scan's positional titles after the break would change");
+  assert.ok(d.titleChanges.every((c: { jobId: number }) => ids.includes(c.jobId)));
+
+  // the live view agrees and writes nothing more
+  const live = (await m.run.evaluateAllGroups()).find((g) => g.needsReviewJobIds.includes(ids[0]))!;
+  assert.deepEqual(live.verdict.lectures.map((l) => l.jobIds.length), [1, 1, 2, 1, 1, 1]);
+  assert.equal((await rowsFor(ids)).length, 7);
+
+  assert.equal(await jobsSnapshot(ids), before, "no job is changed: titles stay as they were");
 });
