@@ -39,7 +39,15 @@ router.put("/schedule/:dayOfWeek/:timeSlot", async (req, res) => {
     .from(scheduleSlotsTable)
     .where(and(eq(scheduleSlotsTable.dayOfWeek, parsed.dayOfWeek), eq(scheduleSlotsTable.timeSlot, parsed.timeSlot)));
 
+  // Optional start day (YYYY-MM-DD). Absent keeps what the slot has; null clears it (the slot always counts).
+  const effective = req.body?.effectiveFrom;
+  if (effective !== undefined && effective !== null && !(typeof effective === "string" && /^\d{4}-\d{2}-\d{2}$/.test(effective) && !Number.isNaN(Date.parse(effective)))) {
+    res.status(400).json({ error: "Invalid body: effectiveFrom must be YYYY-MM-DD or null" });
+    return;
+  }
+
   const values = {
+    ...(effective !== undefined ? { effectiveFrom: effective as string | null } : {}),
     serial: serial.trim(),
     subjectAr: subjectAr.trim(),
     teacherAr: teacherAr.trim(),

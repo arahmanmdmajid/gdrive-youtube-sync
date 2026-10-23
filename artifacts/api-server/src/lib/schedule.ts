@@ -1,5 +1,6 @@
 import { db, scheduleSlotsTable } from "@workspace/db";
 import { and, asc, eq } from "drizzle-orm";
+import { isSlotInEffect } from "./slotInEffect";
 
 export interface ClassSlot {
   serial: string;
@@ -85,7 +86,7 @@ export async function resolveClassFromTime(isoTimestamp: string, meetingCode?: s
     .from(scheduleSlotsTable)
     .where(and(eq(scheduleSlotsTable.dayOfWeek, dayOfWeek), eq(scheduleSlotsTable.timeSlot, slotKey)));
 
-  return row ? toClassSlot(row) : null;
+  return row && isSlotInEffect(row.effectiveFrom, toPktDateStr(isoTimestamp)) ? toClassSlot(row) : null;
 }
 
 /**
@@ -116,16 +117,16 @@ export function getPktInfo(isoTimestamp: string): { dateStr: string; dayOfWeek: 
 }
 
 /**
- * Returns the class slots for a given PKT day-of-week in chronological order.
- * Returns an empty array if the day has no schedule.
+ * Returns the class slots for a given PKT day-of-week in chronological order, leaving out slots
+ * that start after `pktDateStr` (DD-MM-YYYY). Returns an empty array if the day has no schedule.
  */
-export async function getOrderedSlotsForDay(dayOfWeek: number): Promise<ClassSlot[]> {
+export async function getOrderedSlotsForDay(dayOfWeek: number, pktDateStr: string): Promise<ClassSlot[]> {
   const rows = await db
     .select()
     .from(scheduleSlotsTable)
     .where(eq(scheduleSlotsTable.dayOfWeek, dayOfWeek))
     .orderBy(asc(scheduleSlotsTable.timeSlot));
-  return rows.map(toClassSlot);
+  return rows.filter((r) => isSlotInEffect(r.effectiveFrom, pktDateStr)).map(toClassSlot);
 }
 
 /**
