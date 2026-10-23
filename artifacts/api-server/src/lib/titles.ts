@@ -36,7 +36,7 @@ export async function computeGroupAssignments(
   meetingCode: string | null,
   membersChronological: GroupMember[],
 ): Promise<Map<string, { title: string; description: string }>> {
-  const allSlots = meetingCode ? await getOrderedSlotsForDay(dayOfWeek) : [];
+  const allSlots = meetingCode ? await getOrderedSlotsForDay(dayOfWeek, pktDateStr) : [];
 
   const lockedTitles = new Set(
     membersChronological.filter((m) => m.locked).map((m) => m.currentTitle),

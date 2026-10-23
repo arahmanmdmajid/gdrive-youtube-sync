@@ -105,15 +105,16 @@ export async function evaluateAllGroups(now: Date = new Date(), opts: EvaluateOp
   }
 
   const today = getPktInfo(now.toISOString()).dateStr;
-  const slotCache = new Map<number, Awaited<ReturnType<typeof getOrderedSlotsForDay>>>();
+  const slotCache = new Map<string, Awaited<ReturnType<typeof getOrderedSlotsForDay>>>();
   const results: GroupResult[] = [];
 
   for (const [key, g] of groups) {
     const needsReviewJobIds = g.rows.filter((r) => r.status === "needs_review").map((r) => r.id);
     if (needsReviewJobIds.length === 0) continue;
 
-    if (!slotCache.has(g.dow)) slotCache.set(g.dow, await getOrderedSlotsForDay(g.dow));
-    const slots: GroupSlot[] = slotCache.get(g.dow)!.map((s) => ({ title: buildYoutubeTitleFromSlot(s, g.date), startTime: s.timeSlot, teacher: s.teacherEn }));
+    const slotKey = `${g.dow}|${g.date}`;
+    if (!slotCache.has(slotKey)) slotCache.set(slotKey, await getOrderedSlotsForDay(g.dow, g.date));
+    const slots: GroupSlot[] = slotCache.get(slotKey)!.map((s) => ({ title: buildYoutubeTitleFromSlot(s, g.date), startTime: s.timeSlot, teacher: s.teacherEn }));
 
     const files: GroupFile[] = g.rows.map((r) => ({
       id: r.id,

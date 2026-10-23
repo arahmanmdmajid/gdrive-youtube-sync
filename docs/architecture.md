@@ -33,7 +33,7 @@ pnpm workspace, TypeScript throughout. After editing any `lib/*` package run `pn
 | `recording_teacher_reads` | The verdict of reading a recording's name tile (teacher or none, frames read and matched, the alias-table hash). Never frames, never the recognized text |
 | `job_decisions` | Append-only history of proposals and review decisions (approve, edit, reject, restore, and every job a cascade, swap or merge changed), written by `lib/decisions.ts`. Rows are never updated or deleted; a write failure is logged and never blocks a review action |
 | `lecture_names` | Admin-editable "Serial Subject \| Teacher" picklist used when reviewing |
-| `schedule_slots` | The weekly timetable (day + time slot → subject/teacher, English and Arabic) |
+| `schedule_slots` | The weekly timetable (day + time slot → subject/teacher, English and Arabic). An optional `effective_from` (YYYY-MM-DD, PKT) makes a slot count only for days on or after it; empty means always. `getOrderedSlotsForDay(dayOfWeek, pktDate)` applies it for titling, the review cascade and the day-approval rules |
 | `settings` | Single row: playlist, library/audio folders, auto-sync, interval, student invite code |
 | `drive_source_folders` | Drive folders the scan watches (several; managed via `/drive-folders`) |
 | `library_resources` | Catalogued PDFs/audio for the student library |

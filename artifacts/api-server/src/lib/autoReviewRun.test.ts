@@ -204,6 +204,33 @@ test("a day with no needs_review job is not evaluated", { skip }, async () => {
   assert.equal((await rowsFor(ids)).length, 0);
 });
 
+test("a slot with a start day: the Monday before it is judged with 6 slots (clean), the Monday after with 7 (count mismatch), in one run", { skip }, async () => {
+  const weekEarlier: GroupInput = {
+    ...cleanDay,
+    date: "05-10-2026",
+    files: cleanDay.files.map((f) => ({
+      ...f,
+      createdTime: new Date(Date.parse(f.createdTime) - 7 * 24 * 3600 * 1000).toISOString(),
+      title: f.title?.replace("12-10-2026", "05-10-2026") ?? null,
+    })),
+  };
+  const [extra] = await m.db
+    .insert(m.slotsTable)
+    .values({ dayOfWeek: 1, timeSlot: "21:00", serial: "4.1", subjectAr: "x", teacherAr: "x", subjectEn: "Tawzeeh Part 1", teacherEn: "Ustad Atiqullah", effectiveFrom: "2026-10-08" })
+    .returning();
+  try {
+    const early = (await seedCleanDay("needs_review", weekEarlier)).map((j) => j.id);
+    const late = (await seedCleanDay("needs_review", cleanDay)).map((j) => j.id);
+    const groups = await m.run.evaluateAllGroups();
+    const verdictOf = (ids: number[]) => groups.find((g) => g.needsReviewJobIds.includes(ids[0]))?.verdict;
+    assert.equal(verdictOf(early)?.verdict, "clean", "before the start day the 21:00 slot does not exist");
+    assert.equal(verdictOf(late)?.verdict, "hold", "on a later Monday there are 7 slots for 6 recordings");
+    assert.ok(verdictOf(late)?.reasons.some((r) => r.check === "count_mismatch"));
+  } finally {
+    await m.db.delete(m.slotsTable).where(m.eq(m.slotsTable.id, extra.id));
+  }
+});
+
 test("a day with a break: the grouping, the part titles and the title changes are recorded, and nothing else changes", { skip }, async () => {
   // lecture 3 was cut by a break; its neighbours are too long to join, so there is one grouping
   const day = buildDay([[27], [50], [10, 17], [50], [30], [26]]);

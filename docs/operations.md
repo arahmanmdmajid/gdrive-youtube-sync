@@ -168,6 +168,10 @@ A user object means it works; `401 Unauthorized` means it does not match. The fr
 
 **Port in use / type errors after a schema change.** See SETUP.md → Troubleshooting.
 
+## Timetable changes with a start day
+
+A class added from a given day is a slot with a start day, so earlier days keep the old timetable. Enter it on the Schedule page or with `PUT /api/schedule/<dayOfWeek>/<HH:MM>` (body: `serial`, `subjectAr`, `teacherAr`, `subjectEn`, `teacherEn`, and `effectiveFrom` as `YYYY-MM-DD`; `null` clears it, leaving it out keeps what the slot has). Slots are matched by position in the day, not by clock time, so only an added or removed class needs a start day, not a changed start time. The column needs `pnpm --filter @workspace/db run push` before the API is restarted. Days already uploaded are not retitled. A recording scanned from now on is titled with the slots of its own date, and the day-approval rules judge each unreviewed day with the slots of its own date. A recording already in review keeps the title it was given at scan time until a reject or restore re-flows its day (the rules list the difference as a title change), so check those days by hand.
+
 ## Decision history
 
 Every proposal and review decision is appended to the `job_decisions` table (who, when, old and new title, old and new status, and the other jobs a cascade, swap or merge changed, linked by `group_event_id`). Nothing is overwritten. History before this table existed cannot be recovered, and a failed write is logged (`Could not write decision history`) without blocking the review action.
