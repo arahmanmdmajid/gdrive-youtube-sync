@@ -25,6 +25,14 @@ Drive (Meet recordings) → scan → name from timetable → human review → Yo
 
 A background job also tidies the many folders Google Meet creates, so recordings end up in one shared folder per meeting code and day.
 
+### Review automation (shadow mode)
+
+Reviewing is still done by a person. Beside it, a set of rules judges each day's recordings (one meeting code on one date) and says whether it would approve the day or hold it, for example because a recording is very short, two overlap, a class seems skipped, or the teacher seen on screen is not the scheduled one. A lecture cut by a break into several recordings is titled `... | Part 1`, `... | Part 2`. The teacher check reads each recording's name tile on this PC (ffmpeg and Windows OCR); frames and text are never kept or sent anywhere.
+
+The rules change no job. Their verdicts are recorded, and the **Auto-review** page in the dashboard compares them with what staff then did, by meeting code and weekday, and shows the checklist that must be met before anything may run on its own. It is off unless `AUTO_REVIEW_MODE=dry_run` is set (and `AUTO_REVIEW_TEACHER=on` for the teacher check). See [docs/operations.md](docs/operations.md) and [issue #27](https://github.com/arahmanmdmajid/gdrive-youtube-sync/issues/27) for the plan.
+
+Timetable slots can have a start day, so a class added later does not change earlier days.
+
 ## Repository layout
 
 | Path | What it is |
@@ -57,7 +65,7 @@ Full installation, including how to obtain the Google OAuth tokens, is in **[SET
 | Read | When |
 |---|---|
 | [SETUP.md](SETUP.md) | Installing on a new machine |
-| [docs/operations.md](docs/operations.md) | Running it: daily jobs, flags, token expiry, troubleshooting, how to undo things |
+| [docs/operations.md](docs/operations.md) | Running it: daily jobs, flags, token expiry, troubleshooting, how to undo things, the review rules and their agreement report |
 | [docs/architecture.md](docs/architecture.md) | How the code and data fit together |
 | [docs/app-flow.html](docs/app-flow.html) | Interactive diagram of the pipeline and every route |
 | [CLAUDE.md](CLAUDE.md) | Conventions and past decisions, written for AI coding agents |
