@@ -4,7 +4,8 @@ import { getDriveClient, listChildren, listTopLevelMeetFolders, FOLDER_MIME_TYPE
 import { buildYoutubeTitle, buildYoutubeDescription, extractMeetingCode, getPktInfo } from "./schedule";
 import { isEligible, BATCH_RECORDING_SIZE_BYTES } from "./filter";
 import { logger } from "./logger";
-import { computeGroupAssignments, type GroupMember } from "./titles";
+import { computeGroupAssignments } from "./titles";
+import { scanGroupMembers } from "./scanMembers";
 import { recordDecisions, snapshotJobs } from "./decisions";
 
 /**
@@ -154,20 +155,7 @@ export async function runPipelineScan(): Promise<{
   // Map driveFileId → { title, description } for every eligible, non-confirmed file
   const positionalAssignments = new Map<string, { title: string; description: string }>();
   for (const group of groupMap.values()) {
-    const members: GroupMember[] = group.files
-      .filter((f): f is typeof f & { id: string; createdTime: string } => Boolean(f.id && f.createdTime))
-      .map((f) => {
-        const existing = existingByFileId.get(f.id);
-        return {
-          id: f.id,
-          driveFileName: f.name ?? f.id,
-          driveCreatedTime: f.createdTime,
-          currentTitle: existing?.proposedTitle ?? null,
-          locked: existing
-            ? existing.lectureNameConfirmed || (existing.status !== "needs_review" && existing.status !== "rejected")
-            : false,
-        };
-      });
+    const members = scanGroupMembers(group.files, existingByFileId);
     const groupAssignments = await computeGroupAssignments(group.dayOfWeek, group.pktDateStr, group.meetingCode, members);
     for (const [id, assignment] of groupAssignments) {
       positionalAssignments.set(id, assignment);

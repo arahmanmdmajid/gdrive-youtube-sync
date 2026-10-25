@@ -106,7 +106,7 @@ Serial map (Arabic subject → serial):
 
 ## Slot assignment logic
 
-Files are grouped by (PKT date, meeting code), sorted by `createdTime` ascending, then assigned schedule slots by **position index** (not by actual recording time). This handles late-start recordings correctly.
+Files are grouped by (PKT date, meeting code), sorted by `createdTime` ascending, then assigned schedule slots by **position index** (not by actual recording time). This handles late-start recordings correctly. A `rejected` recording takes no slot, both when the reject re-flows the day and on every later scan (`scanMembers.ts`); a job that left review or was confirmed reserves its slot.
 
 **Cascade**: when a user changes a job's lecture name during review (because a class was skipped), all subsequent `needs_review` siblings for the same day+meeting code are automatically reassigned to the next slots. Jobs whose name a human already confirmed (`lectureNameConfirmed`) are never resequenced.
 
