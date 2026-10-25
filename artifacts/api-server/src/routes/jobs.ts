@@ -23,6 +23,7 @@ import {
 } from "../lib/thumbnails";
 import { logger } from "../lib/logger";
 import { withDecisionLog } from "../lib/decisions";
+import { canSwapWith, SWAP_REFUSED_MESSAGE } from "../lib/swapRule";
 import { approveIfNeedsReview, undoPendingJob } from "../lib/jobClaims";
 
 const uploadThumbnail = multer({
@@ -118,7 +119,8 @@ async function buildAndAssignTitle(
 
 type CascadeResult =
   | { matched: false }
-  | { matched: true; conflict: { id: number; proposedTitle: string; driveCreatedTime: string | null } }
+  | { matched: true; conflict: { id: number; proposedTitle: string; driveCreatedTime: string | null; status: string } }
+  | { matched: true; refused: string }
   | { matched: true };
 
 /**
@@ -211,8 +213,12 @@ async function cascadeSlotAssignment(
   if (conflicting && !conflictResolution) {
     return {
       matched: true,
-      conflict: { id: conflicting.id, proposedTitle: conflicting.proposedTitle ?? "", driveCreatedTime: conflicting.driveCreatedTime },
+      conflict: { id: conflicting.id, proposedTitle: conflicting.proposedTitle ?? "", driveCreatedTime: conflicting.driveCreatedTime, status: conflicting.status },
     };
+  }
+  // Nothing is written yet, so refusing here leaves both jobs as they were.
+  if (conflicting && conflictResolution === "swap" && !canSwapWith(conflicting.status)) {
+    return { matched: true, refused: SWAP_REFUSED_MESSAGE };
   }
 
   let currentFinalTitle = newTitle;
@@ -258,9 +264,12 @@ async function applyLectureNameChange(
   job: typeof jobsTable.$inferSelect,
   lectureName: string,
   conflictResolution?: "swap" | "merge",
-): Promise<{ conflict: true; conflictingJob: { id: number; proposedTitle: string; driveCreatedTime: string | null } } | null> {
+): Promise<{ conflict: true; conflictingJob: { id: number; proposedTitle: string; driveCreatedTime: string | null; status: string } } | { error: string } | null> {
   if (job.contentType !== "audio" && job.driveCreatedTime && job.driveFileName) {
     const cascadeResult = await cascadeSlotAssignment(id, lectureName, job.driveCreatedTime, job.driveFileName, conflictResolution);
+    if (cascadeResult.matched && "refused" in cascadeResult) {
+      return { error: cascadeResult.refused };
+    }
     if (cascadeResult.matched && "conflict" in cascadeResult) {
       return { conflict: true, conflictingJob: cascadeResult.conflict };
     }

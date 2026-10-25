@@ -154,6 +154,8 @@ export interface JobNameConflictResponse {
     id: number;
     proposedTitle: string;
     driveCreatedTime: string | null;
+    /** Status of the other recording. A swap is only possible with one still in review. */
+    status?: string;
   };
 }
 
