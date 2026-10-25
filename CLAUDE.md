@@ -111,7 +111,7 @@ Files are grouped by (PKT date, meeting code), sorted by `createdTime` ascending
 **Cascade**: when a user changes a job's lecture name during review (because a class was skipped), all subsequent `needs_review` siblings for the same day+meeting code are automatically reassigned to the next slots. Jobs whose name a human already confirmed (`lectureNameConfirmed`) are never resequenced.
 
 **Naming conflicts**: if the new name collides with another job's current name, the API returns `409` instead of guessing. The reviewer picks `conflictResolution`:
-- `"swap"` — two classes traded places; the other job takes this one's old name
+- `"swap"` — two classes traded places; the other job takes this one's old name. Refused (409 with an `error`, nothing written) when the other job has left review (pending, uploading, done, failed, removed): its title is fixed. The 409 conflict payload carries that job's `status`, and the dashboard disables Swap for it
 - `"merge"` — one class split across two recordings; both keep the name, both confirmed
 
 ---

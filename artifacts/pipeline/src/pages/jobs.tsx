@@ -838,6 +838,9 @@ export default function Jobs() {
               {" "}is currently titled "{conflictPrompt?.conflictingJob.proposedTitle}". Is this the same class
               (e.g. a recording that got split into two files), or should the two names be swapped between the
               recordings?
+              {conflictPrompt?.conflictingJob.status && conflictPrompt.conflictingJob.status !== "needs_review" && (
+                <> That recording has already left review (approved or uploaded), so its title is fixed and a swap is not possible.</>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:justify-between">
@@ -846,7 +849,10 @@ export default function Jobs() {
               <Button variant="outline" onClick={() => resolveConflict("merge")}>
                 Same class — keep both
               </Button>
-              <Button onClick={() => resolveConflict("swap")}>
+              <Button
+                disabled={!!conflictPrompt?.conflictingJob.status && conflictPrompt.conflictingJob.status !== "needs_review"}
+                onClick={() => resolveConflict("swap")}
+              >
                 Swap
               </Button>
             </div>
