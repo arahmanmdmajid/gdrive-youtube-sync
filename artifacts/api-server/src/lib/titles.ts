@@ -9,6 +9,7 @@ import {
   getOrderedSlotsForDay,
   getPktInfo,
 } from "./schedule";
+import { slotTitleOf } from "./splitTitle";
 
 export interface GroupMember {
   id: string;
@@ -39,7 +40,7 @@ export async function computeGroupAssignments(
   const allSlots = meetingCode ? await getOrderedSlotsForDay(dayOfWeek, pktDateStr) : [];
 
   const lockedTitles = new Set(
-    membersChronological.filter((m) => m.locked).map((m) => m.currentTitle),
+    membersChronological.filter((m) => m.locked).map((m) => slotTitleOf(m.currentTitle)),
   );
   const availableSlots = allSlots.filter(
     (slot) => !lockedTitles.has(buildYoutubeTitleFromSlot(slot, pktDateStr)),
