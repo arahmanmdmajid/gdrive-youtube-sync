@@ -10,6 +10,7 @@ import {
   getPktInfo,
 } from "./schedule";
 import { slotTitleOf } from "./splitTitle";
+import { slotsHeldBy } from "./standIn";
 
 export interface GroupMember {
   id: string;
@@ -42,8 +43,10 @@ export async function computeGroupAssignments(
   const lockedTitles = new Set(
     membersChronological.filter((m) => m.locked).map((m) => slotTitleOf(m.currentTitle)),
   );
+  // A locked stand-in (a teacher teaching something else in his slot) holds that slot too.
+  const standInHeld = new Set(slotsHeldBy(allSlots, [...lockedTitles]));
   const availableSlots = allSlots.filter(
-    (slot) => !lockedTitles.has(buildYoutubeTitleFromSlot(slot, pktDateStr)),
+    (slot) => !lockedTitles.has(buildYoutubeTitleFromSlot(slot, pktDateStr)) && !standInHeld.has(slot),
   );
 
   const assignments = new Map<string, { title: string; description: string }>();

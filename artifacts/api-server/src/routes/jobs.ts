@@ -23,6 +23,7 @@ import {
 } from "../lib/thumbnails";
 import { logger } from "../lib/logger";
 import { withDecisionLog } from "../lib/decisions";
+import { standInSlot } from "../lib/standIn";
 import { canSwapWith, SWAP_REFUSED_MESSAGE } from "../lib/swapRule";
 import { approveIfNeedsReview, undoPendingJob } from "../lib/jobClaims";
 
@@ -162,7 +163,8 @@ async function cascadeSlotAssignment(
   // Lecture name format: "X.X SubjectEn | TeacherEn"
   const nameWithoutSerial = selectedLectureName.replace(/^\d+\.\d+\s+/, "");
   const subjectEn = nameWithoutSerial.split(" | ")[0]?.trim() ?? "";
-  const selectedSlot = slots.find(s => s.subjectEn === subjectEn);
+  // Not a timetable subject: it may be the teacher teaching something else in his own slot.
+  const selectedSlot = slots.find(s => s.subjectEn === subjectEn) ?? standInSlot(slots, selectedLectureName)?.as;
   if (!selectedSlot) return { matched: false };
 
   const newTitle = buildYoutubeTitleFromSlot(selectedSlot, dateStr);
