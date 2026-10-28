@@ -15,3 +15,14 @@ export function standInSlot(slots: ClassSlot[], lectureName: string): { held: Cl
   if (own.length !== 1) return null;
   return { held: own[0], as: { ...own[0], serial, subjectEn, teacherEn } };
 }
+
+/** The slots that jobs already titled as a stand-in hold, given their titles without any "| Part N". */
+export function slotsHeldBy(slots: ClassSlot[], titles: (string | null)[]): ClassSlot[] {
+  const held: ClassSlot[] = [];
+  for (const t of titles) {
+    if (!t) continue;
+    const r = standInSlot(slots, t.replace(/ \| \d{2}-\d{2}-\d{4}$/, ""));
+    if (r) held.push(r.held);
+  }
+  return held;
+}

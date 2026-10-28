@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { standInSlot } from "./standIn";
+import { slotsHeldBy, standInSlot } from "./standIn";
 import type { ClassSlot } from "./schedule";
 
 const slot = (serial: string, subjectEn: string, teacherEn: string, timeSlot: string): ClassSlot =>
@@ -28,6 +28,15 @@ test("a subject that is in the day's timetable is not a stand-in", () => {
 test("a teacher with no slot, or with two slots, that day is not a stand-in", () => {
   assert.equal(standInSlot(monday, "5.3 Something | Ustad Nobody"), null);
   assert.equal(standInSlot(monday, "9.9 Something | Ustad Haseeb"), null);
+});
+
+test("a job titled as a stand-in holds the slot it took; others hold none", () => {
+  const held = slotsHeldBy(monday, [
+    "5.3 Ulama-e-Deoband ka Deeni Rukh aur Maslaki Mizaj | Ustad Khalid Zaman | 19-10-2026",
+    "1.2 Jalalain Part 2 | Ustad Haseeb | 19-10-2026",
+    null,
+  ]);
+  assert.deepEqual(held.map((s) => s.subjectEn), ["Siraji"]);
 });
 
 test("a name without serial, subject and teacher is not a stand-in", () => {
