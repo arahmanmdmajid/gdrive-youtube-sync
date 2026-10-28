@@ -99,7 +99,7 @@ Serial map (Arabic subject → serial):
 - 2.1 Al Fawz ul Kabir, 2.2 Kitab ul Asar, 2.3 Siraji
 - 3.1 Hidaya Sani Part 1, 3.2 Hidaya Sani Part 2, 3.3 Hidaya Sani Part 3
 - 4.1 Tawzeeh Part 1, 4.2 Tawzeeh Part 2
-- 5.1 Sharah Aqaid, 5.2 Falakiyat
+- 5.1 Sharah Aqaid, 5.2 Falakiyat, 5.3 Ulama-e-Deoband ka Deeni Rukh aur Maslaki Mizaj (Ustad Khalid Zaman teaches it in place of his own slot, see Stand-in below)
 - 6.1 Matan ul Kafi, 6.2 Dewan Hamasa
 
 ---
@@ -109,6 +109,8 @@ Serial map (Arabic subject → serial):
 Files are grouped by (PKT date, meeting code), sorted by `createdTime` ascending, then assigned schedule slots by **position index** (not by actual recording time). This handles late-start recordings correctly. A `rejected` recording takes no slot, both when the reject re-flows the day and on every later scan (`scanMembers.ts`); a job that left review or was confirmed reserves its slot.
 
 **Cascade**: when a user changes a job's lecture name during review (because a class was skipped), all subsequent `needs_review` siblings for the same day+meeting code are automatically reassigned to the next slots. Jobs whose name a human already confirmed (`lectureNameConfirmed`) are never resequenced.
+
+**Stand-in** (`lib/standIn.ts`): a name that is not a timetable subject for the day, but whose teacher has exactly one slot that day, is that teacher teaching something else in his slot (e.g. 5.3 in Ustad Khalid Zaman's Siraji, Falakiyat or Sharah Aqaid slot). Approving such a name builds the title from the name and the teacher's slot, and the job holds that slot in the re-flow (`computeGroupAssignments`), so the rest of the day is not shifted. A teacher with no slot or two slots that day is not a stand-in.
 
 **Naming conflicts**: if the new name collides with another job's current name, the API returns `409` instead of guessing. The reviewer picks `conflictResolution`:
 - `"swap"` — two classes traded places; the other job takes this one's old name. Refused (409 with an `error`, nothing written) when the other job has left review (pending, uploading, done, failed, removed): its title is fixed. The 409 conflict payload carries that job's `status`, and the dashboard disables Swap for it
