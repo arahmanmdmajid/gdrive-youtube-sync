@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, Check, X, Minus } from "lucide-react";
+import { SortHead, dateKey, useSort } from "@/components/sortable";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -102,6 +103,18 @@ export default function AutoReview() {
   const groups = useAutoReviewGroups();
   const agreement = useAutoReviewAgreement();
   const report = agreement.data;
+  const groupSort = useSort(groups.data?.groups ?? [], {
+    date: (g) => dateKey(g.date),
+    verdict: (g) => g.verdict,
+    reasons: (g) => g.reasons.length,
+    teachers: (g) => Object.values(g.teachers ?? {}).filter(Boolean).length,
+  }, { key: "date", dir: "desc" });
+  const daySort = useSort(report?.days ?? [], {
+    date: (d) => dateKey(d.date),
+    verdict: (d) => d.verdict,
+    outcome: (d) => OUTCOME_LABEL[d.outcome],
+    why: (d) => d.why,
+  }, { key: "date", dir: "desc" });
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
@@ -170,14 +183,14 @@ export default function AutoReview() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Day</TableHead>
-                  <TableHead>Rules say</TableHead>
-                  <TableHead>Why</TableHead>
-                  <TableHead>Teachers read</TableHead>
+                  <SortHead label="Day" column="date" sort={groupSort.sort} onSort={groupSort.toggle} />
+                  <SortHead label="Rules say" column="verdict" sort={groupSort.sort} onSort={groupSort.toggle} />
+                  <SortHead label="Why" column="reasons" sort={groupSort.sort} onSort={groupSort.toggle} />
+                  <SortHead label="Teachers read" column="teachers" sort={groupSort.sort} onSort={groupSort.toggle} />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {groups.data.groups.map((g) => (
+                {groupSort.sorted.map((g) => (
                   <GroupRow key={g.group} g={g} />
                 ))}
               </TableBody>
@@ -198,14 +211,14 @@ export default function AutoReview() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Day</TableHead>
-                    <TableHead>Rules said</TableHead>
-                    <TableHead>Outcome</TableHead>
-                    <TableHead>Why</TableHead>
+                    <SortHead label="Day" column="date" sort={daySort.sort} onSort={daySort.toggle} />
+                    <SortHead label="Rules said" column="verdict" sort={daySort.sort} onSort={daySort.toggle} />
+                    <SortHead label="Outcome" column="outcome" sort={daySort.sort} onSort={daySort.toggle} />
+                    <SortHead label="Why" column="why" sort={daySort.sort} onSort={daySort.toggle} />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {[...report.days].reverse().map((d) => (
+                  {daySort.sorted.map((d) => (
                     <TableRow key={d.key}>
                       <TableCell className="font-mono whitespace-nowrap">
                         {d.date}
