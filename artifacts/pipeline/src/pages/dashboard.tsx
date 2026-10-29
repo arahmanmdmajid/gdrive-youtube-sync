@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortHead, useSort } from "@/components/sortable";
 import { useToast } from "@/hooks/use-toast";
 import { Play, Upload, Activity, Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, ArrowRight, ListVideo, Headphones, ImageUp } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -131,6 +132,12 @@ export default function Dashboard() {
   });
 
   const recentJobs = jobs?.slice(0, 5) || [];
+
+  const jobSort = useSort(recentJobs, {
+    file: (j) => j.driveFileName,
+    status: (j) => j.status,
+    time: (j) => j.createdAt,
+  }, { key: "time", dir: "desc" });
 
   return (
     <div className="px-12 py-10 max-w-7xl mx-auto space-y-8">
@@ -282,13 +289,13 @@ export default function Dashboard() {
             <Table>
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
-                  <TableHead className="font-mono text-xs text-muted-foreground">FILE</TableHead>
-                  <TableHead className="font-mono text-xs text-muted-foreground">STATUS</TableHead>
-                  <TableHead className="font-mono text-xs text-muted-foreground text-right">TIME</TableHead>
+                  <SortHead label="FILE" column="file" sort={jobSort.sort} onSort={jobSort.toggle} className="font-mono text-xs text-muted-foreground" />
+                  <SortHead label="STATUS" column="status" sort={jobSort.sort} onSort={jobSort.toggle} className="font-mono text-xs text-muted-foreground" />
+                  <SortHead label="TIME" column="time" sort={jobSort.sort} onSort={jobSort.toggle} className="font-mono text-xs text-muted-foreground text-right" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {recentJobs.map(job => (
+                {jobSort.sorted.map(job => (
                   <TableRow key={job.id} className="border-border" data-testid={`row-job-${job.id}`}>
                     <TableCell className="font-medium text-sm truncate max-w-[200px]" title={job.driveFileName}>
                       {job.driveFileName}
