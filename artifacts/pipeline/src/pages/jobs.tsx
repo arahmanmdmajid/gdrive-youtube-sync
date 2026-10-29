@@ -23,6 +23,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortHead, useSort } from "@/components/sortable";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -104,6 +105,16 @@ export default function Jobs() {
   const { data: jobs, isLoading } = useListJobs(params, {
     query: { queryKey: getListJobsQueryKey(params), refetchInterval: 30000 }
   });
+
+  // The API already sends every job, newest recording first; the header sorts those rows in the browser.
+  const jobSort = useSort(jobs ?? [], {
+    id: (j) => j.id,
+    title: (j) => j.youtubeTitle ?? j.proposedTitle ?? j.driveFileName,
+    size: (j) => j.driveFileSizeBytes,
+    duration: (j) => j.durationSeconds,
+    status: (j) => j.status,
+    recorded: (j) => j.driveCreatedTime,
+  }, { key: "recorded", dir: "desc" });
 
   const { data: lectureNames } = useListLectureNames();
 
@@ -361,17 +372,17 @@ export default function Jobs() {
             <Table>
               <TableHeader>
                 <TableRow className="border-border">
-                  <TableHead className="font-mono text-xs">ID</TableHead>
-                  <TableHead className="font-mono text-xs">FILE / TITLE</TableHead>
-                  <TableHead className="font-mono text-xs">SIZE</TableHead>
-                  <TableHead className="font-mono text-xs">DURATION</TableHead>
-                  <TableHead className="font-mono text-xs">STATUS</TableHead>
-                  <TableHead className="font-mono text-xs">RECORDED</TableHead>
+                  <SortHead label="ID" column="id" sort={jobSort.sort} onSort={jobSort.toggle} className="font-mono text-xs" />
+                  <SortHead label="FILE / TITLE" column="title" sort={jobSort.sort} onSort={jobSort.toggle} className="font-mono text-xs" />
+                  <SortHead label="SIZE" column="size" sort={jobSort.sort} onSort={jobSort.toggle} className="font-mono text-xs" />
+                  <SortHead label="DURATION" column="duration" sort={jobSort.sort} onSort={jobSort.toggle} className="font-mono text-xs" />
+                  <SortHead label="STATUS" column="status" sort={jobSort.sort} onSort={jobSort.toggle} className="font-mono text-xs" />
+                  <SortHead label="RECORDED" column="recorded" sort={jobSort.sort} onSort={jobSort.toggle} className="font-mono text-xs" />
                   <TableHead className="font-mono text-xs text-right">ACTIONS</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {jobs.map(job => (
+                {jobSort.sorted.map(job => (
                   <TableRow
                     key={job.id}
                     className={`border-border group ${job.status === "needs_review" ? "bg-amber-500/5" : job.status === "rejected" || job.status === "removed" ? "bg-muted/40 opacity-60" : ""}`}
