@@ -10,6 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortHead, useSort } from "@/components/sortable";
 import { Badge } from "@/components/ui/badge";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useToast } from "@/hooks/use-toast";
@@ -64,6 +65,14 @@ export default function Drive() {
     if (viewFilter === "skipped") return !!f.skipReason;
     return true;
   });
+
+  const fileSort = useSort(visibleFiles ?? [], {
+    name: (f) => f.name,
+    size: (f) => f.sizeBytes,
+    recorded: (f) => f.createdTime,
+    uploaded: (f) => f.modifiedTime,
+    reason: (f) => f.skipReason,
+  }, { key: "recorded", dir: "desc" });
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
@@ -126,16 +135,16 @@ export default function Drive() {
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead className="font-mono text-xs w-[40px]"></TableHead>
-                  <TableHead className="font-mono text-xs">FILE NAME</TableHead>
-                  <TableHead className="font-mono text-xs">SIZE</TableHead>
-                  <TableHead className="font-mono text-xs">RECORDED</TableHead>
-                  <TableHead className="font-mono text-xs">UPLOADED</TableHead>
-                  <TableHead className="font-mono text-xs">FILTER REASON</TableHead>
+                  <SortHead label="FILE NAME" column="name" sort={fileSort.sort} onSort={fileSort.toggle} className="font-mono text-xs" />
+                  <SortHead label="SIZE" column="size" sort={fileSort.sort} onSort={fileSort.toggle} className="font-mono text-xs" />
+                  <SortHead label="RECORDED" column="recorded" sort={fileSort.sort} onSort={fileSort.toggle} className="font-mono text-xs" />
+                  <SortHead label="UPLOADED" column="uploaded" sort={fileSort.sort} onSort={fileSort.toggle} className="font-mono text-xs" />
+                  <SortHead label="FILTER REASON" column="reason" sort={fileSort.sort} onSort={fileSort.toggle} className="font-mono text-xs" />
                   <TableHead className="font-mono text-xs text-right">ACTION</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {visibleFiles.map(file => {
+                {fileSort.sorted.map(file => {
                   const isSkipped = !!file.skipReason;
                   return (
                     <TableRow

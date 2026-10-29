@@ -11,6 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortHead, useSort } from "@/components/sortable";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -111,6 +112,14 @@ export default function Library() {
     },
   });
 
+  const resourceSort = useSort(resources ?? [], {
+    title: (r) => r.title,
+    category: (r) => CATEGORY_LABELS[r.category] ?? r.category,
+    size: (r) => r.sizeBytes,
+    visible: (r) => (r.visible ? 1 : 0),
+    added: (r) => r.createdAt,
+  }, { key: "added", dir: "desc" });
+
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between gap-4">
@@ -157,15 +166,15 @@ export default function Library() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>Visible</TableHead>
+                  <SortHead label="Title" column="title" sort={resourceSort.sort} onSort={resourceSort.toggle} />
+                  <SortHead label="Category" column="category" sort={resourceSort.sort} onSort={resourceSort.toggle} />
+                  <SortHead label="Size" column="size" sort={resourceSort.sort} onSort={resourceSort.toggle} />
+                  <SortHead label="Visible" column="visible" sort={resourceSort.sort} onSort={resourceSort.toggle} />
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {resources.map((r: LibraryResource) => (
+                {resourceSort.sorted.map((r: LibraryResource) => (
                   <TableRow key={r.id}>
                     <TableCell className="max-w-md truncate" title={r.driveFileName}>
                       {r.title}
