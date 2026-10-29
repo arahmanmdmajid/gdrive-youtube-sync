@@ -25,6 +25,7 @@ import { logger } from "../lib/logger";
 import { withDecisionLog } from "../lib/decisions";
 import { standInSlot } from "../lib/standIn";
 import { canSwapWith, SWAP_REFUSED_MESSAGE } from "../lib/swapRule";
+import { mergedTitles } from "../lib/splitTitle";
 import { approveIfNeedsReview, undoPendingJob } from "../lib/jobClaims";
 
 const uploadThumbnail = multer({
@@ -131,9 +132,9 @@ type CascadeResult =
  * supply a conflictResolution:
  *   - "swap": the two jobs' titles are exchanged (a genuine two-way trade — two
  *     teachers swapped slots for the day).
- *   - "merge": the conflicting sibling's title is left untouched and it's simply
- *     marked confirmed too (one class split across two recording files — both
- *     genuinely share this name).
+ *   - "merge": one class split across two recording files — both get a Part N
+ *     title and are confirmed, except a sibling that has left review, whose
+ *     title is left untouched.
  * With no conflictResolution given and a conflict found, nothing is written —
  * the caller is expected to surface the choice and retry.
  *
@@ -235,11 +236,14 @@ async function cascadeSlotAssignment(
     const conflictingIsEarlier = conflicting.driveCreatedTime
       ? new Date(conflicting.driveCreatedTime).getTime() < new Date(driveCreatedTime).getTime()
       : true;
-    const conflictingFinalTitle = `${newTitle} | Part ${conflictingIsEarlier ? 1 : 2}`;
-    currentFinalTitle = `${newTitle} | Part ${conflictingIsEarlier ? 2 : 1}`;
-    await db.update(jobsTable)
-      .set({ proposedTitle: conflictingFinalTitle, lectureNameConfirmed: true, updatedAt: new Date() })
-      .where(eq(jobsTable.id, conflicting.id));
+    // One that has left review keeps its title: the video on YouTube already has it.
+    const merged = mergedTitles(newTitle, conflictingIsEarlier, canSwapWith(conflicting.status));
+    currentFinalTitle = merged.current;
+    if (merged.other !== null) {
+      await db.update(jobsTable)
+        .set({ proposedTitle: merged.other, lectureNameConfirmed: true, updatedAt: new Date() })
+        .where(eq(jobsTable.id, conflicting.id));
+    }
   }
 
   await db.update(jobsTable)
