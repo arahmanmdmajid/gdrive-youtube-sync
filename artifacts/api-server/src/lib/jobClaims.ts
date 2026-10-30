@@ -17,6 +17,20 @@ export async function claimPendingJob(id: number): Promise<Job | null> {
   return row ?? null;
 }
 
+/**
+ * Creates a job for a newly seen Drive file. Returns false if a job for that file already exists,
+ * for example one a second scan inserted a moment ago: the unique drive_file_id decides, not a
+ * list read earlier.
+ */
+export async function insertNewJob(values: typeof jobsTable.$inferInsert): Promise<boolean> {
+  const rows = await db
+    .insert(jobsTable)
+    .values(values)
+    .onConflictDoNothing({ target: jobsTable.driveFileId })
+    .returning({ id: jobsTable.id });
+  return rows.length > 0;
+}
+
 /** Records that the job's video is on YouTube. Throws if the database write fails. */
 export async function markJobDone(jobId: number, videoId: string, title: string): Promise<void> {
   await db

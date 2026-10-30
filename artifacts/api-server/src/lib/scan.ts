@@ -6,6 +6,7 @@ import { isEligible, BATCH_RECORDING_SIZE_BYTES } from "./filter";
 import { logger } from "./logger";
 import { computeGroupAssignments } from "./titles";
 import { scanGroupMembers } from "./scanMembers";
+import { insertNewJob } from "./jobClaims";
 import { recordDecisions, snapshotJobs } from "./decisions";
 
 /**
@@ -202,7 +203,7 @@ export async function runPipelineScan(): Promise<{
       if (isSuspiciousSize) {
         proposedTitle = `[REVIEW: large file] ${proposedTitle}`;
       }
-      await db.insert(jobsTable).values({
+      const inserted = await insertNewJob({
         driveFileId: file.id,
         driveFileName: file.name ?? "Untitled",
         driveFileSizeBytes: sizeBytes,
@@ -212,7 +213,8 @@ export async function runPipelineScan(): Promise<{
         proposedTitle,
         proposedDescription,
       });
-      newJobsCreated++;
+      if (inserted) newJobsCreated++;
+      else alreadyQueued++;
     }
   }
 
