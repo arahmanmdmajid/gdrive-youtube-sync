@@ -139,3 +139,13 @@ test("pre-upload check: empty title and a title already uploaded are blocked", {
   await newJob("needs_review", other);
   assert.equal(await m.claims.uploadBlockReason(mine.id, other), null, "rejected and needs_review do not block");
 });
+
+test("inserting the same new file twice makes one job and does not throw", { skip }, async () => {
+  const driveFileId = `test-dup-${Date.now()}`;
+  const values = { driveFileId, driveFileName: "x", status: "needs_review" as const, proposedTitle: "T" };
+  const results = await Promise.all([m.claims.insertNewJob(values), m.claims.insertNewJob(values), m.claims.insertNewJob(values)]);
+  assert.equal(results.filter(Boolean).length, 1);
+  const rows = await m.db.select().from(m.jobsTable).where(m.eq(m.jobsTable.driveFileId, driveFileId));
+  assert.equal(rows.length, 1);
+  created.push(rows[0].id);
+});
