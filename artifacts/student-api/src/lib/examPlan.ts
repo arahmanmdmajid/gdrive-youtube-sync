@@ -87,7 +87,7 @@ export function projectFinish(input: PlanInput): Projection {
   };
 
   if (remainingMinutes === 0) return { ...empty, status: "done" };
-  if (daysToExam < 0) return { ...empty, status: "exam_passed" };
+  if (daysToExam < 0) return { ...empty, status: "exam_passed", achievable: false };
 
   const perDayMinutes = Math.round(hoursPerDay * 60 * 1e6) / 1e6;
   const studyDaysNeeded = Math.ceil(remainingMinutes / perDayMinutes);
