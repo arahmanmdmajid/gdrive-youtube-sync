@@ -53,6 +53,7 @@ test("after the exam date there is no projection", () => {
   const p = projectFinish({ ...base, remainingSeconds: HOUR, today: "2027-01-02" });
   assert.equal(p.status, "exam_passed");
   assert.equal(p.finishDate, null);
+  assert.equal(p.achievable, false);
 });
 
 test("on track with days to spare", () => {
