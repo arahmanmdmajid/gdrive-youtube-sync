@@ -19,7 +19,7 @@ Drive (Meet recordings) → scan → name from timetable → human review → Yo
 ```
 
 1. A worker scans the Drive folders it watches and creates a job per recording, with a proposed title like `1.2 Jalalain Part 2 | Ustad Haseeb | 18-05-2026`.
-2. Staff review the jobs in the admin dashboard, correct the lecture name if a class was skipped, and approve.
+2. Staff review the jobs in the admin dashboard, correct the lecture name if a class was skipped, and approve. A class cut into several recordings can be merged (`| Part 1`, `| Part 2`), two classes that traded places can be swapped, and a teacher who teaches another subject in their own slot (a stand-in, such as 5.3) keeps that slot so the rest of the day is not shifted. The dashboard tables are sorted newest first and any column header re-sorts them.
 3. Approved jobs are uploaded to YouTube as unlisted videos and added to the playlist.
 4. Students sign in to the portal (invite code) to watch lectures grouped by subject and track their progress.
 
