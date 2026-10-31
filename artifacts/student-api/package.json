@@ -6,7 +6,8 @@
   "scripts": {
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps --env-file=../../.env ./dist/index.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node buildTests.mjs && node --test \"dist/test/*.test.mjs\""
   },
   "dependencies": {
     "@workspace/db": "workspace:*",
