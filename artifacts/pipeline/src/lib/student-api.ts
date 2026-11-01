@@ -158,6 +158,49 @@ export function useContinueLecture() {
   });
 }
 
+export interface StudyPlan {
+  hoursPerDay: number;
+  daysPerWeek: number;
+}
+
+export interface ExamReadiness {
+  lectures: { total: number; completed: number; remaining: number };
+  seconds: { total: number; completed: number; remaining: number };
+  approximate: boolean;
+  examDate: string;
+  today: string;
+  daysToExam: number;
+  plan: StudyPlan | null;
+  state: "no_lectures" | "done" | "exam_passed" | "needs_plan" | "on_track" | "at_risk";
+  projection: {
+    finishDate: string;
+    daysSpare: number | null;
+    daysShort: number | null;
+    minHoursPerDay: number;
+    achievable: boolean;
+  } | null;
+  message: string | null;
+  comparison: { hoursPerDay: number; finishDate: string; status: "on_track" | "at_risk" }[];
+}
+
+export function useExamReadiness() {
+  return useQuery({
+    queryKey: ["student", "exam-readiness"],
+    queryFn: () => customFetch<ExamReadiness>("/api/student/exam-readiness"),
+  });
+}
+
+export function useSaveStudyPlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (plan: StudyPlan) =>
+      customFetch<{ plan: StudyPlan }>("/api/student/study-plan", { method: "PUT", body: JSON.stringify(plan) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["student", "exam-readiness"] });
+    },
+  });
+}
+
 export function useAdminStudents() {
   return useQuery({
     queryKey: ["admin", "students"],

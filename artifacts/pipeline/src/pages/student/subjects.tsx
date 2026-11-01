@@ -7,6 +7,7 @@ import { CheckCircle2, Play } from "lucide-react";
 import { StudentLayout } from "@/components/student-layout";
 import { useSubjects, useContinueLecture } from "@/lib/student-api";
 import { getStoredUser } from "@/lib/auth";
+import { ExamReadinessCard } from "./exam-readiness-card";
 
 export default function StudentSubjects() {
   const { data, isLoading } = useSubjects();
@@ -28,6 +29,8 @@ export default function StudentSubjects() {
           </p>
         )}
       </div>
+
+      <ExamReadinessCard />
 
       {cont?.lecture && (
         <Card className="mb-6 border-primary/40 bg-primary/5">
