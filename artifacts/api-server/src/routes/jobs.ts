@@ -13,6 +13,7 @@ import {
 import { runPipelineScan, processJobById, processAllPendingJobs, reconcilePlaylist, isQuotaError, isThumbnailRateLimited, reflowGroupTitles } from "../lib/pipeline";
 import { scanAudioLibrary } from "../lib/audioPipeline";
 import { getYoutubeClient } from "../lib/youtubeClient";
+import { backfillMissingDurations } from "../lib/durationBackfill";
 import {
   extractSerial,
   getSubjectThumbnailPath,
@@ -841,6 +842,21 @@ router.post("/pipeline/apply-thumbnails", async (req, res) => {
   }
 
   res.json({ applied, skipped, failed });
+});
+
+// Store the YouTube length of done jobs that have none (manual uploads, audio). Idempotent.
+router.post("/pipeline/backfill-durations", async (req, res) => {
+  const youtube = getYoutubeClient();
+  if (!youtube) {
+    res.status(503).json({ error: "YouTube not configured" });
+    return;
+  }
+  try {
+    res.json(await backfillMissingDurations(youtube));
+  } catch (err) {
+    logger.warn({ err }, "Duration backfill failed");
+    res.status(502).json({ error: err instanceof Error ? err.message : "Backfill failed" });
+  }
 });
 
 // Start uploading all pending jobs in chronological order (runs in background)

@@ -198,6 +198,7 @@
     { "method": "POST", "path": "/pipeline/trigger", "purpose": "Run a Drive scan now", "file": "routes/jobs.ts" },
     { "method": "POST", "path": "/pipeline/scan-audio", "purpose": "Scan for audio-only recordings", "file": "routes/jobs.ts" },
     { "method": "POST", "path": "/pipeline/apply-thumbnails", "purpose": "Apply subject-default thumbnails to all jobs missing one", "file": "routes/jobs.ts" },
+    { "method": "POST", "path": "/pipeline/backfill-durations", "purpose": "Store the YouTube length of done jobs that have none (manual uploads, audio)", "file": "routes/jobs.ts" },
     { "method": "POST", "path": "/pipeline/upload", "purpose": "Process all pending jobs", "file": "routes/jobs.ts" },
     { "method": "POST", "path": "/pipeline/reconcile-playlist", "purpose": "Sync playlist membership with job state (done/removed/backfill)", "file": "routes/jobs.ts" },
     { "method": "GET", "path": "/pipeline/stats", "purpose": "Status counts for the Dashboard", "file": "routes/jobs.ts" },
