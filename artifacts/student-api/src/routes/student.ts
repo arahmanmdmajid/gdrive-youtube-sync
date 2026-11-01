@@ -5,6 +5,7 @@ import { requireAuth, requireAdminRole, type AuthedRequest } from "../lib/auth";
 import { UNGROUPED_SERIAL, serialForTitle, loadSubjectLookup, type SubjectLookup } from "../lib/subjects";
 import { progressSchema, studyPlanSchema } from "../zod";
 import { getStudyPlan, saveStudyPlan } from "../lib/studyPlan";
+import { loadReadiness } from "../lib/readinessData";
 
 const router: Router = Router();
 
@@ -149,6 +150,11 @@ router.put("/progress/:jobId", async (req: Request, res: Response) => {
   }
 
   res.json({ jobId, status });
+});
+
+router.get("/exam-readiness", async (req: Request, res: Response) => {
+  const { userId } = req as AuthedRequest;
+  res.json(await loadReadiness(userId));
 });
 
 router.get("/study-plan", async (req: Request, res: Response) => {
