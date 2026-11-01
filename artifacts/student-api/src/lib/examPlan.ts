@@ -1,4 +1,4 @@
-export const EXAM_DATE = "2027-01-01";
+export const EXAM_DATE = "2027-01-09";
 export const EXAM_TIME_ZONE = "Asia/Karachi";
 
 const DAY_MS = 86_400_000;

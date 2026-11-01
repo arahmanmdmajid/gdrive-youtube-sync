@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  EXAM_DATE,
   addDays,
   compareHours,
   daysBetween,
@@ -12,6 +13,11 @@ import {
 
 const HOUR = 3600;
 const base = { hoursPerDay: 2, daysPerWeek: 7, today: "2026-10-31", examDate: "2027-01-01" };
+
+test("the exam is on 9 January 2027, 8 days after the old date", () => {
+  assert.equal(EXAM_DATE, "2027-01-09");
+  assert.equal(daysBetween("2027-01-01", EXAM_DATE), 8);
+});
 
 test("date helpers cross month and year ends", () => {
   assert.equal(addDays("2026-12-31", 1), "2027-01-01");
