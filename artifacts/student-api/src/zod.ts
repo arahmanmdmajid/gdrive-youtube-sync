@@ -21,6 +21,12 @@ export const progressSchema = z.object({
   status: z.enum(["not_started", "in_progress", "completed"]),
 });
 
+// Under a minute a day rounds to 0 minutes, which is not a plan.
+export const studyPlanSchema = z.object({
+  hoursPerDay: z.number().min(1 / 60).max(24),
+  daysPerWeek: z.number().int().min(1).max(7).default(7),
+});
+
 export const resetPasswordSchema = z.object({
   password: z.string().min(6).max(100),
 });

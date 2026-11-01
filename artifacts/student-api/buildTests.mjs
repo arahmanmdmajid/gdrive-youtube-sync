@@ -22,4 +22,14 @@ await build({
   bundle: true,
   format: "esm",
   logLevel: "warning",
+  external: ["pg-native"],
+  // pg and other CommonJS packages are bundled into an ES module, so give them require/__dirname.
+  banner: {
+    js: `import { createRequire as __cr } from 'node:module';
+import __p from 'node:path';
+import __u from 'node:url';
+globalThis.require = __cr(import.meta.url);
+globalThis.__filename = __u.fileURLToPath(import.meta.url);
+globalThis.__dirname = __p.dirname(globalThis.__filename);`,
+  },
 });

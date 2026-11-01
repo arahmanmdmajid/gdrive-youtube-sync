@@ -3,7 +3,8 @@ import { db, jobsTable, lectureProgressTable, usersTable } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
 import { requireAuth, requireAdminRole, type AuthedRequest } from "../lib/auth";
 import { UNGROUPED_SERIAL, serialForTitle, loadSubjectLookup, type SubjectLookup } from "../lib/subjects";
-import { progressSchema } from "../zod";
+import { progressSchema, studyPlanSchema } from "../zod";
+import { getStudyPlan, saveStudyPlan } from "../lib/studyPlan";
 
 const router: Router = Router();
 
@@ -148,6 +149,22 @@ router.put("/progress/:jobId", async (req: Request, res: Response) => {
   }
 
   res.json({ jobId, status });
+});
+
+router.get("/study-plan", async (req: Request, res: Response) => {
+  const { userId } = req as AuthedRequest;
+  res.json({ plan: await getStudyPlan(userId) });
+});
+
+router.put("/study-plan", async (req: Request, res: Response) => {
+  const { userId } = req as AuthedRequest;
+  const parsed = studyPlanSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Hours per day must be above 0 and at most 24, and study days per week from 1 to 7" });
+    return;
+  }
+  await saveStudyPlan(userId, parsed.data);
+  res.json({ plan: await getStudyPlan(userId) });
 });
 
 router.get("/class-progress", requireAdminRole, async (_req: Request, res: Response) => {
