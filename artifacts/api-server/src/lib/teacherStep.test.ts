@@ -97,3 +97,62 @@ test("the limit defaults to the setting when not given", async () => {
   }
   assert.deepEqual(s.calls.reads, [4]);
 });
+
+// ── TITLE_BY_TEACHER ───────────────────────────────────────────────────────
+
+import { readTitleByTeacher } from "./autoReviewMode";
+
+test("TITLE_BY_TEACHER: only 'on' turns it on, anything else is off", () => {
+  assert.equal(readTitleByTeacher("on"), true);
+  assert.equal(readTitleByTeacher(" ON "), true);
+  for (const v of [undefined, "", "off", "true", "1", "yes", "dry_run", "onn"]) assert.equal(readTitleByTeacher(v), false, String(v));
+});
+
+test("title by teacher on, auto-review off: reads, re-titles the jobs read ok, runs no dry run", async () => {
+  const retitled: number[][] = [];
+  const reviewed: string[] = [];
+  const r = await runTeacherStep({
+    reviewMode: "off",
+    teacherMode: "off",
+    titleByTeacher: true,
+    reads: async () => ({
+      skipped: null,
+      attempted: 2,
+      results: [
+        { jobId: 7, status: "ok", teacher: "Ustad Haseeb", ambiguous: false, framesRead: 4, framesMatched: 4, error: null },
+        { jobId: 8, status: "failed", teacher: null, ambiguous: false, framesRead: 0, framesMatched: 0, error: "x" },
+      ],
+    }),
+    review: async (m) => void reviewed.push(m),
+    retitle: async (ids) => void retitled.push(ids),
+  });
+  assert.deepEqual(r, { ran: true, attempted: 2 });
+  assert.deepEqual(retitled, [[7]]);
+  assert.deepEqual(reviewed, []);
+});
+
+test("title by teacher on with the dry run and teacher reads on: re-titles, then runs the dry run", async () => {
+  const calls: string[] = [];
+  await runTeacherStep({
+    reviewMode: "dry_run",
+    teacherMode: "on",
+    titleByTeacher: true,
+    reads: async () => summary(1),
+    review: async () => void calls.push("review"),
+    retitle: async () => void calls.push("retitle"),
+  });
+  assert.deepEqual(calls, ["retitle", "review"]);
+});
+
+test("title by teacher off: no re-title, as before", async () => {
+  const calls: string[] = [];
+  await runTeacherStep({
+    reviewMode: "dry_run",
+    teacherMode: "on",
+    titleByTeacher: false,
+    reads: async () => summary(1),
+    review: async () => void calls.push("review"),
+    retitle: async () => void calls.push("retitle"),
+  });
+  assert.deepEqual(calls, ["review"]);
+});

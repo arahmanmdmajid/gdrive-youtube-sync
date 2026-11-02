@@ -110,6 +110,8 @@ Files are grouped by (PKT date, meeting code), sorted by `createdTime` ascending
 
 **Cascade**: when a user changes a job's lecture name during review (because a class was skipped), all subsequent `needs_review` siblings for the same day+meeting code are automatically reassigned to the next slots. Jobs whose name a human already confirmed (`lectureNameConfirmed`) are never resequenced.
 
+**Teacher-first naming** (`lib/titleByTeacher.ts`, `TITLE_BY_TEACHER=on`, off by default, issue #88): a recording whose teacher was read (`recording_teacher_reads`) is named from that teacher's slot that weekday instead of its position in the day. `proposeByTeacher` is pure (one slot: that subject, several recordings: `| Part N`; two slots: nearest start, or in order; otherwise left to a person with a reason); `proposeForWalkable` applies it to the unconfirmed members of a group, and `computeGroupAssignments` walks the rest positionally over the slots left. The teacher step re-titles the groups it just read (`reflowGroupsOfJobs`). Confirmed and past-review titles are never rewritten.
+
 **Stand-in** (`lib/standIn.ts`): a name that is not a timetable subject for the day, but whose teacher has exactly one slot that day, is that teacher teaching something else in his slot (e.g. 5.3 in Ustad Khalid Zaman's Siraji, Falakiyat or Sharah Aqaid slot). Approving such a name builds the title from the name and the teacher's slot, and the job holds that slot in the re-flow (`computeGroupAssignments`), so the rest of the day is not shifted. A teacher with no slot or two slots that day is not a stand-in.
 
 **Naming conflicts**: if the new name collides with another job's current name, the API returns `409` instead of guessing. The reviewer picks `conflictResolution`:

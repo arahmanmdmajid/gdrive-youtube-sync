@@ -66,3 +66,51 @@ test("one proposal per recording, in the order given, and one teacher's recordin
 test("no recordings gives no proposals", () => {
   assert.deepEqual(proposeByTeacher(monday, []), []);
 });
+
+// The walk's view: only unconfirmed members are proposed.
+
+import { proposeForWalkable, pktStartMinute, type TeacherMember } from "./titleByTeacher";
+
+const member = (id: string, teacher: string | null | undefined, locked = false, startMin: number | null = null): TeacherMember =>
+  ({ id, teacher, startMin, locked });
+const none = () => false;
+
+test("a locked member is evidence but is never proposed", () => {
+  const r = proposeForWalkable(monday, [member("a", "Ustad Aamir Iqbal", true), member("b", "Ustad Saeedur Rahman")], none);
+  assert.deepEqual([...r.keys()], ["b"]);
+  assert.equal(r.get("b")?.slot.serial, "4.2");
+});
+
+test("a member with no read, or a read that found nobody, gets no proposal", () => {
+  const r = proposeForWalkable(monday, [member("a", undefined), member("b", null), member("c", "")], none);
+  assert.equal(r.size, 0);
+});
+
+test("a slot that a locked recording already holds is not proposed again", () => {
+  // Aamir Iqbal has one slot, held by a done recording with no read: a new one must not repeat its title.
+  const held = (s: ClassSlot) => s.serial === "6.1";
+  const r = proposeForWalkable(monday, [member("a", undefined, true), member("b", "Ustad Aamir Iqbal")], held);
+  assert.equal(r.size, 0);
+});
+
+test("a locked recording by the same teacher is counted, so the next one continues its Part numbers", () => {
+  const held = (s: ClassSlot) => s.serial === "6.1";
+  const r = proposeForWalkable(monday, [member("a", "Ustad Aamir Iqbal", true), member("b", "Ustad Aamir Iqbal")], held);
+  assert.equal(r.get("b")?.slot.serial, "6.1");
+  assert.equal(r.get("b")?.part, 2);
+});
+
+test("start time tells a teacher's two slots apart", () => {
+  const r = proposeForWalkable(monday, [member("a", "Ustad Haseeb", false, 20 * 60 + 2)], none);
+  assert.equal(r.get("a")?.slot.serial, "2.1");
+});
+
+test("pktStartMinute: end time plus 5 hours minus the length, in minutes after PKT midnight", () => {
+  // 2026-10-30 14:00Z is 19:00 PKT; a 30 minute recording started at 18:30 PKT.
+  assert.equal(pktStartMinute("2026-10-30T14:00:00Z", 1800), 18 * 60 + 30);
+  // across midnight: ends 00:10 PKT, 20 minutes long, started 23:50 the day before.
+  assert.equal(pktStartMinute("2026-10-30T19:10:00Z", 1200), 23 * 60 + 50);
+  assert.equal(pktStartMinute(null, 1800), null);
+  assert.equal(pktStartMinute("2026-10-30T14:00:00Z", null), null);
+  assert.equal(pktStartMinute("not a date", 60), null);
+});

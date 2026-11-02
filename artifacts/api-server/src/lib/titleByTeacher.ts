@@ -63,3 +63,39 @@ export function proposeByTeacher(slots: ClassSlot[], recordings: TeacherRecordin
 
   return recordings.map((r) => out.get(r.id)!);
 }
+
+/** A member of one day's group, as the walk sees it. `teacher` is absent when there is no usable read, null when the read found nobody. */
+export type TeacherMember = { id: string; teacher?: string | null; startMin?: number | null; locked: boolean };
+
+/**
+ * The slot (and Part number) the teacher read gives each still-unconfirmed member of a day's group.
+ * Recordings that are locked (confirmed or past review) count as evidence for the numbering but are never
+ * rewritten. A slot that a locked recording already holds is not proposed again, unless that same teacher
+ * has a locked recording in the group, whose Part number the proposal then continues from.
+ */
+export function proposeForWalkable(
+  slots: ClassSlot[],
+  members: TeacherMember[],
+  isHeld: (slot: ClassSlot) => boolean,
+): Map<string, { slot: ClassSlot; part: number | null }> {
+  const named = members.filter((m) => typeof m.teacher === "string" && m.teacher !== "");
+  const proposals = proposeByTeacher(slots, named.map((m, i) => ({ id: i, teacher: m.teacher!, startMin: m.startMin ?? null })));
+  const out = new Map<string, { slot: ClassSlot; part: number | null }>();
+  named.forEach((m, i) => {
+    const p = proposals[i];
+    if (m.locked || !p.slot) return;
+    if (isHeld(p.slot) && !named.some((x) => x.locked && x.teacher === m.teacher)) return;
+    out.set(m.id, { slot: p.slot, part: p.part });
+  });
+  return out;
+}
+
+/** A recording's estimated start in PKT, in minutes after midnight, from when its file appeared and its length. */
+export function pktStartMinute(createdTime: string | null | undefined, durationSec: number | null | undefined): number | null {
+  if (!createdTime || durationSec == null) return null;
+  const ms = Date.parse(createdTime);
+  if (Number.isNaN(ms)) return null;
+  const DAY = 86_400_000;
+  const pktMs = ms + 5 * 3_600_000 - durationSec * 1000;
+  return Math.floor((((pktMs % DAY) + DAY) % DAY) / 60_000);
+}
