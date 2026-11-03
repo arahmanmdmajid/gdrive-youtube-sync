@@ -62,6 +62,8 @@ export interface Job {
   hasCustomThumbnail?: boolean;
   /** A job in review: the teacher read from the recording (null if the read found nobody). Absent when not read. */
   teacherSeen?: string | null;
+  /** A job in review: the book open on the shared screen, and whether the title agrees. Absent when no book was seen. */
+  screenSeen?: { subject: string; agrees: boolean };
   createdAt: string;
   updatedAt?: string;
 }

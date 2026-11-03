@@ -95,3 +95,9 @@ export function subjectFromFrames(frames: OcrLine[][]): ScreenReading {
   if (ambiguous || !all) return { subject: null, serials: [], framesMatched: perFrame.length, ambiguous };
   return { subject: all.subject, serials: all.serials, framesMatched: perFrame.length, ambiguous: false };
 }
+
+/** What the Jobs page shows for a read: the subject the screen showed and whether the title's serial is one it allows. Null when no subject was seen. */
+export function screenSeenFor(read: { subject: string | null; serials: string[] }, title: string): { subject: string; agrees: boolean } | null {
+  if (!read.subject) return null;
+  return { subject: read.subject, agrees: screenAgreesWith(title, { subject: read.subject, serials: read.serials }) };
+}

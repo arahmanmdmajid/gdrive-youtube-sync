@@ -96,6 +96,12 @@ function TeacherNote({ seen, title }: { seen?: string | null; title: string }) {
   return <div className="text-xs text-muted-foreground">Teacher seen: {seen}</div>;
 }
 
+function ScreenNote({ seen }: { seen?: { subject: string; agrees: boolean } }) {
+  if (!seen) return null;
+  if (!seen.agrees) return <div className="text-xs text-red-600 dark:text-red-400">Screen shows {seen.subject}. The title says otherwise.</div>;
+  return <div className="text-xs text-muted-foreground">Screen shows {seen.subject}</div>;
+}
+
 export default function Jobs() {
   const [statusFilter, setStatusFilter] = useState<ListJobsStatus | "all">("all");
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -431,6 +437,7 @@ export default function Jobs() {
                             {job.proposedTitle}
                           </div>
                           <TeacherNote seen={job.teacherSeen} title={job.proposedTitle} />
+                          <ScreenNote seen={job.screenSeen} />
                         </div>
                       ) : renameState?.id === job.id ? (
                         <div className="space-y-1 mt-0.5 max-w-[320px]">

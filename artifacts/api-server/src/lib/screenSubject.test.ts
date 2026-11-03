@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { screenAgreesWith, subjectFromFileName } from "./screenSubject";
+import { screenAgreesWith, screenSeenFor, subjectFromFileName } from "./screenSubject";
 
 // File names as they appear in the PDF viewer's toolbar on real shared screens, and as the OCR garbled them.
 const serials = (name: string) => subjectFromFileName(name)?.serials;
@@ -50,4 +50,12 @@ test("the screen agrees when the title's serial is one it allows", () => {
   assert.equal(screenAgreesWith(null, screen), false);
   // job 692: titled Siraji while the screen showed Ulama-e-Deoband
   assert.equal(screenAgreesWith("2.3 Siraji | Ustad Khalid Zaman | 12-10-2026", subjectFromFileName("Ulama-e-Deoband ka.pdf")!), false);
+});
+
+test("screenSeenFor: the subject the screen showed and whether the title agrees; nothing when no subject was seen", () => {
+  const jalalain2 = { subject: "Jalalain", serials: ["1.2"] };
+  assert.deepEqual(screenSeenFor(jalalain2, "1.2 Jalalain Part 2 | Ustad Haseeb | 03-11-2026"), { subject: "Jalalain", agrees: true });
+  assert.deepEqual(screenSeenFor(jalalain2, "2.1 Al Fawz ul Kabir | Ustad Haseeb | 03-11-2026"), { subject: "Jalalain", agrees: false });
+  assert.deepEqual(screenSeenFor(jalalain2, ""), { subject: "Jalalain", agrees: false });
+  assert.equal(screenSeenFor({ subject: null, serials: [] }, "1.2 Jalalain Part 2 | X | 03-11-2026"), null);
 });

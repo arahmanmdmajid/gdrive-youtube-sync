@@ -25,6 +25,7 @@ import {
 import { logger } from "../lib/logger";
 import { withDecisionLog } from "../lib/decisions";
 import { standInSlot } from "../lib/standIn";
+import { screenSeenFor } from "../lib/screenSubject";
 import { canSwapWith, SWAP_REFUSED_MESSAGE } from "../lib/swapRule";
 import { mergedTitles } from "../lib/splitTitle";
 import { approveIfNeedsReview, undoPendingJob } from "../lib/jobClaims";
@@ -927,7 +928,8 @@ function formatJob(j: typeof jobsTable.$inferSelect) {
 /**
  * The job list. A job in review also carries `teacherSeen`, the teacher read from the recording's name tile
  * (null when the read found nobody), so the reviewer sees the evidence beside the proposed title. It is left
- * out when there is no usable read, and a failure to load reads never fails the list.
+ * out when there is no usable read, and a failure to load reads never fails the list. `screenSeen` is the same
+ * for the book open on the shared screen: only when a subject was seen, with whether the title agrees.
  */
 async function formatJobs(rows: (typeof jobsTable.$inferSelect)[]) {
   const ids = rows.filter((r) => r.status === "needs_review").map((r) => r.id);
@@ -939,7 +941,19 @@ async function formatJobs(rows: (typeof jobsTable.$inferSelect)[]) {
       logger.warn({ err }, "Could not load teacher reads for the job list");
     }
   }
-  return rows.map((r) => ({ ...formatJob(r), ...(seen.has(r.id) ? { teacherSeen: seen.get(r.id) ?? null } : {}) }));
+  let screen = new Map<number, { subject: string; serials: string[] }>();
+  if (ids.length > 0) {
+    try {
+      screen = await (await import("../lib/screenReads")).loadScreenEvidence(ids);
+    } catch (err) {
+      logger.warn({ err }, "Could not load screen reads for the job list");
+    }
+  }
+  return rows.map((r) => {
+    const onScreen = screen.get(r.id);
+    const screenSeen = onScreen ? screenSeenFor(onScreen, r.proposedTitle ?? "") : null;
+    return { ...formatJob(r), ...(seen.has(r.id) ? { teacherSeen: seen.get(r.id) ?? null } : {}), ...(screenSeen ? { screenSeen } : {}) };
+  });
 }
 
 export default router;
