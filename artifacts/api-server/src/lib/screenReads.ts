@@ -95,3 +95,25 @@ export async function runScreenReads(
 export async function listScreenReads() {
   return db.select().from(recordingScreenReadsTable).orderBy(asc(recordingScreenReadsTable.jobId));
 }
+
+/**
+ * The subject each recording's screen showed, for the reads that can be used: made with the CURRENT subject
+ * table, finished ok, and naming a subject. Every other recording is simply absent.
+ */
+export async function loadScreenEvidence(jobIds: number[]): Promise<Map<number, { subject: string; serials: string[] }>> {
+  const evidence = new Map<number, { subject: string; serials: string[] }>();
+  if (jobIds.length === 0) return evidence;
+  const reads = await db
+    .select({ jobId: recordingScreenReadsTable.jobId, subject: recordingScreenReadsTable.subject, serials: recordingScreenReadsTable.serials })
+    .from(recordingScreenReadsTable)
+    .where(
+      and(
+        inArray(recordingScreenReadsTable.jobId, jobIds),
+        eq(recordingScreenReadsTable.tableVersion, SCREEN_TABLE_VERSION),
+        eq(recordingScreenReadsTable.status, "ok"),
+        isNotNull(recordingScreenReadsTable.subject),
+      ),
+    );
+  for (const r of reads) if (r.subject) evidence.set(r.jobId, { subject: r.subject, serials: JSON.parse(r.serials ?? "[]") as string[] });
+  return evidence;
+}
