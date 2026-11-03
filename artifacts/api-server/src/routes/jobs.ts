@@ -306,11 +306,11 @@ router.get("/jobs", async (req, res) => {
   const byRecordingDate = sql`${jobsTable.driveCreatedTime} desc nulls last`;
   if (status) {
     const rows = await db.select().from(jobsTable).where(eq(jobsTable.status, status)).orderBy(byRecordingDate);
-    res.json(rows.map(formatJob));
+    res.json(await formatJobs(rows));
     return;
   }
   const rows = await db.select().from(jobsTable).orderBy(byRecordingDate);
-  res.json(rows.map(formatJob));
+  res.json(await formatJobs(rows));
 });
 
 router.post("/jobs", async (req, res) => {
@@ -922,6 +922,24 @@ function formatJob(j: typeof jobsTable.$inferSelect) {
     createdAt: j.createdAt.toISOString(),
     updatedAt: j.updatedAt.toISOString(),
   };
+}
+
+/**
+ * The job list. A job in review also carries `teacherSeen`, the teacher read from the recording's name tile
+ * (null when the read found nobody), so the reviewer sees the evidence beside the proposed title. It is left
+ * out when there is no usable read, and a failure to load reads never fails the list.
+ */
+async function formatJobs(rows: (typeof jobsTable.$inferSelect)[]) {
+  const ids = rows.filter((r) => r.status === "needs_review").map((r) => r.id);
+  let seen = new Map<number, string | null>();
+  if (ids.length > 0) {
+    try {
+      seen = await (await import("../lib/teacherReads")).loadTeacherEvidence(ids);
+    } catch (err) {
+      logger.warn({ err }, "Could not load teacher reads for the job list");
+    }
+  }
+  return rows.map((r) => ({ ...formatJob(r), ...(seen.has(r.id) ? { teacherSeen: seen.get(r.id) ?? null } : {}) }));
 }
 
 export default router;

@@ -60,6 +60,8 @@ export interface Job {
   /** @nullable */
   errorMessage?: string | null;
   hasCustomThumbnail?: boolean;
+  /** A job in review: the teacher read from the recording (null if the read found nobody). Absent when not read. */
+  teacherSeen?: string | null;
   createdAt: string;
   updatedAt?: string;
 }
