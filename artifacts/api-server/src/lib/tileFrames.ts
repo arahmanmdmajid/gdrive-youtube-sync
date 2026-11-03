@@ -14,6 +14,9 @@ export const FRAME_COUNT = 4;
 // enlarged 3 times. Measured in #27 on 93 recordings.
 const TILE_FILTER = "crop=iw*0.28:ih*0.5:iw*0.72:ih*0.25,scale=iw*3:-1";
 
+// The whole screen, 1920 wide: the PDF viewer's toolbar is small text near the top left of the shared screen.
+const SCREEN_FILTER = "scale=1920:-1";
+
 export interface ExtractedFrames {
   /** Paths of the frames that were obtained. */
   paths: string[];
@@ -24,13 +27,13 @@ export interface ExtractedFrames {
 /** Gets the tile frames of one recording into `outDir`. */
 export type FrameExtractor = (fileId: string, durationSec: number, outDir: string) => Promise<ExtractedFrames>;
 
-function grabFrame(url: string, token: string, seconds: number, out: string): Promise<boolean> {
+function grabFrame(url: string, token: string, seconds: number, out: string, filter: string): Promise<boolean> {
   return new Promise((resolve) => {
     // The token travels on ffmpeg's command line (ffmpeg has no other way to take a header), so other
     // processes on this PC can see it while ffmpeg runs. It is short-lived and never logged.
     const p = spawn(
       "ffmpeg",
-      ["-y", "-loglevel", "error", "-headers", `Authorization: Bearer ${token}\r\n`, "-ss", String(seconds), "-i", url, "-vf", TILE_FILTER, "-frames:v", "1", "-q:v", "3", out],
+      ["-y", "-loglevel", "error", "-headers", `Authorization: Bearer ${token}\r\n`, "-ss", String(seconds), "-i", url, "-vf", filter, "-frames:v", "1", "-q:v", "3", out],
       { windowsHide: true },
     );
     const timer = setTimeout(() => p.kill(), 120_000);
@@ -45,8 +48,8 @@ function grabFrame(url: string, token: string, seconds: number, out: string): Pr
   });
 }
 
-/** The real extractor: ffmpeg against the Drive file, using the Drive account's short-lived access token. */
-export const extractTileFrames: FrameExtractor = async (fileId, durationSec, outDir) => {
+/** A real extractor: ffmpeg against the Drive file, using the Drive account's short-lived access token. */
+const makeExtractor = (filter: string): FrameExtractor => async (fileId, durationSec, outDir) => {
   const auth = getGoogleDriveAuthClient();
   if (!auth) throw new Error("Google Drive is not configured");
   const { token } = await auth.getAccessToken();
@@ -58,8 +61,14 @@ export const extractTileFrames: FrameExtractor = async (fileId, durationSec, out
   for (let k = 1; k <= FRAME_COUNT; k++) {
     const seconds = Math.max(1, Math.round((durationSec * k) / (FRAME_COUNT + 1)));
     const out = path.join(outDir, `frame${k}.jpg`);
-    if (await grabFrame(url, token, seconds, out)) paths.push(out);
+    if (await grabFrame(url, token, seconds, out, filter)) paths.push(out);
     else failed++;
   }
   return { paths, failed };
 };
+
+/** The name tile of each frame, enlarged. */
+export const extractTileFrames = makeExtractor(TILE_FILTER);
+
+/** The whole of each frame. */
+export const extractScreenFrames = makeExtractor(SCREEN_FILTER);

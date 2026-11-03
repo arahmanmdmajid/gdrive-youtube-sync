@@ -4,6 +4,7 @@ export * from "./jobDecisions";
 export * from "./jobs";
 export * from "./library";
 export * from "./schedule";
+export * from "./screenReads";
 export * from "./studyPlans";
 export * from "./teacherTile";
 export * from "./users";
