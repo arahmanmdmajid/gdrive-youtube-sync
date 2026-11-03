@@ -11,6 +11,7 @@ import scheduleRouter from "./schedule";
 import driveFoldersRouter from "./driveFolders";
 import autoReviewRouter from "./autoReview";
 import teacherTileRouter from "./teacherTile";
+import screenReadsRouter from "./screenReads";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(scheduleRouter);
 router.use(driveFoldersRouter);
 router.use(autoReviewRouter);
 router.use(teacherTileRouter);
+router.use(screenReadsRouter);
 
 export default router;

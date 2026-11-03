@@ -180,6 +180,8 @@
     { "method": "GET", "path": "/teacher-aliases", "purpose": "the alias table (how each teacher shows on the name tile) and its hash", "file": "routes/teacherTile.ts" },
     { "method": "PUT", "path": "/teacher-aliases", "purpose": "replace the whole alias table; body { aliases: [{ teacher, strong?, allOf?, weak? }] }", "file": "routes/teacherTile.ts" },
     { "method": "GET", "path": "/teacher-reads", "purpose": "stored results of reading recordings' name tiles (verdicts only)", "file": "routes/teacherTile.ts" },
+    { "method": "GET", "path": "/screen-reads", "purpose": "stored results of reading the open book from recordings' shared screens (subject and serials only)", "file": "routes/screenReads.ts" },
+    { "method": "POST", "path": "/screen-reads/run", "purpose": "reads up to ?limit (default 1, at most 5) recordings now; needs no flag", "file": "routes/screenReads.ts" },
     { "method": "POST", "path": "/teacher-reads/run", "purpose": "read up to ?limit (default 2, max 10) recordings now with ffmpeg and Windows OCR; one run at a time", "file": "routes/teacherTile.ts" },
     { "method": "GET", "path": "/auto-review/agreement", "purpose": "how often the rules' verdicts agreed with the reviewer's decisions per day, by code and weekday, and the gate checklist for active mode (read only; 503 if job_decisions is missing)", "file": "routes/autoReview.ts" },
     { "method": "GET", "path": "/auto-review/groups", "purpose": "live verdicts of the day-approval rules for every day with a needs_review job (read only, writes nothing)", "file": "routes/autoReview.ts" },

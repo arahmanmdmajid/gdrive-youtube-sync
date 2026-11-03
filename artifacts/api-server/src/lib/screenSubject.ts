@@ -1,3 +1,5 @@
+import type { OcrLine } from "./windowsOcr";
+
 /** What a shared PDF says the class is about: the subject and the lecture serials it could be. */
 export type ScreenSubject = { subject: string; serials: string[] };
 
@@ -43,4 +45,53 @@ export function subjectFromFileName(fileName: string): ScreenSubject | null {
 export function screenAgreesWith(title: string | null | undefined, screen: ScreenSubject): boolean {
   const serial = /^(\d+\.\d+) /.exec(title ?? "")?.[1];
   return !!serial && screen.serials.includes(serial);
+}
+
+/** Bump when SUBJECTS changes, so recordings are read again with the new table. */
+export const SCREEN_TABLE_VERSION = 1;
+
+export interface ScreenReading {
+  subject: string | null;
+  serials: string[];
+  /** Frames where the toolbar showed a known subject. */
+  framesMatched: number;
+  /** The frames named different subjects (or volumes), so no subject is given. */
+  ambiguous: boolean;
+}
+
+const COUNTER = /^\d{1,4}\s*\/\s*\d{1,4}$/;
+const SAME_ROW_PX = 8;
+
+/** The subject all the given readings agree on, or null when they differ. */
+function agreed(found: ScreenSubject[]): ScreenSubject | null {
+  const subject = found[0].subject;
+  if (found.some((f) => f.subject !== subject)) return null;
+  const serials = found[0].serials.filter((s) => found.every((f) => f.serials.includes(s)));
+  return serials.length ? { subject, serials } : null;
+}
+
+/**
+ * The subject named by the PDF viewer's toolbar in the recognized lines of a recording's frames. The
+ * toolbar's file name is the line on the same row as the page counter ("620 / 681") and to its left; the
+ * address bar and the browser tabs (the class representative keeps many open) are never looked at. Frames
+ * with no such line are skipped; the frames that have one must agree.
+ */
+export function subjectFromFrames(frames: OcrLine[][]): ScreenReading {
+  const perFrame: ScreenSubject[] = [];
+  let ambiguous = false;
+  for (const lines of frames) {
+    const counters = lines.filter((l) => COUNTER.test(l.text.trim()));
+    const found = lines
+      .filter((l) => counters.some((c) => Math.abs(c.y - l.y) <= SAME_ROW_PX && l.x < c.x))
+      .map((l) => subjectFromFileName(l.text))
+      .filter((s): s is ScreenSubject => s !== null);
+    if (found.length === 0) continue;
+    const one = agreed(found);
+    if (one) perFrame.push(one);
+    else ambiguous = true;
+  }
+  const all = perFrame.length ? agreed(perFrame) : null;
+  if (perFrame.length && !all) ambiguous = true;
+  if (ambiguous || !all) return { subject: null, serials: [], framesMatched: perFrame.length, ambiguous };
+  return { subject: all.subject, serials: all.serials, framesMatched: perFrame.length, ambiguous: false };
 }

@@ -9,6 +9,7 @@ import { getYoutubeClient } from "./youtubeClient";
 import { markJobDone } from "./jobClaims";
 import { runAutoReview } from "./autoReviewRun";
 import { runTeacherStep } from "./teacherStep";
+import { runScreenStep } from "./screenStep";
 import { sweepTileFolders } from "./teacherReader";
 import { activeUploadJobIds, retryUnrecorded, unrecordedJobIds } from "./uploadRecovery";
 
@@ -82,6 +83,8 @@ export function startPipelineWorker() {
         // Last in the tick, so reading recordings never delays an upload, and it still runs when an upload
         // fails. Off unless AUTO_REVIEW_MODE=dry_run and AUTO_REVIEW_TEACHER=on. Never throws.
         await runTeacherStep();
+        // Off unless SCREEN_CHECK=on. Never throws.
+        await runScreenStep();
       }
     } catch (err) {
       if (err instanceof QuotaExceededError) {

@@ -54,6 +54,22 @@ export function readTitleByTeacher(raw: string | undefined = process.env.TITLE_B
   return false;
 }
 
+let warnedBadScreenCheck = false;
+
+/**
+ * SCREEN_CHECK: "on" reads the file name in the PDF viewer's toolbar on recordings' shared screens, in the
+ * worker tick, to say which book was open. Unset, empty, "off" or anything else is off, so a typo reads nothing.
+ */
+export function readScreenCheck(raw: string | undefined = process.env.SCREEN_CHECK): boolean {
+  const v = (raw ?? "").trim().toLowerCase();
+  if (v === "on") return true;
+  if (v !== "" && v !== "off" && !warnedBadScreenCheck) {
+    warnedBadScreenCheck = true;
+    logger.warn({ value: raw }, 'SCREEN_CHECK must be "on" or "off": treating it as off');
+  }
+  return false;
+}
+
 export const DEFAULT_READS_PER_TICK = 2;
 export const MAX_READS_PER_TICK = 10;
 

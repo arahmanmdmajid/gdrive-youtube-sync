@@ -45,7 +45,7 @@ const failed = (error: string, framesRead = 0): ReadResult => ({
 /** Prefix of the temporary folders that hold a recording's frames while it is being read. */
 export const TILE_DIR_PREFIX = "dtt-tile-";
 
-const defaultMakeTempDir = () => fs.mkdtemp(path.join(os.tmpdir(), TILE_DIR_PREFIX));
+export const defaultMakeTempDir = () => fs.mkdtemp(path.join(os.tmpdir(), TILE_DIR_PREFIX));
 
 /**
  * Removes frame folders left behind when a read was cut short (the process was killed or crashed, so the
@@ -72,10 +72,10 @@ export async function sweepTileFolders(opts: { baseDir?: string; olderThanMs?: n
   }
   return removed;
 }
-const defaultRemoveDir = (dir: string) => fs.rm(dir, { recursive: true, force: true });
+export const defaultRemoveDir = (dir: string) => fs.rm(dir, { recursive: true, force: true });
 
 /** An error message that is safe to store: our own wording or a short cut of an error, never frame text. */
-function safeMessage(err: unknown): string {
+export function safeMessage(err: unknown): string {
   const m = err instanceof Error ? err.message : String(err);
   return m.replace(/\s+/g, " ").slice(0, 150);
 }
