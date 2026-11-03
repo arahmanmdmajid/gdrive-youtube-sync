@@ -1,4 +1,5 @@
 import type { GroupMember } from "./titles";
+import { pktStartMinute } from "./titleByTeacher";
 
 interface ScanFile {
   id?: string | null;
@@ -7,6 +8,8 @@ interface ScanFile {
 }
 
 interface ExistingJob {
+  id?: number;
+  durationSeconds?: number | null;
   proposedTitle: string | null;
   lectureNameConfirmed: boolean;
   status: string;
@@ -18,7 +21,11 @@ interface ExistingJob {
  * so keeping it here would hand its slot to it again on every scan and undo the shift the reject made.
  * A job that has left review, or whose name a person confirmed, is locked: its slot is reserved.
  */
-export function scanGroupMembers(files: ScanFile[], existingByFileId: Map<string, ExistingJob>): GroupMember[] {
+export function scanGroupMembers(
+  files: ScanFile[],
+  existingByFileId: Map<string, ExistingJob>,
+  teacherByJobId: Map<number, string | null> = new Map(),
+): GroupMember[] {
   const members: GroupMember[] = [];
   for (const f of files) {
     if (!f.id || !f.createdTime) continue;
@@ -30,6 +37,9 @@ export function scanGroupMembers(files: ScanFile[], existingByFileId: Map<string
       driveCreatedTime: f.createdTime,
       currentTitle: existing?.proposedTitle ?? null,
       locked: existing ? existing.lectureNameConfirmed || existing.status !== "needs_review" : false,
+      ...(existing?.id !== undefined && teacherByJobId.has(existing.id)
+        ? { teacher: teacherByJobId.get(existing.id), startMin: pktStartMinute(f.createdTime, existing.durationSeconds) }
+        : {}),
     });
   }
   return members;

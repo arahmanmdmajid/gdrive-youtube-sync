@@ -1,5 +1,5 @@
 import { db, jobsTable } from "@workspace/db";
-import { eq, notInArray } from "drizzle-orm";
+import { eq, inArray, notInArray } from "drizzle-orm";
 import {
   buildYoutubeTitle,
   buildYoutubeDescription,
@@ -11,6 +11,8 @@ import {
 } from "./schedule";
 import { slotTitleOf } from "./splitTitle";
 import { slotsHeldBy } from "./standIn";
+import { proposeForWalkable, pktStartMinute } from "./titleByTeacher";
+import { readTitleByTeacher } from "./autoReviewMode";
 
 export interface GroupMember {
   id: string;
@@ -22,6 +24,10 @@ export interface GroupMember {
   // needs_review (pending/processing/done/failed). Only a still-needs_review,
   // unconfirmed job is "walkable" — up for (re)assignment by this pool-walk.
   locked: boolean;
+  // The teacher seen on screen: absent when there is no usable read, null when the read found nobody.
+  teacher?: string | null;
+  // Estimated start in PKT, minutes after midnight, to tell a teacher's two slots apart.
+  startMin?: number | null;
 }
 
 /**
@@ -49,12 +55,30 @@ export async function computeGroupAssignments(
     (slot) => !lockedTitles.has(buildYoutubeTitleFromSlot(slot, pktDateStr)) && !standInHeld.has(slot),
   );
 
+  // With TITLE_BY_TEACHER on, a recording whose teacher was read is named from that teacher's slot, not from
+  // its position; the rest of the day is walked positionally over the slots left.
+  const byTeacher = readTitleByTeacher()
+    ? proposeForWalkable(allSlots, membersChronological, (slot) => lockedTitles.has(buildYoutubeTitleFromSlot(slot, pktDateStr)) || standInHeld.has(slot))
+    : new Map<string, { slot: (typeof allSlots)[number]; part: number | null }>();
+  const takenByTeacher = new Set([...byTeacher.values()].map((p) => p.slot));
+  const walkSlots = availableSlots.filter((slot) => !takenByTeacher.has(slot));
+
   const assignments = new Map<string, { title: string; description: string }>();
   let nextSlotIdx = 0;
   for (const member of membersChronological) {
     if (member.locked) continue;
 
-    const slot = availableSlots[nextSlotIdx];
+    const proposed = byTeacher.get(member.id);
+    if (proposed) {
+      const base = buildYoutubeTitleFromSlot(proposed.slot, pktDateStr);
+      assignments.set(member.id, {
+        title: proposed.part ? `${base} | Part ${proposed.part}` : base,
+        description: buildYoutubeDescriptionFromSlot(proposed.slot, pktDateStr, member.driveFileName),
+      });
+      continue;
+    }
+
+    const slot = walkSlots[nextSlotIdx];
     if (slot) {
       nextSlotIdx++;
       assignments.set(member.id, {
@@ -100,6 +124,7 @@ export async function reflowGroupTitles(driveCreatedTime: string, driveFileName:
       driveFileName: jobsTable.driveFileName,
       proposedTitle: jobsTable.proposedTitle,
       lectureNameConfirmed: jobsTable.lectureNameConfirmed,
+      durationSeconds: jobsTable.durationSeconds,
     })
     .from(jobsTable)
     .where(notInArray(jobsTable.status, ["rejected"]));
@@ -119,12 +144,16 @@ export async function reflowGroupTitles(driveCreatedTime: string, driveFileName:
 
   if (groupJobs.length === 0) return;
 
+  const evidence = readTitleByTeacher()
+    ? await (await import("./teacherReads")).loadTeacherEvidence(groupJobs.map((j) => j.id))
+    : new Map<number, string | null>();
   const members: GroupMember[] = groupJobs.map((j) => ({
     id: String(j.id),
     driveFileName: j.driveFileName ?? "",
     driveCreatedTime: j.driveCreatedTime ?? "",
     currentTitle: j.proposedTitle,
     locked: j.lectureNameConfirmed || j.status !== "needs_review",
+    ...(evidence.has(j.id) ? { teacher: evidence.get(j.id), startMin: pktStartMinute(j.driveCreatedTime, j.durationSeconds) } : {}),
   }));
 
   const assignments = await computeGroupAssignments(dayOfWeek, dateStr, meetingCode, members);
@@ -136,5 +165,22 @@ export async function reflowGroupTitles(driveCreatedTime: string, driveFileName:
     await db.update(jobsTable)
       .set({ proposedTitle: assignment.title, proposedDescription: assignment.description, updatedAt: new Date() })
       .where(eq(jobsTable.id, j.id));
+  }
+}
+
+/** Re-derives the titles of every day group that holds one of these jobs, e.g. after their teacher was read. */
+export async function reflowGroupsOfJobs(jobIds: number[]): Promise<void> {
+  if (jobIds.length === 0) return;
+  const jobs = await db
+    .select({ driveCreatedTime: jobsTable.driveCreatedTime, driveFileName: jobsTable.driveFileName })
+    .from(jobsTable)
+    .where(inArray(jobsTable.id, jobIds));
+  const done = new Set<string>();
+  for (const j of jobs) {
+    if (!j.driveCreatedTime) continue;
+    const key = `${getPktInfo(j.driveCreatedTime).dateStr}|${extractMeetingCode(j.driveFileName ?? "") ?? ""}`;
+    if (done.has(key)) continue;
+    done.add(key);
+    await reflowGroupTitles(j.driveCreatedTime, j.driveFileName ?? "");
   }
 }

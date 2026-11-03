@@ -38,6 +38,22 @@ export function readTeacherMode(raw: string | undefined = process.env.AUTO_REVIE
   return "off";
 }
 
+let warnedBadTitleByTeacher = false;
+
+/**
+ * TITLE_BY_TEACHER: "on" proposes titles from the teacher seen on screen (see titleByTeacher.ts) and reads
+ * recordings' name tiles to do it. Unset, empty, "off" or anything else is off, so a typo changes nothing.
+ */
+export function readTitleByTeacher(raw: string | undefined = process.env.TITLE_BY_TEACHER): boolean {
+  const v = (raw ?? "").trim().toLowerCase();
+  if (v === "on") return true;
+  if (v !== "" && v !== "off" && !warnedBadTitleByTeacher) {
+    warnedBadTitleByTeacher = true;
+    logger.warn({ value: raw }, 'TITLE_BY_TEACHER must be "on" or "off": treating it as off');
+  }
+  return false;
+}
+
 export const DEFAULT_READS_PER_TICK = 2;
 export const MAX_READS_PER_TICK = 10;
 

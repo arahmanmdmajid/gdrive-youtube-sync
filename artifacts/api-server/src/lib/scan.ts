@@ -6,6 +6,7 @@ import { isEligible, BATCH_RECORDING_SIZE_BYTES } from "./filter";
 import { logger } from "./logger";
 import { computeGroupAssignments } from "./titles";
 import { scanGroupMembers } from "./scanMembers";
+import { readTitleByTeacher } from "./autoReviewMode";
 import { insertNewJob } from "./jobClaims";
 import { recordDecisions, snapshotJobs } from "./decisions";
 
@@ -130,6 +131,11 @@ export async function runPipelineScan(): Promise<{
   // name. Non-confirmed files (new or previously auto-guessed) draw positionally
   // from whatever's left, same as before.
 
+  // With TITLE_BY_TEACHER on, the stored teacher reads let a recording be named from its teacher's slot.
+  const teacherByJobId = readTitleByTeacher()
+    ? await (await import("./teacherReads")).loadTeacherEvidence(existingJobs.filter((j) => j.status !== "rejected").map((j) => j.id))
+    : new Map<number, string | null>();
+
   type GroupEntry = {
     pktDateStr: string;
     dayOfWeek: number;
@@ -156,7 +162,7 @@ export async function runPipelineScan(): Promise<{
   // Map driveFileId → { title, description } for every eligible, non-confirmed file
   const positionalAssignments = new Map<string, { title: string; description: string }>();
   for (const group of groupMap.values()) {
-    const members = scanGroupMembers(group.files, existingByFileId);
+    const members = scanGroupMembers(group.files, existingByFileId, teacherByJobId);
     const groupAssignments = await computeGroupAssignments(group.dayOfWeek, group.pktDateStr, group.meetingCode, members);
     for (const [id, assignment] of groupAssignments) {
       positionalAssignments.set(id, assignment);
