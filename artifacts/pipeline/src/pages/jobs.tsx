@@ -81,6 +81,21 @@ type EditState = {
   driveCreatedTime?: string | null;
 };
 
+/** What the teacher read from the recording says next to the title it was proposed. Nothing when the recording was not read. */
+function TeacherNote({ seen, title }: { seen?: string | null; title: string }) {
+  if (seen === undefined) return null;
+  if (seen === null) return <div className="text-xs text-muted-foreground">Teacher not identified from the recording</div>;
+  const titleTeacher = title.split(" | ")[1]?.trim();
+  if (titleTeacher && titleTeacher !== seen) {
+    return (
+      <div className="text-xs text-red-600 dark:text-red-400">
+        Teacher seen: {seen}. The title says {titleTeacher}.
+      </div>
+    );
+  }
+  return <div className="text-xs text-muted-foreground">Teacher seen: {seen}</div>;
+}
+
 export default function Jobs() {
   const [statusFilter, setStatusFilter] = useState<ListJobsStatus | "all">("all");
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -411,8 +426,11 @@ export default function Jobs() {
 
                       {/* Proposed / final title */}
                       {job.status === "needs_review" && job.proposedTitle ? (
-                        <div className="truncate text-sm font-medium text-amber-700 dark:text-amber-400 mt-0.5" title={job.proposedTitle}>
-                          {job.proposedTitle}
+                        <div>
+                          <div className="truncate text-sm font-medium text-amber-700 dark:text-amber-400 mt-0.5" title={job.proposedTitle}>
+                            {job.proposedTitle}
+                          </div>
+                          <TeacherNote seen={job.teacherSeen} title={job.proposedTitle} />
                         </div>
                       ) : renameState?.id === job.id ? (
                         <div className="space-y-1 mt-0.5 max-w-[320px]">
