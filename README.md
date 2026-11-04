@@ -31,6 +31,8 @@ Reviewing is still done by a person. Beside it, a set of rules judges each day's
 
 The rules change no job. Their verdicts are recorded, and the **Auto-review** page in the dashboard compares them with what staff then did, by meeting code and weekday, and shows the checklist that must be met before anything may run on its own. It is off unless `AUTO_REVIEW_MODE=dry_run` is set (and `AUTO_REVIEW_TEACHER=on` for the teacher check). See [docs/operations.md](docs/operations.md) and [issue #27](https://github.com/arahmanmdmajid/gdrive-youtube-sync/issues/27) for the plan.
 
+Two more reviewer aids, both off by default and both read on this PC only (frames and text are never kept, only the result). With `TITLE_BY_TEACHER=on`, a recording whose teacher was read is named from that teacher's slot that weekday, and the Jobs page shows the teacher seen beside the proposed title. With `SCREEN_CHECK=on`, the worker reads the book open on the shared screen from the PDF viewer's file name and the Jobs page shows `Screen shows <book>` under the title, in red when the title's serial does not fit that book. It is a note for the reviewer: it changes no title and approves nothing.
+
 Timetable slots can have a start day, so a class added later does not change earlier days.
 
 ## Repository layout
