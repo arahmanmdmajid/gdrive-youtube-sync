@@ -15,14 +15,17 @@ const key = (s: string) =>
     .replace(/[^a-z؀-ۿ]/g, "")
     .replace(/[i|]/g, "l");
 
-// Only subjects whose file names have been seen on a real shared screen. Add Siraji, Tawzeeh, Sharah Aqaid,
-// Falakiyat, Matan ul Kafi and Dewan Hamasa when theirs have.
+// Only subjects whose file names have been seen on a real shared screen. Add Siraji, Matan ul Kafi and Dewan
+// Hamasa when theirs have.
 const SUBJECTS: { subject: string; words: string[]; serials: string[] }[] = [
   { subject: "Jalalain", words: ["jalala"], serials: ["1.1", "1.2", "1.3"] },
   { subject: "Al Fawz ul Kabir", words: ["faoz", "fawz", "kabeer"], serials: ["2.1"] },
   { subject: "Kitab ul Asar", words: ["asar", "asaar", "athar", "الاثار"], serials: ["2.2"] },
   { subject: "Khair ul Usool", words: ["khairulusool", "usool"], serials: ["2.4"] },
   { subject: "Hidaya Sani", words: ["hidaya"], serials: ["3.1", "3.2", "3.3"] },
+  { subject: "Tawzeeh", words: ["التوضيح", "غوامض", "التنقيح"], serials: ["4.1", "4.2"] },
+  { subject: "Sharah Aqaid", words: ["aqaid", "aqaed", "nasaf"], serials: ["5.1"] },
+  { subject: "Falakiyat", words: ["فلكيات"], serials: ["5.2"] },
   { subject: "Ulama-e-Deoband", words: ["deoband", "oeoband"], serials: ["5.3"] },
 ].map((s) => ({ ...s, words: s.words.map(key) }));
 
@@ -48,7 +51,7 @@ export function screenAgreesWith(title: string | null | undefined, screen: Scree
 }
 
 /** Bump when SUBJECTS changes, so recordings are read again with the new table. */
-export const SCREEN_TABLE_VERSION = 1;
+export const SCREEN_TABLE_VERSION = 2;
 
 export interface ScreenReading {
   subject: string | null;
