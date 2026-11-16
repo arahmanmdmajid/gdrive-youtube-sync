@@ -74,3 +74,7 @@ test("Sharah Aqaid: the toolbar file name (library code 6.5.1.1) gives serial 5.
   assert.deepEqual(serials("Sharh ul Aqaid Al Nasaflyah.pdf"), ["5.1"]);
   assert.equal(screenAgreesWith("5.1 Sharah Aqaid | Ustad Khalid Zaman | 14-11-2026", subjectFromFileName("Sharh ul Aqaid Al Nasafiyah.pdf")!), true);
 });
+
+test("Falakiyat: the Arabic toolbar name gives serial 5.2", () => {
+  assert.deepEqual(serials("درس فلكيات .pdf"), ["5.2"]);
+});
