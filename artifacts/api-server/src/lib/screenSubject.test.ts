@@ -59,3 +59,18 @@ test("screenSeenFor: the subject the screen showed and whether the title agrees;
   assert.deepEqual(screenSeenFor(jalalain2, ""), { subject: "Jalalain", agrees: false });
   assert.equal(screenSeenFor({ subject: null, serials: [] }, "1.2 Jalalain Part 2 | X | 03-11-2026"), null);
 });
+
+test("Tawzeeh: the Arabic name in the toolbar gives both its serials", () => {
+  assert.deepEqual(serials("التوضيح في حل غوامض التنقيح"), ["4.1", "4.2"]);
+  // with the viewer's menu icon read in front of it
+  assert.deepEqual(serials("≡ التوضيح في حل غوامض التنقيح"), ["4.1", "4.2"]);
+  const screen = subjectFromFileName("التوضيح في حل غوامض التنقيح")!;
+  assert.equal(screenAgreesWith("4.2 Tawzeeh Part 2 | Ustad Atiqullah | 16-11-2026", screen), true);
+  assert.equal(screenAgreesWith("2.3 Siraji | Ustad Khalid Zaman | 16-11-2026", screen), false);
+});
+
+test("Sharah Aqaid: the toolbar file name (library code 6.5.1.1) gives serial 5.1", () => {
+  assert.deepEqual(serials("6.5.1.1 Sharh ul Aqaid Al Nasafiyah (Bushra) (1).pdf"), ["5.1"]);
+  assert.deepEqual(serials("Sharh ul Aqaid Al Nasaflyah.pdf"), ["5.1"]);
+  assert.equal(screenAgreesWith("5.1 Sharah Aqaid | Ustad Khalid Zaman | 14-11-2026", subjectFromFileName("Sharh ul Aqaid Al Nasafiyah.pdf")!), true);
+});
