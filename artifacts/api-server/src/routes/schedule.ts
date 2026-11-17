@@ -46,8 +46,20 @@ router.put("/schedule/:dayOfWeek/:timeSlot", async (req, res) => {
     return;
   }
 
+  // Optional end day, the last class day (YYYY-MM-DD). Same rules as the start day, and not before it.
+  const until = req.body?.effectiveUntil;
+  if (until !== undefined && until !== null && !(typeof until === "string" && /^\d{4}-\d{2}-\d{2}$/.test(until) && !Number.isNaN(Date.parse(until)))) {
+    res.status(400).json({ error: "Invalid body: effectiveUntil must be YYYY-MM-DD or null" });
+    return;
+  }
+  if (typeof effective === "string" && typeof until === "string" && until < effective) {
+    res.status(400).json({ error: "Invalid body: effectiveUntil must not be before effectiveFrom" });
+    return;
+  }
+
   const values = {
     ...(effective !== undefined ? { effectiveFrom: effective as string | null } : {}),
+    ...(until !== undefined ? { effectiveUntil: until as string | null } : {}),
     serial: serial.trim(),
     subjectAr: subjectAr.trim(),
     teacherAr: teacherAr.trim(),

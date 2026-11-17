@@ -86,7 +86,7 @@ export async function resolveClassFromTime(isoTimestamp: string, meetingCode?: s
     .from(scheduleSlotsTable)
     .where(and(eq(scheduleSlotsTable.dayOfWeek, dayOfWeek), eq(scheduleSlotsTable.timeSlot, slotKey)));
 
-  return row && isSlotInEffect(row.effectiveFrom, toPktDateStr(isoTimestamp)) ? toClassSlot(row) : null;
+  return row && isSlotInEffect(row.effectiveFrom, toPktDateStr(isoTimestamp), row.effectiveUntil) ? toClassSlot(row) : null;
 }
 
 /**
@@ -118,7 +118,7 @@ export function getPktInfo(isoTimestamp: string): { dateStr: string; dayOfWeek: 
 
 /**
  * Returns the class slots for a given PKT day-of-week in chronological order, leaving out slots
- * that start after `pktDateStr` (DD-MM-YYYY). Returns an empty array if the day has no schedule.
+ * that start after or ended before `pktDateStr` (DD-MM-YYYY). Returns an empty array if the day has no schedule.
  */
 export async function getOrderedSlotsForDay(dayOfWeek: number, pktDateStr: string): Promise<ClassSlot[]> {
   const rows = await db
@@ -126,7 +126,7 @@ export async function getOrderedSlotsForDay(dayOfWeek: number, pktDateStr: strin
     .from(scheduleSlotsTable)
     .where(eq(scheduleSlotsTable.dayOfWeek, dayOfWeek))
     .orderBy(asc(scheduleSlotsTable.timeSlot));
-  return rows.filter((r) => isSlotInEffect(r.effectiveFrom, pktDateStr)).map(toClassSlot);
+  return rows.filter((r) => isSlotInEffect(r.effectiveFrom, pktDateStr, r.effectiveUntil)).map(toClassSlot);
 }
 
 /**

@@ -10,6 +10,7 @@ export const scheduleSlotsTable = pgTable("schedule_slots", {
   subjectEn: text("subject_en").notNull(),
   teacherEn: text("teacher_en").notNull(),
   effectiveFrom: date("effective_from", { mode: "string" }), // PKT day (YYYY-MM-DD) the slot starts to count; null = always
+  effectiveUntil: date("effective_until", { mode: "string" }), // last PKT day (YYYY-MM-DD) the slot counts, inclusive; null = no end
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (t) => [uniqueIndex("schedule_slots_day_time_idx").on(t.dayOfWeek, t.timeSlot)]);
