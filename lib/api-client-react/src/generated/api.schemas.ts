@@ -115,6 +115,10 @@ export interface ScheduleSlot {
   teacherAr: string;
   subjectEn: string;
   teacherEn: string;
+  /** First PKT day (YYYY-MM-DD) the slot counts; null = always. */
+  effectiveFrom?: string | null;
+  /** Last PKT day (YYYY-MM-DD) the slot counts, inclusive; null = no end. */
+  effectiveUntil?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -125,6 +129,9 @@ export interface UpsertScheduleSlotInput {
   teacherAr: string;
   subjectEn: string;
   teacherEn: string;
+  /** Left out keeps what the slot has; null clears it. */
+  effectiveFrom?: string | null;
+  effectiveUntil?: string | null;
 }
 
 export interface DriveSourceFolder {
