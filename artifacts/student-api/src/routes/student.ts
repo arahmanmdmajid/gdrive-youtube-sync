@@ -82,6 +82,7 @@ export function groupBySubject(lectures: LectureRow[], progress: Map<number, str
       serial: UNGROUPED_SERIAL,
       nameEn: "Earlier lectures",
       teacherEn: "",
+      finished: false,
       ...ungrouped,
     });
   }

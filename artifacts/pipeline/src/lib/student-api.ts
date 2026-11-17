@@ -6,6 +6,8 @@ export interface Subject {
   serial: string;
   nameEn: string;
   teacherEn: string;
+  /** The course has ended (every timetable slot has a last class day in the past). */
+  finished?: boolean;
   total: number;
   completed: number;
   inProgress: number;
