@@ -75,6 +75,7 @@ export default function StudentSubjects() {
                         <p className="text-xs text-muted-foreground truncate">
                           {subject.teacherEn ? `${subject.teacherEn} · ` : ""}
                           {subject.total} lectures
+                          {subject.finished ? " · Course finished" : ""}
                         </p>
                       </div>
                       {done && <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />}

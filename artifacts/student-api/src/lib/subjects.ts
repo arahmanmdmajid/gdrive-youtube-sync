@@ -17,11 +17,14 @@
 // instead of silently drifting out of sync.
 
 import { db, scheduleSlotsTable, lectureNamesTable } from "@workspace/db";
+import { isCourseFinished } from "./courseFinished";
 
 export interface SubjectInfo {
   serial: string;
   nameEn: string;
   teacherEn: string;
+  /** The course has ended: every timetable slot of this subject has a last class day before today (PKT). */
+  finished: boolean;
 }
 
 export const UNGROUPED_SERIAL = "other";
@@ -44,17 +47,20 @@ export async function loadSubjectLookup(): Promise<SubjectLookup> {
         subjectEn: scheduleSlotsTable.subjectEn,
         teacherEn: scheduleSlotsTable.teacherEn,
         subjectAr: scheduleSlotsTable.subjectAr,
+        effectiveUntil: scheduleSlotsTable.effectiveUntil,
       })
       .from(scheduleSlotsTable),
     db.select({ name: lectureNamesTable.name }).from(lectureNamesTable),
   ]);
 
   const bySerial = new Map<string, SubjectInfo>();
+  const slotEnds = new Map<string, (string | null)[]>();
   const arabicSerialMap: Record<string, string> = {};
   for (const row of scheduleRows) {
     if (!bySerial.has(row.serial)) {
-      bySerial.set(row.serial, { serial: row.serial, nameEn: row.subjectEn, teacherEn: row.teacherEn });
+      bySerial.set(row.serial, { serial: row.serial, nameEn: row.subjectEn, teacherEn: row.teacherEn, finished: false });
     }
+    slotEnds.set(row.serial, [...(slotEnds.get(row.serial) ?? []), row.effectiveUntil]);
     if (!(row.subjectAr in arabicSerialMap)) {
       arabicSerialMap[row.subjectAr] = row.serial;
     }
@@ -64,9 +70,12 @@ export async function loadSubjectLookup(): Promise<SubjectLookup> {
     if (!match) continue;
     const [, serial, nameEn, teacherEn] = match;
     if (!bySerial.has(serial!)) {
-      bySerial.set(serial!, { serial: serial!, nameEn: nameEn!, teacherEn: teacherEn! });
+      bySerial.set(serial!, { serial: serial!, nameEn: nameEn!, teacherEn: teacherEn!, finished: false });
     }
   }
+
+  const today = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString().slice(0, 10); // PKT day, YYYY-MM-DD
+  for (const subject of bySerial.values()) subject.finished = isCourseFinished(slotEnds.get(subject.serial) ?? [], today);
 
   const subjects = [...bySerial.values()].sort((a, b) => a.serial.localeCompare(b.serial));
   return { subjects, serials: new Set(subjects.map((s) => s.serial)), arabicSerialMap };
