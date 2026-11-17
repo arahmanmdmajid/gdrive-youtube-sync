@@ -78,3 +78,9 @@ test("Sharah Aqaid: the toolbar file name (library code 6.5.1.1) gives serial 5.
 test("Falakiyat: the Arabic toolbar name gives serial 5.2", () => {
   assert.deepEqual(serials("درس فلكيات .pdf"), ["5.2"]);
 });
+
+test("Siraji: the toolbar file names (6.2.3.x) give serial 2.3", () => {
+  assert.deepEqual(serials("6.2.3.1 Siraji Fil Meras (Bushra)290726.pdf"), ["2.3"]);
+  assert.deepEqual(serials("6.2.3.1 Siraji Fil Meras pdf.29O726(Bushra)"), ["2.3"]);
+  assert.deepEqual(serials("6.2.3.4 Tasheel ul faraaiz 2nd Edition.pdf"), ["2.3"]);
+});

@@ -15,12 +15,13 @@ const key = (s: string) =>
     .replace(/[^a-z؀-ۿ]/g, "")
     .replace(/[i|]/g, "l");
 
-// Only subjects whose file names have been seen on a real shared screen. Add Siraji, Matan ul Kafi and Dewan
-// Hamasa when theirs have.
+// Only subjects whose file names have been seen on a real shared screen. Add Matan ul Kafi and Dewan Hamasa when
+// theirs have.
 const SUBJECTS: { subject: string; words: string[]; serials: string[] }[] = [
   { subject: "Jalalain", words: ["jalala"], serials: ["1.1", "1.2", "1.3"] },
   { subject: "Al Fawz ul Kabir", words: ["faoz", "fawz", "kabeer"], serials: ["2.1"] },
   { subject: "Kitab ul Asar", words: ["asar", "asaar", "athar", "الاثار"], serials: ["2.2"] },
+  { subject: "Siraji", words: ["siraji", "faraaiz", "faraiz", "meras", "السراجي"], serials: ["2.3"] },
   { subject: "Khair ul Usool", words: ["khairulusool", "usool"], serials: ["2.4"] },
   { subject: "Hidaya Sani", words: ["hidaya"], serials: ["3.1", "3.2", "3.3"] },
   { subject: "Tawzeeh", words: ["التوضيح", "غوامض", "التنقيح"], serials: ["4.1", "4.2"] },
