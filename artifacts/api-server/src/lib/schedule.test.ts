@@ -1,4 +1,5 @@
-// Slot start dates: a slot with a start day only counts for days on or after it.
+// Slot start and end dates: a slot with a start day only counts for days on or after it, and one with an end day
+// only up to and including it.
 // The pure rule runs everywhere; the lookups run against a real Postgres, only when TEST_DATABASE_URL points
 // at a LOCAL database (see jobClaims.test.ts for how to set one up).
 import { test, before, after } from "node:test";
@@ -28,6 +29,25 @@ test("the comparison is by date, not by text: month and year are weighed before 
   assert.equal(isSlotInEffect("2026-10-05", "01-11-2026"), true); // earlier day-of-month, later month
   assert.equal(isSlotInEffect("2026-10-05", "06-10-2025"), false);
   assert.equal(isSlotInEffect("2026-10-05", "01-01-2027"), true);
+});
+
+test("a slot with an end day counts up to and including it, not after", () => {
+  assert.equal(isSlotInEffect(null, "10-11-2026", "2026-11-10"), true);
+  assert.equal(isSlotInEffect(null, "09-11-2026", "2026-11-10"), true);
+  assert.equal(isSlotInEffect(null, "11-11-2026", "2026-11-10"), false);
+});
+
+test("a slot with both days counts only between them", () => {
+  assert.equal(isSlotInEffect("2026-10-05", "04-10-2026", "2026-11-10"), false);
+  assert.equal(isSlotInEffect("2026-10-05", "05-10-2026", "2026-11-10"), true);
+  assert.equal(isSlotInEffect("2026-10-05", "10-11-2026", "2026-11-10"), true);
+  assert.equal(isSlotInEffect("2026-10-05", "11-11-2026", "2026-11-10"), false);
+});
+
+test("the end day is compared by date too: month and year before the day", () => {
+  assert.equal(isSlotInEffect(null, "20-09-2026", "2026-10-05"), true); // later day-of-month, earlier month
+  assert.equal(isSlotInEffect(null, "01-11-2026", "2026-10-05"), false); // earlier day-of-month, later month
+  assert.equal(isSlotInEffect(null, "06-10-2027", "2026-10-05"), false);
 });
 
 type Mods = {
