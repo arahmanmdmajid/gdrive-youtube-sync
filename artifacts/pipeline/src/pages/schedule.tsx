@@ -47,6 +47,8 @@ type EditState = {
   teacherAr: string;
   subjectEn: string;
   teacherEn: string;
+  effectiveFrom: string; // YYYY-MM-DD, "" = always
+  effectiveUntil: string; // last class day, "" = no end
 };
 
 function cardId(dayOfWeek: number, timeSlot: string) {
@@ -82,6 +84,11 @@ function DraggableCard({ slot, onOpen, use24Hour }: { slot: ScheduleSlot; onOpen
           <div className="text-sm font-medium truncate">{slot.subjectEn}</div>
           <div className="text-xs text-muted-foreground truncate">{slot.teacherEn}</div>
           <div className="text-xs text-muted-foreground/70 truncate" dir="rtl">{slot.subjectAr} — {slot.teacherAr}</div>
+          {(slot.effectiveFrom || slot.effectiveUntil) && (
+            <div className="text-xs text-muted-foreground/70">
+              {[slot.effectiveFrom && `from ${slot.effectiveFrom}`, slot.effectiveUntil && `until ${slot.effectiveUntil}`].filter(Boolean).join(" ")}
+            </div>
+          )}
         </button>
       </div>
     </div>
@@ -160,6 +167,9 @@ export default function Schedule() {
             teacherAr: slotContent.teacherAr,
             subjectEn: slotContent.subjectEn,
             teacherEn: slotContent.teacherEn,
+            // the days belong to the class, so they move with it (leaving them out would keep them on the time)
+            effectiveFrom: slotContent.effectiveFrom ?? null,
+            effectiveUntil: slotContent.effectiveUntil ?? null,
           }),
         ),
       );
@@ -182,6 +192,8 @@ export default function Schedule() {
       teacherAr: existing?.teacherAr ?? "",
       subjectEn: existing?.subjectEn ?? "",
       teacherEn: existing?.teacherEn ?? "",
+      effectiveFrom: existing?.effectiveFrom ?? "",
+      effectiveUntil: existing?.effectiveUntil ?? "",
     });
   };
 
@@ -199,6 +211,8 @@ export default function Schedule() {
         teacherAr: editState.teacherAr,
         subjectEn: editState.subjectEn,
         teacherEn: editState.teacherEn,
+        effectiveFrom: editState.effectiveFrom || null,
+        effectiveUntil: editState.effectiveUntil || null,
       },
     });
   };
@@ -208,7 +222,8 @@ export default function Schedule() {
     editState?.subjectAr.trim() &&
     editState?.teacherAr.trim() &&
     editState?.subjectEn.trim() &&
-    editState?.teacherEn.trim()
+    editState?.teacherEn.trim() &&
+    !(editState.effectiveFrom && editState.effectiveUntil && editState.effectiveUntil < editState.effectiveFrom)
   );
 
   return (
@@ -358,6 +373,29 @@ export default function Schedule() {
                   />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="slot-from">Starts on</Label>
+                  <Input
+                    id="slot-from"
+                    type="date"
+                    value={editState.effectiveFrom}
+                    onChange={(e) => setEditState({ ...editState, effectiveFrom: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="slot-until">Last class day</Label>
+                  <Input
+                    id="slot-until"
+                    type="date"
+                    value={editState.effectiveUntil}
+                    onChange={(e) => setEditState({ ...editState, effectiveUntil: e.target.value })}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Leave both empty for a class that always runs. Set the last class day when a course is finished; earlier days keep it, later days no longer count it.
+              </p>
             </div>
           )}
 
