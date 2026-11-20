@@ -422,3 +422,24 @@ export interface ScreenAgreementReport {
   bySubject: { subject: string; agree: number; disagree: number }[];
   disagreements: ScreenDisagreement[];
 }
+
+/** A job that left review whose title names a different teacher than the name-tile read found. Either may be wrong. */
+export interface TeacherDisagreement {
+  jobId: number;
+  /** The teacher the read found. */
+  teacher: string;
+  title: string;
+}
+
+export interface TeacherAgreementReport {
+  /** Jobs that left review, the ones that can be compared. */
+  jobsLeftReview: number;
+  /** Left review with no read at all (reads are only made in review). */
+  notRead: number;
+  /** A read exists but names nobody: failed, found no one or two, or made with an older alias table. */
+  noVerdict: number;
+  agree: number;
+  disagree: number;
+  byTeacher: { teacher: string; agree: number; disagree: number }[];
+  disagreements: TeacherDisagreement[];
+}
