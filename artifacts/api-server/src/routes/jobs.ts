@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { db, jobsTable } from "@workspace/db";
-import { eq, desc, like, asc, sql, notInArray } from "drizzle-orm";
+import { eq, desc, like, asc, sql, notInArray, and, ne } from "drizzle-orm";
 import fs from "node:fs";
 import {
   ListJobsQueryParams,
@@ -25,6 +25,7 @@ import {
 import { logger } from "../lib/logger";
 import { withDecisionLog } from "../lib/decisions";
 import { standInSlot } from "../lib/standIn";
+import { parseLectureName, revisionBase, revisionTitle, revisionDescription } from "../lib/revision";
 import { screenSeenFor } from "../lib/screenSubject";
 import { canSwapWith, SWAP_REFUSED_MESSAGE } from "../lib/swapRule";
 import { mergedTitles } from "../lib/splitTitle";
@@ -267,12 +268,60 @@ async function cascadeSlotAssignment(
  * the change needs a swap/merge decision first; returns null once the title
  * has actually been applied.
  */
+type LectureNameResult = { conflict: true; conflictingJob: { id: number; proposedTitle: string; driveCreatedTime: string | null; status: string } } | { error: string } | null;
+
+/**
+ * Marks a job as a revision (or extra) class of the named lecture. It holds no timetable slot, so there is no swap
+ * or merge: the title is `<name> | <date> | Revision`, and a later one of the same name and day counts on
+ * (Revision 2, 3). Other jobs' titles are never rewritten. The day is re-flowed afterwards, because this recording
+ * no longer takes a position in it.
+ */
+async function applyRevision(id: number, job: typeof jobsTable.$inferSelect, lectureName: string): Promise<LectureNameResult> {
+  if (!parseLectureName(lectureName)) {
+    return { error: 'A revision needs a lecture name like "2.3 Siraji | Ustad Khalid Zaman"' };
+  }
+  const dateStr = job.driveCreatedTime ? toPktDateStr(job.driveCreatedTime) : "00-00-0000";
+  const earlier = await db
+    .select({ id: jobsTable.id })
+    .from(jobsTable)
+    .where(and(like(jobsTable.proposedTitle, `${revisionBase(lectureName, dateStr)}%`), ne(jobsTable.id, id), ne(jobsTable.status, "rejected")));
+  await db
+    .update(jobsTable)
+    .set({
+      classKind: "revision",
+      lectureNameConfirmed: true,
+      proposedTitle: revisionTitle(lectureName, dateStr, earlier.length),
+      proposedDescription: revisionDescription(lectureName, dateStr, job.driveFileName ?? ""),
+      updatedAt: new Date(),
+    })
+    .where(eq(jobsTable.id, id));
+  if (job.driveCreatedTime && job.driveFileName) await reflowGroupTitles(job.driveCreatedTime, job.driveFileName);
+  return null;
+}
+
+/** Applies a lecture name chosen by hand: as a revision class when `classKind` says so, otherwise as a timetable class. */
 async function applyLectureNameChange(
   id: number,
   job: typeof jobsTable.$inferSelect,
   lectureName: string,
   conflictResolution?: "swap" | "merge",
-): Promise<{ conflict: true; conflictingJob: { id: number; proposedTitle: string; driveCreatedTime: string | null; status: string } } | { error: string } | null> {
+  classKind?: "regular" | "revision",
+): Promise<LectureNameResult> {
+  if (classKind === "revision") return applyRevision(id, job, lectureName);
+  const result = await applyRegularLectureName(id, job, lectureName, conflictResolution);
+  // A name chosen as a regular class takes the revision mark off.
+  if (result === null && job.classKind === "revision") {
+    await db.update(jobsTable).set({ classKind: "regular", updatedAt: new Date() }).where(eq(jobsTable.id, id));
+  }
+  return result;
+}
+
+async function applyRegularLectureName(
+  id: number,
+  job: typeof jobsTable.$inferSelect,
+  lectureName: string,
+  conflictResolution?: "swap" | "merge",
+): Promise<LectureNameResult> {
   if (job.contentType !== "audio" && job.driveCreatedTime && job.driveFileName) {
     const cascadeResult = await cascadeSlotAssignment(id, lectureName, job.driveCreatedTime, job.driveFileName, conflictResolution);
     if (cascadeResult.matched && "refused" in cascadeResult) {
@@ -447,6 +496,10 @@ router.post("/jobs/:id/approve", async (req, res) => {
     res.status(400).json({ error: "Invalid body" });
     return;
   }
+  if (bodyParsed.data.classKind === "revision" && !bodyParsed.data.lectureName) {
+    res.status(400).json({ error: "A revision needs a lecture name" });
+    return;
+  }
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
   if (!job) {
     res.status(404).json({ error: "Not found" });
@@ -466,7 +519,7 @@ router.post("/jobs/:id/approve", async (req, res) => {
     { eventType: "approve", actor: "admin", subjectId: id, conflictResolution: bodyParsed.data.conflictResolution },
     async () => {
       if (bodyParsed.data.lectureName) {
-        const c = await applyLectureNameChange(id, job, bodyParsed.data.lectureName, bodyParsed.data.conflictResolution);
+        const c = await applyLectureNameChange(id, job, bodyParsed.data.lectureName, bodyParsed.data.conflictResolution, bodyParsed.data.classKind);
         if (c) return c;
       } else if (bodyParsed.data.proposedTitle !== undefined) {
         updates.proposedTitle = bodyParsed.data.proposedTitle;
@@ -521,6 +574,10 @@ router.patch("/jobs/:id", async (req, res) => {
     res.status(400).json({ error: "Invalid body" });
     return;
   }
+  if (bodyParsed.data.classKind === "revision" && !bodyParsed.data.lectureName) {
+    res.status(400).json({ error: "A revision needs a lecture name" });
+    return;
+  }
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
   if (!job) {
     res.status(404).json({ error: "Not found" });
@@ -537,7 +594,7 @@ router.patch("/jobs/:id", async (req, res) => {
     { eventType: "edit", actor: "admin", subjectId: id, conflictResolution: bodyParsed.data.conflictResolution },
     async () => {
       if (bodyParsed.data.lectureName) {
-        const c = await applyLectureNameChange(id, job, bodyParsed.data.lectureName, bodyParsed.data.conflictResolution);
+        const c = await applyLectureNameChange(id, job, bodyParsed.data.lectureName, bodyParsed.data.conflictResolution, bodyParsed.data.classKind);
         if (c) return c;
         if (Object.keys(updates).length > 1) {
           await db.update(jobsTable).set(updates).where(eq(jobsTable.id, id));
@@ -913,6 +970,7 @@ function formatJob(j: typeof jobsTable.$inferSelect) {
     status: j.status,
     source: j.source,
     contentType: j.contentType,
+    classKind: j.classKind,
     proposedTitle: j.proposedTitle ?? null,
     proposedDescription: j.proposedDescription ?? null,
     youtubeVideoId: j.youtubeVideoId ?? null,

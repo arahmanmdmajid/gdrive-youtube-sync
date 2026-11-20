@@ -13,6 +13,8 @@ export const jobsTable = pgTable("jobs", {
   proposedTitle: text("proposed_title"),
   proposedDescription: text("proposed_description"),
   lectureNameConfirmed: boolean("lecture_name_confirmed").notNull().default(false),
+  // "revision": a revision or extra class marked by hand. It holds no timetable slot (see lib/revision.ts).
+  classKind: text("class_kind", { enum: ["regular", "revision"] }).notNull().default("regular"),
   youtubeVideoId: text("youtube_video_id"),
   youtubeUrl: text("youtube_url"),
   youtubeTitle: text("youtube_title"),
