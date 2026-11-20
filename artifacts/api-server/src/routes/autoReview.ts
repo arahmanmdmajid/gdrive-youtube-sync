@@ -3,6 +3,7 @@ import { evaluateAllGroups } from "../lib/autoReviewRun";
 import { readMode } from "../lib/autoReviewMode";
 import { loadAgreementReport } from "../lib/agreementData";
 import { loadScreenAgreementReport } from "../lib/screenAgreementData";
+import { loadTeacherAgreementReport } from "../lib/teacherAgreementData";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -52,6 +53,16 @@ router.get("/auto-review/screen-agreement", async (_req, res) => {
   } catch (err) {
     logger.error({ err }, "Could not build the screen agreement report");
     res.status(503).json({ error: "Could not read the screen reads." });
+  }
+});
+
+// Same for the teacher read: does the teacher in the final title match the one the name tile showed (issue #105).
+router.get("/auto-review/teacher-agreement", async (_req, res) => {
+  try {
+    res.json(await loadTeacherAgreementReport());
+  } catch (err) {
+    logger.error({ err }, "Could not build the teacher agreement report");
+    res.status(503).json({ error: "Could not read the teacher reads." });
   }
 });
 
