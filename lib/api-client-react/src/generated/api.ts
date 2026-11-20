@@ -20,6 +20,7 @@ import type {
 import type {
   AgreementReport,
   ScreenAgreementReport,
+  TeacherAgreementReport,
   AutoReviewGroups,
   ApproveJobInput,
   PatchJobInput,
@@ -396,3 +397,8 @@ export const getScreenAgreement = (options?: RequestInit): Promise<ScreenAgreeme
   send<ScreenAgreementReport>(`/api/auto-review/screen-agreement`, 'GET', options);
 export const getScreenAgreementQueryKey = () => [`/api/auto-review/screen-agreement`] as const;
 export const useScreenAgreement = makeQuery(getScreenAgreementQueryKey(), getScreenAgreement);
+
+export const getTeacherAgreement = (options?: RequestInit): Promise<TeacherAgreementReport> =>
+  send<TeacherAgreementReport>(`/api/auto-review/teacher-agreement`, 'GET', options);
+export const getTeacherAgreementQueryKey = () => [`/api/auto-review/teacher-agreement`] as const;
+export const useTeacherAgreement = makeQuery(getTeacherAgreementQueryKey(), getTeacherAgreement);

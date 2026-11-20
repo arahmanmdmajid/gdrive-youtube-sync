@@ -1,5 +1,5 @@
-import { useAutoReviewAgreement, useAutoReviewGroups, useScreenAgreement } from "@workspace/api-client-react";
-import type { AgreementOutcome, AgreementTally, AutoReviewGroup, ScreenAgreementReport } from "@workspace/api-client-react";
+import { useAutoReviewAgreement, useAutoReviewGroups, useScreenAgreement, useTeacherAgreement } from "@workspace/api-client-react";
+import type { AgreementOutcome, AgreementTally, AutoReviewGroup, ScreenAgreementReport, TeacherAgreementReport } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -130,6 +130,71 @@ function ScreenAgreementCard({ report }: { report: ScreenAgreementReport }) {
   );
 }
 
+/**
+ * How often the teacher the name tile showed is the teacher in the title a recording ended up with. Same rules as the
+ * screen card: only recordings that left review and were read in review. Nothing here changes a title.
+ */
+function TeacherAgreementCard({ report }: { report: TeacherAgreementReport }) {
+  const compared = report.agree + report.disagree;
+  const percent = compared > 0 ? Math.round((report.agree / compared) * 100) : null;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">Teacher read against your titles</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 overflow-x-auto">
+        <p className="text-sm">
+          {compared === 0 ? (
+            "No recording that left review has a teacher read to compare yet."
+          ) : (
+            <>
+              <span className="font-mono font-semibold">{report.agree} of {compared}</span> compared titles name the teacher the name tile showed
+              {percent !== null && <> ({percent}%)</>}.
+            </>
+          )}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Of {report.jobsLeftReview} recordings that left review, {report.noVerdict} were read but named nobody (or the read is out of date), and{" "}
+          {report.notRead} were never read (reads are only made while a recording is in review, so older ones have none). A disagreement means
+          either the read or the title was wrong; only you can tell. If titles are set from the read (TITLE_BY_TEACHER), agreement is partly
+          circular.
+        </p>
+        {report.byTeacher.length > 0 && (
+          <table className="text-sm font-mono">
+            <thead>
+              <tr className="text-left text-muted-foreground">
+                <th className="pr-4 font-normal">Read found</th>
+                <th className="pr-4 font-normal">Agree</th>
+                <th className="font-normal">Disagree</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.byTeacher.map((t) => (
+                <tr key={t.teacher} className="border-t">
+                  <td className="py-1.5 pr-4 font-medium">{t.teacher}</td>
+                  <td className="pr-4">{t.agree}</td>
+                  <td className={t.disagree ? "text-red-600 dark:text-red-400 font-semibold" : ""}>{t.disagree}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {report.disagreements.length > 0 && (
+          <div className="space-y-1">
+            <div className="text-sm font-medium">Disagreements</div>
+            {report.disagreements.map((d) => (
+              <div key={d.jobId} className="text-sm">
+                <span className="font-mono">#{d.jobId}</span> read found {d.teacher}, title is{" "}
+                <span className="font-mono">{d.title || "empty"}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function GroupRow({ g }: { g: AutoReviewGroup }) {
   const teachers = [...new Set(Object.values(g.teachers ?? {}).filter(Boolean))];
   return (
@@ -169,6 +234,7 @@ export default function AutoReview() {
   const agreement = useAutoReviewAgreement();
   const report = agreement.data;
   const screen = useScreenAgreement();
+  const teacher = useTeacherAgreement();
   const groupSort = useSort(groups.data?.groups ?? [], {
     date: (g) => dateKey(g.date),
     verdict: (g) => g.verdict,
@@ -239,6 +305,9 @@ export default function AutoReview() {
 
       {screen.data && <ScreenAgreementCard report={screen.data} />}
       {screen.error && <p className="text-sm text-destructive">Screen check report: {(screen.error as Error).message}</p>}
+
+      {teacher.data && <TeacherAgreementCard report={teacher.data} />}
+      {teacher.error && <p className="text-sm text-destructive">Teacher read report: {(teacher.error as Error).message}</p>}
 
       <Card>
         <CardHeader>
