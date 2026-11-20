@@ -19,6 +19,7 @@ import type {
 
 import type {
   AgreementReport,
+  ScreenAgreementReport,
   AutoReviewGroups,
   ApproveJobInput,
   PatchJobInput,
@@ -390,3 +391,8 @@ export const getAutoReviewAgreement = (options?: RequestInit): Promise<Agreement
   send<AgreementReport>(`/api/auto-review/agreement`, 'GET', options);
 export const getAutoReviewAgreementQueryKey = () => [`/api/auto-review/agreement`] as const;
 export const useAutoReviewAgreement = makeQuery(getAutoReviewAgreementQueryKey(), getAutoReviewAgreement);
+
+export const getScreenAgreement = (options?: RequestInit): Promise<ScreenAgreementReport> =>
+  send<ScreenAgreementReport>(`/api/auto-review/screen-agreement`, 'GET', options);
+export const getScreenAgreementQueryKey = () => [`/api/auto-review/screen-agreement`] as const;
+export const useScreenAgreement = makeQuery(getScreenAgreementQueryKey(), getScreenAgreement);
