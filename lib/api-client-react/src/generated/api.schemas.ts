@@ -399,3 +399,26 @@ export interface AgreementReport {
   days: AgreementDay[];
   gate: AgreementGateItem[];
 }
+
+/** A job that left review whose title the screen check did not agree with. Either the read or the title may be wrong. */
+export interface ScreenDisagreement {
+  jobId: number;
+  /** What the screen showed. */
+  subject: string;
+  serials: string[];
+  title: string;
+}
+
+export interface ScreenAgreementReport {
+  tableVersion: number;
+  /** Jobs that left review, the ones that can be compared. */
+  jobsLeftReview: number;
+  /** Left review with no read at all (reads are only made in review). */
+  notRead: number;
+  /** A read exists but gave no subject. */
+  noVerdict: number;
+  agree: number;
+  disagree: number;
+  bySubject: { subject: string; agree: number; disagree: number }[];
+  disagreements: ScreenDisagreement[];
+}

@@ -1,5 +1,5 @@
-import { useAutoReviewAgreement, useAutoReviewGroups } from "@workspace/api-client-react";
-import type { AgreementOutcome, AgreementTally, AutoReviewGroup } from "@workspace/api-client-react";
+import { useAutoReviewAgreement, useAutoReviewGroups, useScreenAgreement } from "@workspace/api-client-react";
+import type { AgreementOutcome, AgreementTally, AutoReviewGroup, ScreenAgreementReport } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -65,6 +65,71 @@ function TallyTable({ rows }: { rows: [string, AgreementTally][] }) {
   );
 }
 
+/**
+ * How often the screen check named a subject that the title a recording ended up with agrees with. Only recordings that
+ * left review and were read while in review can be compared. Nothing here changes a title or approves anything.
+ */
+function ScreenAgreementCard({ report }: { report: ScreenAgreementReport }) {
+  const compared = report.agree + report.disagree;
+  const percent = compared > 0 ? Math.round((report.agree / compared) * 100) : null;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">Screen check against your titles</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 overflow-x-auto">
+        <p className="text-sm">
+          {compared === 0 ? (
+            "No recording that left review has a screen read to compare yet."
+          ) : (
+            <>
+              <span className="font-mono font-semibold">{report.agree} of {compared}</span> compared titles agree with the book the screen showed
+              {percent !== null && <> ({percent}%)</>}.
+            </>
+          )}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Of {report.jobsLeftReview} recordings that left review, {report.noVerdict} were read but showed no usable subject, and {report.notRead} were
+          never read (reads are only made while a recording is in review, so older ones have none). A disagreement means either the read or the
+          title was wrong; only you can tell.
+        </p>
+        {report.bySubject.length > 0 && (
+          <table className="text-sm font-mono">
+            <thead>
+              <tr className="text-left text-muted-foreground">
+                <th className="pr-4 font-normal">Screen showed</th>
+                <th className="pr-4 font-normal">Agree</th>
+                <th className="font-normal">Disagree</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.bySubject.map((s) => (
+                <tr key={s.subject} className="border-t">
+                  <td className="py-1.5 pr-4 font-medium">{s.subject}</td>
+                  <td className="pr-4">{s.agree}</td>
+                  <td className={s.disagree ? "text-red-600 dark:text-red-400 font-semibold" : ""}>{s.disagree}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {report.disagreements.length > 0 && (
+          <div className="space-y-1">
+            <div className="text-sm font-medium">Disagreements</div>
+            {report.disagreements.map((d) => (
+              <div key={d.jobId} className="text-sm">
+                <span className="font-mono">#{d.jobId}</span> screen showed {d.subject}
+                <span className="text-muted-foreground font-mono"> ({d.serials.join(", ")})</span>, title is{" "}
+                <span className="font-mono">{d.title || "empty"}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function GroupRow({ g }: { g: AutoReviewGroup }) {
   const teachers = [...new Set(Object.values(g.teachers ?? {}).filter(Boolean))];
   return (
@@ -103,6 +168,7 @@ export default function AutoReview() {
   const groups = useAutoReviewGroups();
   const agreement = useAutoReviewAgreement();
   const report = agreement.data;
+  const screen = useScreenAgreement();
   const groupSort = useSort(groups.data?.groups ?? [], {
     date: (g) => dateKey(g.date),
     verdict: (g) => g.verdict,
@@ -170,6 +236,9 @@ export default function AutoReview() {
           </CardContent>
         </Card>
       )}
+
+      {screen.data && <ScreenAgreementCard report={screen.data} />}
+      {screen.error && <p className="text-sm text-destructive">Screen check report: {(screen.error as Error).message}</p>}
 
       <Card>
         <CardHeader>
