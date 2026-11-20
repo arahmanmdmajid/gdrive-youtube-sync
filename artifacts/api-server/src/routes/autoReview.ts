@@ -2,6 +2,7 @@ import { Router } from "express";
 import { evaluateAllGroups } from "../lib/autoReviewRun";
 import { readMode } from "../lib/autoReviewMode";
 import { loadAgreementReport } from "../lib/agreementData";
+import { loadScreenAgreementReport } from "../lib/screenAgreementData";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -40,6 +41,17 @@ router.get("/auto-review/agreement", async (_req, res) => {
   } catch (err) {
     logger.error({ err }, "Could not build the agreement report");
     res.status(503).json({ error: "Could not read the history. Is the job_decisions table created? (pnpm --filter @workspace/db run push)" });
+  }
+});
+
+// How often the screen check named a subject that the job's final title agrees with (issue #105). Read only.
+// It compares jobs that left review with the read made while they were in review.
+router.get("/auto-review/screen-agreement", async (_req, res) => {
+  try {
+    res.json(await loadScreenAgreementReport());
+  } catch (err) {
+    logger.error({ err }, "Could not build the screen agreement report");
+    res.status(503).json({ error: "Could not read the screen reads." });
   }
 });
 
