@@ -190,6 +190,7 @@
     { "method": "POST", "path": "/jobs/:id/approve", "purpose": "needs_review → pending, optionally retitling/cascading", "file": "routes/jobs.ts" },
     { "method": "PATCH", "path": "/jobs/:id", "purpose": "Edit proposed title/description without changing status", "file": "routes/jobs.ts" },
     { "method": "PATCH", "path": "/jobs/:id/youtube-title", "purpose": "Update the title on an already-uploaded video", "file": "routes/jobs.ts" },
+    { "method": "POST", "path": "/jobs/:id/mark-revision", "purpose": "Mark an already-uploaded (done) job as a revision class: renames the video on YouTube, then sets the revision mark and title", "file": "routes/jobs.ts" },
     { "method": "POST", "path": "/jobs/:id/thumbnail", "purpose": "Assign a subject-default thumbnail to a job", "file": "routes/jobs.ts" },
     { "method": "POST", "path": "/jobs/:id/thumbnail/upload", "purpose": "Upload a custom thumbnail for a job", "file": "routes/jobs.ts" },
     { "method": "DELETE", "path": "/jobs/:id/thumbnail/custom", "purpose": "Remove a job's custom thumbnail", "file": "routes/jobs.ts" },

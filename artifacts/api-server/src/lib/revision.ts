@@ -21,6 +21,11 @@ export function revisionTitle(lectureName: string, dateStr: string, earlier: num
   return earlier === 0 ? base : `${base} ${earlier + 1}`;
 }
 
+/** The title and description a revision gets, whether it is marked in review or after it was uploaded. */
+export function revisionPlan(lectureName: string, dateStr: string, fileName: string, earlier: number): { title: string; description: string } {
+  return { title: revisionTitle(lectureName, dateStr, earlier), description: revisionDescription(lectureName, dateStr, fileName) };
+}
+
 /** Same lines as a timetable class's description, plus "Class: Revision". Kept free of `schedule.ts` so it needs no database. */
 export function revisionDescription(lectureName: string, dateStr: string, fileName: string): string {
   const parsed = parseLectureName(lectureName);
