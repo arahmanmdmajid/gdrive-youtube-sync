@@ -14,10 +14,16 @@ test("on the last class day the course is still running", () => {
   assert.equal(isCourseFinished(["2026-11-16"], "2026-11-15"), false);
 });
 
-test("one slot without an end, or still running, keeps the subject running", () => {
-  assert.equal(isCourseFinished(["2026-11-16", null], "2026-12-01"), false);
-  assert.equal(isCourseFinished(["2026-11-16", "2026-12-20"], "2026-12-01"), false);
+test("one slot that has ended is enough, the other slots need no end day", () => {
+  assert.equal(isCourseFinished(["2026-11-13", null], "2026-11-19"), true);
+  assert.equal(isCourseFinished([null, "2026-11-13"], "2026-11-19"), true);
+  assert.equal(isCourseFinished(["2026-11-13", "2026-12-20"], "2026-11-19"), true);
+});
+
+test("no slot with an end day, or only ends still ahead, keeps the subject running", () => {
+  assert.equal(isCourseFinished([null, null], "2026-12-01"), false);
   assert.equal(isCourseFinished([null], "2026-12-01"), false);
+  assert.equal(isCourseFinished(["2026-12-20", null], "2026-12-01"), false);
 });
 
 test("a subject with no timetable slot (audio-only, lecture names only) is never marked finished", () => {
