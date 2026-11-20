@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { db, lectureProgressTable, usersTable } from "@workspace/db";
+import { db, jobsTable, lectureProgressTable, usersTable } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
 import { requireAuth, requireAdminRole, hashPassword } from "../lib/auth";
 import { getInviteCode, setInviteCode } from "../lib/settings";
@@ -13,7 +13,7 @@ router.use(requireAuth, requireAdminRole);
 
 router.get("/students", async (_req: Request, res: Response) => {
   const lectures = await doneLectures();
-  const total = lectures.length;
+  const total = lectures.filter((l) => l.classKind !== "revision").length;
 
   const rows = await db
     .select({
@@ -21,10 +21,11 @@ router.get("/students", async (_req: Request, res: Response) => {
       username: usersTable.username,
       displayName: usersTable.displayName,
       createdAt: usersTable.createdAt,
-      completed: sql<number>`count(${lectureProgressTable.id}) filter (where ${lectureProgressTable.status} = 'completed')`,
+      completed: sql<number>`count(${lectureProgressTable.id}) filter (where ${lectureProgressTable.status} = 'completed' and coalesce(${jobsTable.classKind}, 'regular') <> 'revision')`,
     })
     .from(usersTable)
     .leftJoin(lectureProgressTable, eq(lectureProgressTable.userId, usersTable.id))
+    .leftJoin(jobsTable, eq(jobsTable.id, lectureProgressTable.jobId))
     .where(eq(usersTable.role, "student"))
     .groupBy(usersTable.id, usersTable.username, usersTable.displayName, usersTable.createdAt)
     .orderBy(usersTable.displayName);
