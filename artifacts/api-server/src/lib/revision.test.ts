@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseLectureName, revisionBase, revisionTitle, revisionDescription } from "./revision";
+import { parseLectureName, revisionBase, revisionTitle, revisionDescription, revisionPlan } from "./revision";
 import { slotTitleOf } from "./splitTitle";
 import { slotsHeldBy } from "./standIn";
 import type { ClassSlot } from "./schedule";
@@ -39,6 +39,13 @@ test("the description says it is a revision class", () => {
   assert.match(d, /^Teacher: Ustad Khalid Zaman$/m);
   assert.match(d, /^Date: 20-11-2026$/m);
   assert.match(d, /^Class: Revision$/m);
+});
+
+test("a revision plan gives the title and description, numbering a later one of the same name and day", () => {
+  const first = revisionPlan(siraji, "17-11-2026", "meet.mp4", 0);
+  assert.equal(first.title, "2.3 Siraji | Ustad Khalid Zaman | 17-11-2026 | Revision");
+  assert.equal(first.description, revisionDescription(siraji, "17-11-2026", "meet.mp4"));
+  assert.equal(revisionPlan(siraji, "17-11-2026", "meet.mp4", 1).title, "2.3 Siraji | Ustad Khalid Zaman | 17-11-2026 | Revision 2");
 });
 
 // A revision holds no timetable slot: its title must never read as the slot's own title, with or without a Part suffix.

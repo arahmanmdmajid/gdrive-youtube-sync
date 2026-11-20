@@ -413,6 +413,7 @@ const DATA = {
     ["POST","/jobs/:id/approve","needs_review → pending, optionally retitling/cascading"],
     ["PATCH","/jobs/:id","Edit proposed title/description without changing status"],
     ["PATCH","/jobs/:id/youtube-title","Update the title on an already-uploaded video"],
+    ["POST","/jobs/:id/mark-revision","Mark a done job as a revision class (renames the video)"],
     ["POST","/jobs/:id/thumbnail","Assign a subject-default thumbnail"],
     ["POST","/jobs/:id/thumbnail/upload","Upload a custom thumbnail"],
     ["DELETE","/jobs/:id/thumbnail/custom","Remove a job's custom thumbnail"],

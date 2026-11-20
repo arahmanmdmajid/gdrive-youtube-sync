@@ -47,6 +47,13 @@ export const RenameYoutubeTitleBody = zod.object({
   "title": zod.string().min(1),
 })
 
+/**
+ * @summary Mark a done job as a revision class
+ */
+export const MarkRevisionBody = zod.object({
+  "lectureName": zod.string().min(1),
+})
+
 
 /**
  * @summary Approve a needs_review job (optionally update title/description) and move to pending

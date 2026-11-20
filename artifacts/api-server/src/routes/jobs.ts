@@ -9,6 +9,7 @@ import {
   ApproveJobBody,
   PatchJobBody,
   RenameYoutubeTitleBody,
+  MarkRevisionBody,
 } from "@workspace/api-zod";
 import { runPipelineScan, processJobById, processAllPendingJobs, reconcilePlaylist, isQuotaError, isThumbnailRateLimited, reflowGroupTitles } from "../lib/pipeline";
 import { scanAudioLibrary } from "../lib/audioPipeline";
@@ -25,7 +26,7 @@ import {
 import { logger } from "../lib/logger";
 import { withDecisionLog } from "../lib/decisions";
 import { standInSlot } from "../lib/standIn";
-import { parseLectureName, revisionBase, revisionTitle, revisionDescription } from "../lib/revision";
+import { parseLectureName, revisionBase, revisionTitle, revisionDescription, revisionPlan } from "../lib/revision";
 import { screenSeenFor } from "../lib/screenSubject";
 import { canSwapWith, SWAP_REFUSED_MESSAGE } from "../lib/swapRule";
 import { mergedTitles } from "../lib/splitTitle";
@@ -676,6 +677,86 @@ router.patch("/jobs/:id/youtube-title", async (req, res) => {
     .set({ youtubeTitle: title, updatedAt: new Date() })
     .where(eq(jobsTable.id, id))
     .returning();
+  res.json(formatJob(updated));
+});
+
+// Mark a job that is already done as a revision class (issue #121). The video is renamed on YouTube first, with
+// the title and description a revision gets in review; if YouTube refuses, nothing is written. Then the job takes
+// the mark and the new title, which the student portal shows and leaves out of its totals.
+router.post("/jobs/:id/mark-revision", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  const bodyParsed = MarkRevisionBody.safeParse(req.body);
+  if (!bodyParsed.success || !parseLectureName(bodyParsed.data.lectureName)) {
+    res.status(400).json({ error: 'A revision needs a lecture name like "2.3 Siraji | Ustad Khalid Zaman"' });
+    return;
+  }
+  const { lectureName } = bodyParsed.data;
+
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
+  if (!job) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (job.status !== "done" || !job.youtubeVideoId) {
+    res.status(409).json({ error: "Only a done job with a YouTube video can be marked this way; use the review dialog for the others" });
+    return;
+  }
+  if (job.classKind === "revision") {
+    res.status(409).json({ error: "Already marked as a revision" });
+    return;
+  }
+
+  const youtube = getYoutubeClient();
+  if (!youtube) {
+    res.status(503).json({ error: "YouTube not configured" });
+    return;
+  }
+
+  const dateStr = job.driveCreatedTime ? toPktDateStr(job.driveCreatedTime) : "00-00-0000";
+  const earlier = await db
+    .select({ id: jobsTable.id })
+    .from(jobsTable)
+    .where(and(like(jobsTable.proposedTitle, `${revisionBase(lectureName, dateStr)}%`), ne(jobsTable.id, id), ne(jobsTable.status, "rejected")));
+  const plan = revisionPlan(lectureName, dateStr, job.driveFileName ?? "", earlier.length);
+
+  try {
+    const current = await youtube.videos.list({ part: ["snippet"], id: [job.youtubeVideoId] });
+    const existingSnippet = current.data.items?.[0]?.snippet;
+    if (!existingSnippet) {
+      res.status(502).json({ error: "Video not found on YouTube (it may have been deleted)" });
+      return;
+    }
+    await youtube.videos.update({
+      part: ["snippet"],
+      requestBody: {
+        id: job.youtubeVideoId,
+        snippet: { ...existingSnippet, title: plan.title, description: plan.description },
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(502).json({ error: `Failed to update YouTube: ${message}` });
+    return;
+  }
+
+  const [updated] = await db
+    .update(jobsTable)
+    .set({
+      classKind: "revision",
+      lectureNameConfirmed: true,
+      proposedTitle: plan.title,
+      proposedDescription: plan.description,
+      youtubeTitle: plan.title,
+      updatedAt: new Date(),
+    })
+    .where(eq(jobsTable.id, id))
+    .returning();
+  // This recording no longer takes a position in its day; recordings still in review are re-flowed. Titles past review stay.
+  if (job.driveCreatedTime && job.driveFileName) await reflowGroupTitles(job.driveCreatedTime, job.driveFileName);
   res.json(formatJob(updated));
 });
 
