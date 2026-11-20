@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { requireAuth, requireAdminRole, type AuthedRequest } from "../lib/auth";
 import { UNGROUPED_SERIAL, serialForTitle, loadSubjectLookup } from "../lib/subjects";
 import { groupBySubject } from "../lib/groupBySubject";
+import { compareLectures } from "../lib/lectureOrder";
 import { progressSchema, studyPlanSchema } from "../zod";
 import { getStudyPlan, saveStudyPlan } from "../lib/studyPlan";
 import { loadReadiness } from "../lib/readinessData";
@@ -51,7 +52,7 @@ export async function doneLectures(): Promise<LectureRow[]> {
       driveFileId: row.driveFileId,
       driveCreatedTime: row.driveCreatedTime,
     }))
-    .sort((a, b) => (a.driveCreatedTime ?? "").localeCompare(b.driveCreatedTime ?? ""));
+    .sort(compareLectures);
 }
 
 export async function progressMap(userId: number): Promise<Map<number, string>> {
