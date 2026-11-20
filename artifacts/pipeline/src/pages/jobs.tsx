@@ -29,6 +29,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Trash2, RefreshCcw, ExternalLink, ClipboardCheck, Pencil, RotateCcw, Undo2, Check, X, ImageUp, ImageMinus } from "lucide-react";
@@ -58,12 +59,13 @@ function previewDate(isoString?: string | null): string {
 }
 
 /** Auto-build the YouTube description from a "Subject | Teacher" lecture name */
-function buildDescription(lectureName: string, dateStr: string, driveFileName: string): string {
+function buildDescription(lectureName: string, dateStr: string, driveFileName: string, revision = false): string {
   const [subject, teacher] = lectureName.split(" | ");
   const lines: string[] = [];
   if (subject) lines.push(`Subject: ${subject.trim()}`);
   if (teacher) lines.push(`Teacher: ${teacher.trim()}`);
   lines.push(`Date: ${dateStr}`);
+  if (revision) lines.push("Class: Revision");
   lines.push(`Source file: ${driveFileName}`);
   lines.push(`Uploaded automatically by the class recording pipeline.`);
   return lines.join("\n");
@@ -74,6 +76,8 @@ type EditState = {
   status: string;
   /** The chosen lecture name from the dropdown (drives auto-title) */
   selectedLectureName: string;
+  /** A revision or extra class: takes no timetable slot. Only sent together with a lecture name. */
+  revision: boolean;
   /** Manual override — only used when no lecture name is selected */
   proposedTitle: string;
   proposedDescription: string;
@@ -289,11 +293,13 @@ export default function Jobs() {
     proposedDescription?: string | null;
     driveFileName: string;
     driveCreatedTime?: string | null;
+    classKind?: string;
   }) => {
     setEditState({
       id: job.id,
       status: job.status,
       selectedLectureName: "",
+      revision: job.classKind === "revision",
       proposedTitle: job.proposedTitle ?? job.driveFileName,
       proposedDescription: job.proposedDescription ?? "",
       driveFileName: job.driveFileName,
@@ -304,7 +310,7 @@ export default function Jobs() {
   const handleSave = () => {
     if (!editState) return;
     const payload = editState.selectedLectureName
-      ? { lectureName: editState.selectedLectureName, proposedDescription: editState.proposedDescription }
+      ? { lectureName: editState.selectedLectureName, classKind: editState.revision ? "revision" as const : "regular" as const, proposedDescription: editState.proposedDescription }
       : { proposedTitle: editState.proposedTitle, proposedDescription: editState.proposedDescription };
 
     if (editState.status === "needs_review") {
@@ -329,7 +335,8 @@ export default function Jobs() {
   const previewTitle = useMemo(() => {
     if (!editState) return "";
     if (editState.selectedLectureName) {
-      return `${editState.selectedLectureName} | ${previewDate(editState.driveCreatedTime)}`;
+      const base = `${editState.selectedLectureName} | ${previewDate(editState.driveCreatedTime)}`;
+      return editState.revision ? `${base} | Revision` : base;
     }
     return editState.proposedTitle;
   }, [editState]);
@@ -411,6 +418,7 @@ export default function Jobs() {
                     <TableCell className="font-mono text-xs text-muted-foreground">#{job.id}</TableCell>
 
                     <TableCell className="font-medium max-w-[300px]">
+                      {job.classKind === "revision" && <Badge variant="outline" className="text-[10px] font-mono mb-0.5">Revision</Badge>}
                       {/* Drive filename — link to the file, except for manually-added jobs (no real Drive source) */}
                       {job.source === "manual" ? (
                         <div className="flex items-center gap-1.5">
@@ -707,7 +715,7 @@ export default function Jobs() {
                     onValueChange={(v) => {
                       const name = v === "none" ? "" : v;
                       const desc = name
-                        ? buildDescription(name, previewDate(editState.driveCreatedTime), editState.driveFileName)
+                        ? buildDescription(name, previewDate(editState.driveCreatedTime), editState.driveFileName, editState.revision)
                         : editState.proposedDescription;
                       setEditState({ ...editState, selectedLectureName: name, proposedDescription: desc });
                     }}
@@ -731,6 +739,28 @@ export default function Jobs() {
                   </p>
                 )}
               </div>
+              {/* Revision or extra class: needs a lecture name, takes no timetable slot */}
+              {editState.selectedLectureName && (
+                <div className="flex items-start gap-3 rounded-md border border-border px-3 py-2">
+                  <Switch
+                    id="edit-revision"
+                    checked={editState.revision}
+                    onCheckedChange={(checked) =>
+                      setEditState({
+                        ...editState,
+                        revision: checked,
+                        proposedDescription: buildDescription(editState.selectedLectureName, previewDate(editState.driveCreatedTime), editState.driveFileName, checked),
+                      })
+                    }
+                  />
+                  <div className="space-y-0.5">
+                    <Label htmlFor="edit-revision">Revision or extra class</Label>
+                    <p className="text-xs text-muted-foreground">
+                      The title ends in Revision (a later one the same day is numbered, Revision 2). It takes no timetable slot, so the other recordings of the day keep their places.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Title preview / manual override */}
               <div className="space-y-1.5">

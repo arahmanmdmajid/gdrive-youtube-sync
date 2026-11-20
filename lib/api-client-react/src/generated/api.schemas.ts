@@ -47,6 +47,8 @@ export interface Job {
   status: JobStatus;
   source?: JobSource;
   contentType: JobContentType;
+  /** A revision or extra class marked by hand. It holds no timetable slot. */
+  classKind?: "regular" | "revision";
   /** @nullable */
   proposedTitle?: string | null;
   /** @nullable */
@@ -147,6 +149,8 @@ export interface AddDriveFolderInput {
 
 export interface ApproveJobInput {
   lectureName?: string;
+  /** "revision" needs lectureName (like "2.3 Siraji | Ustad Khalid Zaman"). A regular name takes the mark off. */
+  classKind?: "regular" | "revision";
   proposedTitle?: string;
   proposedDescription?: string;
   conflictResolution?: "swap" | "merge";
@@ -154,6 +158,8 @@ export interface ApproveJobInput {
 
 export interface PatchJobInput {
   lectureName?: string;
+  /** "revision" needs lectureName (like "2.3 Siraji | Ustad Khalid Zaman"). A regular name takes the mark off. */
+  classKind?: "regular" | "revision";
   proposedTitle?: string;
   proposedDescription?: string;
   conflictResolution?: "swap" | "merge";
