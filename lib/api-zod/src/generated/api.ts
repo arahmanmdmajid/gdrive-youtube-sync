@@ -33,6 +33,7 @@ export const CreateJobBody = zod.object({
  */
 export const PatchJobBody = zod.object({
   "lectureName": zod.string().optional(),
+  "classKind": zod.enum(["regular", "revision"]).optional(),
   "proposedTitle": zod.string().optional(),
   "proposedDescription": zod.string().optional(),
   "conflictResolution": zod.enum(["swap", "merge"]).optional(),
@@ -52,6 +53,7 @@ export const RenameYoutubeTitleBody = zod.object({
  */
 export const ApproveJobBody = zod.object({
   "lectureName": zod.string().optional(),
+  "classKind": zod.enum(["regular", "revision"]).optional(),
   "proposedTitle": zod.string().optional(),
   "proposedDescription": zod.string().optional(),
   "conflictResolution": zod.enum(["swap", "merge"]).optional(),
