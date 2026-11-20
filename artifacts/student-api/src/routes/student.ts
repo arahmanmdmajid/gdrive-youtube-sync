@@ -2,7 +2,8 @@ import { Router, type Request, type Response } from "express";
 import { db, jobsTable, lectureProgressTable, usersTable } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
 import { requireAuth, requireAdminRole, type AuthedRequest } from "../lib/auth";
-import { UNGROUPED_SERIAL, serialForTitle, loadSubjectLookup, type SubjectLookup } from "../lib/subjects";
+import { UNGROUPED_SERIAL, serialForTitle, loadSubjectLookup } from "../lib/subjects";
+import { groupBySubject } from "../lib/groupBySubject";
 import { progressSchema, studyPlanSchema } from "../zod";
 import { getStudyPlan, saveStudyPlan } from "../lib/studyPlan";
 import { loadReadiness } from "../lib/readinessData";
@@ -15,6 +16,8 @@ export interface LectureRow {
   id: number;
   title: string;
   contentType: "video" | "audio";
+  /** A revision or extra class is listed under its subject but left out of every total. */
+  classKind: "regular" | "revision";
   youtubeVideoId: string | null;
   youtubeUrl: string | null;
   driveFileId: string;
@@ -28,6 +31,7 @@ export async function doneLectures(): Promise<LectureRow[]> {
       proposedTitle: jobsTable.proposedTitle,
       youtubeTitle: jobsTable.youtubeTitle,
       contentType: jobsTable.contentType,
+      classKind: jobsTable.classKind,
       youtubeVideoId: jobsTable.youtubeVideoId,
       youtubeUrl: jobsTable.youtubeUrl,
       driveFileId: jobsTable.driveFileId,
@@ -41,6 +45,7 @@ export async function doneLectures(): Promise<LectureRow[]> {
       id: row.id,
       title: row.youtubeTitle ?? row.proposedTitle ?? "Untitled lecture",
       contentType: row.contentType,
+      classKind: row.classKind,
       youtubeVideoId: row.youtubeVideoId,
       youtubeUrl: row.youtubeUrl,
       driveFileId: row.driveFileId,
@@ -57,37 +62,7 @@ export async function progressMap(userId: number): Promise<Map<number, string>> 
   return new Map(rows.map((r) => [r.jobId, r.status]));
 }
 
-export function groupBySubject(lectures: LectureRow[], progress: Map<number, string>, lookup: SubjectLookup) {
-  const groups = new Map<string, { total: number; completed: number; inProgress: number; latest: string | null }>();
-  for (const lecture of lectures) {
-    const serial = serialForTitle(lecture.title, lookup);
-    const group = groups.get(serial) ?? { total: 0, completed: 0, inProgress: 0, latest: null };
-    group.total += 1;
-    const status = progress.get(lecture.id);
-    if (status === "completed") group.completed += 1;
-    else if (status === "in_progress") group.inProgress += 1;
-    if (!group.latest || (lecture.driveCreatedTime ?? "") > group.latest) {
-      group.latest = lecture.driveCreatedTime;
-    }
-    groups.set(serial, group);
-  }
-
-  const subjects = lookup.subjects.filter((s) => groups.has(s.serial)).map((s) => ({
-    ...s,
-    ...groups.get(s.serial)!,
-  }));
-  const ungrouped = groups.get(UNGROUPED_SERIAL);
-  if (ungrouped) {
-    subjects.push({
-      serial: UNGROUPED_SERIAL,
-      nameEn: "Earlier lectures",
-      teacherEn: "",
-      finished: false,
-      ...ungrouped,
-    });
-  }
-  return subjects;
-}
+export { groupBySubject };
 
 router.get("/subjects", async (req: Request, res: Response) => {
   const { userId } = req as AuthedRequest;
@@ -176,16 +151,17 @@ router.put("/study-plan", async (req: Request, res: Response) => {
 
 router.get("/class-progress", requireAdminRole, async (_req: Request, res: Response) => {
   const lectures = await doneLectures();
-  const total = lectures.length;
+  const total = lectures.filter((l) => l.classKind !== "revision").length;
 
   const rows = await db
     .select({
       userId: usersTable.id,
       displayName: usersTable.displayName,
-      completed: sql<number>`count(${lectureProgressTable.id}) filter (where ${lectureProgressTable.status} = 'completed')`,
+      completed: sql<number>`count(${lectureProgressTable.id}) filter (where ${lectureProgressTable.status} = 'completed' and coalesce(${jobsTable.classKind}, 'regular') <> 'revision')`,
     })
     .from(usersTable)
     .leftJoin(lectureProgressTable, eq(lectureProgressTable.userId, usersTable.id))
+    .leftJoin(jobsTable, eq(jobsTable.id, lectureProgressTable.jobId))
     .where(eq(usersTable.role, "student"))
     .groupBy(usersTable.id, usersTable.displayName)
     .orderBy(usersTable.displayName);

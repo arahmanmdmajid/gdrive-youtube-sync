@@ -18,22 +18,11 @@
 
 import { db, scheduleSlotsTable, lectureNamesTable } from "@workspace/db";
 import { isCourseFinished } from "./courseFinished";
+import type { SubjectInfo, SubjectLookup } from "./subjectSerial";
 
-export interface SubjectInfo {
-  serial: string;
-  nameEn: string;
-  teacherEn: string;
-  /** The course has ended: every timetable slot of this subject has a last class day before today (PKT). */
-  finished: boolean;
-}
-
-export const UNGROUPED_SERIAL = "other";
-
-export interface SubjectLookup {
-  subjects: SubjectInfo[];
-  serials: Set<string>;
-  arabicSerialMap: Record<string, string>;
-}
+// The title-to-serial rule and the lookup types live in subjectSerial.ts (no database); re-exported for callers.
+export { UNGROUPED_SERIAL, serialForTitle } from "./subjectSerial";
+export type { SubjectInfo, SubjectLookup } from "./subjectSerial";
 
 // Matches the lecture-name picker's "X.X Subject | Teacher" format.
 const LECTURE_NAME_RE = /^(\d+\.\d+)\s+(.*?)\s*\|\s*(.*)$/;
@@ -79,22 +68,4 @@ export async function loadSubjectLookup(): Promise<SubjectLookup> {
 
   const subjects = [...bySerial.values()].sort((a, b) => a.serial.localeCompare(b.serial));
   return { subjects, serials: new Set(subjects.map((s) => s.serial)), arabicSerialMap };
-}
-
-/**
- * Resolves the subject serial for a lecture title. Falls back to the Arabic
- * subject map for old titles; returns UNGROUPED_SERIAL when nothing matches.
- */
-export function serialForTitle(title: string | null | undefined, lookup: SubjectLookup): string {
-  if (!title) return UNGROUPED_SERIAL;
-
-  const match = title.match(/^(\d+\.\d+)\s/);
-  if (match && lookup.serials.has(match[1]!)) return match[1]!;
-
-  const arabicSubject = title.split("|")[0]?.trim();
-  if (arabicSubject && lookup.arabicSerialMap[arabicSubject]) {
-    return lookup.arabicSerialMap[arabicSubject]!;
-  }
-
-  return UNGROUPED_SERIAL;
 }
