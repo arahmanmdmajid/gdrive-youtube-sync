@@ -247,6 +247,26 @@ export function useRemoveStudent() {
   });
 }
 
+export type AuthEventKind = "login_ok" | "login_failed" | "register" | "reset_ok" | "reset_refused";
+export type AuthEventCounts = Record<AuthEventKind, number>;
+export interface AuthEventRow {
+  id: number;
+  createdAt: string;
+  event: AuthEventKind;
+  username: string;
+  userId: number | null;
+  reason: string | null;
+  ipHash: string | null;
+}
+
+export function useAuthEvents() {
+  return useQuery({
+    queryKey: ["admin", "auth-events"],
+    queryFn: () =>
+      customFetch<{ summary: { last24h: AuthEventCounts; last7d: AuthEventCounts }; events: AuthEventRow[] }>("/api/admin/auth-events"),
+  });
+}
+
 export function useInviteCode() {
   return useQuery({
     queryKey: ["admin", "invite-code"],

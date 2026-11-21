@@ -133,7 +133,12 @@ export default function AdminStudents() {
 
   return (
     <StudentLayout>
-      <h1 className="text-xl font-semibold mb-6">Manage students</h1>
+      <div className="flex items-baseline justify-between gap-2 mb-6">
+        <h1 className="text-xl font-semibold">Manage students</h1>
+        <Link href="/admin/activity" className="text-sm text-primary underline-offset-4 hover:underline">
+          Sign-in activity
+        </Link>
+      </div>
 
       <InviteCodeCard />
 

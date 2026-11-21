@@ -15,6 +15,7 @@ import StudentSubjectDetail from "@/pages/student/subject-detail";
 import StudentClassProgress from "@/pages/student/class-progress";
 import AdminStudents from "@/pages/student/admin-students";
 import AdminStudentDetail from "@/pages/student/admin-student-detail";
+import AdminActivity from "@/pages/student/admin-activity";
 import StudentLibrary from "@/pages/student/library";
 import StudentLibraryCategory from "@/pages/student/library-category";
 import StudentSchedule from "@/pages/student/schedule";
@@ -118,6 +119,11 @@ function StudentRouter() {
       <Route path="/admin/students">
         <RequireAdmin>
           <AdminStudents />
+        </RequireAdmin>
+      </Route>
+      <Route path="/admin/activity">
+        <RequireAdmin>
+          <AdminActivity />
         </RequireAdmin>
       </Route>
       <Route path="/admin/students/:id">
