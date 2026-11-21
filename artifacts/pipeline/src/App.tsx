@@ -9,6 +9,7 @@ import { logout } from "@/lib/student-api";
 import { ThemeProvider } from "@/lib/theme";
 import StudentLogin from "@/pages/student/login";
 import StudentRegister from "@/pages/student/register";
+import StudentForgotPassword from "@/pages/student/forgot-password";
 import StudentSubjects from "@/pages/student/subjects";
 import StudentSubjectDetail from "@/pages/student/subject-detail";
 import StudentClassProgress from "@/pages/student/class-progress";
@@ -77,6 +78,11 @@ function StudentRouter() {
       <Route path="/register">
         <RedirectIfAuthed>
           <StudentRegister />
+        </RedirectIfAuthed>
+      </Route>
+      <Route path="/forgot-password">
+        <RedirectIfAuthed>
+          <StudentForgotPassword />
         </RedirectIfAuthed>
       </Route>
       <Route path="/">
