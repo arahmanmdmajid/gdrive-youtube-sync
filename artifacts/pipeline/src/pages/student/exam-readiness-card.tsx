@@ -16,11 +16,6 @@ function formatHm(seconds: number): string {
   return h ? `${h}h ${m}m` : `${m}m`;
 }
 
-/** "29 Dec" from a plain YYYY-MM-DD date, with no time zone shifting it. */
-function formatDay(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
-}
-
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="min-w-0">
@@ -168,28 +163,6 @@ export function ExamReadinessCard() {
                   )}
                 </div>
               </div>
-            )}
-            {data.comparison.length > 0 && (
-              <table className="w-full text-sm" data-testid="plan-comparison">
-                <thead>
-                  <tr className="text-left text-xs text-muted-foreground">
-                    <th className="font-normal pb-1">Hours a day</th>
-                    <th className="font-normal pb-1">Finish date</th>
-                    <th className="font-normal pb-1 text-right">Exam</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.comparison.map((row) => (
-                    <tr key={row.hoursPerDay} className={data.plan?.hoursPerDay === row.hoursPerDay ? "font-medium" : ""}>
-                      <td className="py-0.5">{row.hoursPerDay}</td>
-                      <td className="py-0.5">{formatDay(row.finishDate)}</td>
-                      <td className={`py-0.5 text-right ${row.status === "at_risk" ? "text-destructive" : "text-success"}`}>
-                        {row.status === "at_risk" ? "Too late" : "On time"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             )}
           </>
         )}
