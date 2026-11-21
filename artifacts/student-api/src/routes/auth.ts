@@ -6,6 +6,7 @@ import { getInviteCode } from "../lib/settings";
 import { registerSchema, loginSchema, resetWithInviteSchema } from "../zod";
 import { createAttemptLimiter } from "../lib/attemptLimiter";
 import { logger } from "../lib/logger";
+import { recordAuthEvent } from "../lib/authEventsData";
 
 const router: Router = Router();
 
@@ -46,6 +47,7 @@ router.post("/register", async (req: Request, res: Response) => {
     .values({ username: normalized, passwordHash, displayName })
     .returning();
 
+  await recordAuthEvent(req, "register", { username: normalized, userId: user!.id });
   res.status(201).json({ token: signToken(user!.id, user!.role as "student" | "admin"), user: publicUser(user!) });
 });
 
@@ -63,11 +65,14 @@ router.post("/login", async (req: Request, res: Response) => {
     .where(eq(usersTable.username, username.toLowerCase()))
     .limit(1);
 
-  if (!user || !(await verifyPassword(password, user.passwordHash))) {
+  const passwordOk = user ? await verifyPassword(password, user.passwordHash) : false;
+  if (!user || !passwordOk) {
+    await recordAuthEvent(req, "login_failed", { username, reason: user ? "wrong_password" : "unknown_user" });
     res.status(401).json({ error: "Incorrect username or password" });
     return;
   }
 
+  await recordAuthEvent(req, "login_ok", { username, userId: user.id });
   res.json({ token: signToken(user.id, user.role as "student" | "admin"), user: publicUser(user) });
 });
 
@@ -84,6 +89,7 @@ router.post("/reset-password", async (req: Request, res: Response) => {
 
   if (resetByUser.blocked(normalized) || resetAll.blocked(ALL)) {
     logger.warn({ username: normalized }, "Password reset refused: too many wrong invite codes");
+    await recordAuthEvent(req, "reset_refused", { username: normalized, reason: "too_many_attempts" });
     res.status(429).json({ error: "Too many wrong attempts. Try again in 15 minutes or ask your teacher." });
     return;
   }
@@ -93,6 +99,7 @@ router.post("/reset-password", async (req: Request, res: Response) => {
     resetByUser.fail(normalized);
     resetAll.fail(ALL);
     logger.warn({ username: normalized }, "Password reset refused: wrong invite code");
+    await recordAuthEvent(req, "reset_refused", { username: normalized, reason: "wrong_invite_code" });
     res.status(403).json({ error: "Invalid invite code" });
     return;
   }
@@ -104,12 +111,14 @@ router.post("/reset-password", async (req: Request, res: Response) => {
     .where(and(eq(usersTable.username, normalized), eq(usersTable.role, "student")))
     .returning();
   if (!user) {
+    await recordAuthEvent(req, "reset_refused", { username: normalized, reason: "no_student" });
     res.status(404).json({ error: "No student account with that username" });
     return;
   }
 
   resetByUser.clear(normalized);
   logger.info({ userId: user.id, username: normalized }, "Password reset with the invite code");
+  await recordAuthEvent(req, "reset_ok", { username: normalized, userId: user.id });
   res.json({ token: signToken(user.id, "student"), user: publicUser(user) });
 });
 

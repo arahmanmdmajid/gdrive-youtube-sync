@@ -148,7 +148,7 @@ Invoke-RestMethod -Method Post -Uri https://gdrive-youtube-sync.onrender.com/api
 
 A user object means it works; `401 Unauthorized` means it does not match. The free Render instance can take about 50 seconds to wake up.
 
-**Students' passwords** are different: signed in as admin, use the *Reset password* button on the Students page. A student can also reset their own password with the class invite code (`POST /api/auth/reset-password`, issue #123): students only, never the admin account; wrong codes are limited to 5 per username and 30 in total per 15 minutes (in memory), and every reset and refusal is logged with the username and never the password. Prevention: keep the admin password in a password manager.
+**Students' passwords** are different: signed in as admin, use the *Reset password* button on the Students page. A student can also reset their own password with the class invite code (`POST /api/auth/reset-password`, issue #123): students only, never the admin account; wrong codes are limited to 5 per username and 30 in total per 15 minutes (in memory), and every reset and refusal is logged with the username and never the password. **Sign-in activity** (issue #126): every sign-in, failed sign-in, registration and password reset is also written to the `auth_events` table (username as typed, the reason a failure happened, a salted hash of the address; never a password, invite code or token) and read by the admin-only `GET /api/admin/auth-events`. Recording is best effort: if the insert fails a warning is logged and the sign-in carries on. After adding the table run `pnpm --filter @workspace/db run push`. Prevention: keep the admin password in a password manager.
 
 ## Troubleshooting
 
