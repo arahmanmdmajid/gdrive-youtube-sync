@@ -84,6 +84,14 @@ export function useRegister() {
   });
 }
 
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: (body: { inviteCode: string; username: string; password: string }) =>
+      customFetch<AuthResponse>("/api/auth/reset-password", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: (data) => storeSession(data.token, data.user),
+  });
+}
+
 export function useLogin() {
   return useMutation({
     mutationFn: (body: { username: string; password: string }) =>
