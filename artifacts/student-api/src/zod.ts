@@ -12,6 +12,12 @@ export const registerSchema = z.object({
   displayName: z.string().trim().min(1).max(60),
 });
 
+export const resetWithInviteSchema = z.object({
+  inviteCode: z.string().trim().min(1),
+  username: z.string().trim().min(1),
+  password: z.string().min(6).max(100),
+});
+
 export const loginSchema = z.object({
   username: z.string().trim().min(1),
   password: z.string().min(1),
