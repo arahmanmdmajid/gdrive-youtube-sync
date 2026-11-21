@@ -6,10 +6,28 @@ import { getInviteCode, setInviteCode } from "../lib/settings";
 import { doneLectures, progressMap, groupBySubject } from "./student";
 import { loadSubjectLookup } from "../lib/subjects";
 import { resetPasswordSchema, inviteCodeSchema } from "../zod";
+import { loadAuthEvents } from "../lib/authEventsData";
+import { summarizeEvents } from "../lib/authEvents";
+import { logger } from "../lib/logger";
 
 const router: Router = Router();
 
 router.use(requireAuth, requireAdminRole);
+
+// Who signed in, failed to, registered or reset a password (issue #126). Newest first, plus counts for 24 hours and 7 days.
+router.get("/auth-events", async (req: Request, res: Response) => {
+  const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 200));
+  try {
+    const { recent, week } = await loadAuthEvents(limit);
+    res.json({
+      summary: summarizeEvents(week, Date.now()),
+      events: recent.map((e) => ({ id: e.id, createdAt: e.createdAt, event: e.event, username: e.username, userId: e.userId, reason: e.reason, ipHash: e.ipHash })),
+    });
+  } catch (err) {
+    logger.error({ err: err instanceof Error ? err.message : String(err) }, "Could not read the sign-in events");
+    res.status(503).json({ error: "Could not read the activity log. Is the auth_events table created? (pnpm --filter @workspace/db run push)" });
+  }
+});
 
 router.get("/students", async (_req: Request, res: Response) => {
   const lectures = await doneLectures();
