@@ -27,6 +27,7 @@ declare namespace YT {
   class Player {
     constructor(elementId: string | HTMLElement, options: PlayerOptions);
     getCurrentTime(): number;
+    getPlayerState(): number;
     seekTo(seconds: number, allowSeekAhead: boolean): void;
     destroy(): void;
   }
