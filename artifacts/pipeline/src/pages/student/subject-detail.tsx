@@ -105,6 +105,12 @@ function LectureRow({
 
     let cancelled = false;
     let pollId: ReturnType<typeof setInterval> | undefined;
+    let saveNow: (() => void) | undefined;
+
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") saveNow?.();
+    };
+    const onHide = () => saveNow?.();
 
     loadYouTubeIframeApi().then((YTApi) => {
       if (cancelled) return;
@@ -126,6 +132,8 @@ function LectureRow({
                 setResumeSeconds(seconds);
                 saveResumePosition(lecture.id, seconds);
               }, PROGRESS_POLL_MS);
+            } else if (event.data === YTApi.PlayerState.PAUSED) {
+              saveNow?.();
             } else if (event.data === YTApi.PlayerState.ENDED) {
               clearResumePosition(lecture.id);
               setResumeSeconds(0);
@@ -138,10 +146,27 @@ function LectureRow({
         },
       });
       playerRef.current = player;
+      // A locked phone or a switched app freezes the page before the next 3 second tick, and a pause stops the
+      // tick. Save the position now. Not after the end: that position is cleared and must stay cleared.
+      saveNow = () => {
+        try {
+          const state = player.getPlayerState();
+          if (state !== YTApi.PlayerState.PLAYING && state !== YTApi.PlayerState.PAUSED) return;
+          const seconds = player.getCurrentTime();
+          setResumeSeconds(seconds);
+          saveResumePosition(lecture.id, seconds);
+        } catch {
+          /* the player is not ready or was destroyed: keep the last saved position */
+        }
+      };
+      document.addEventListener("visibilitychange", onVisibility);
+      window.addEventListener("pagehide", onHide);
     });
 
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onHide);
       if (pollId) clearInterval(pollId);
       playerRef.current?.destroy();
       playerRef.current = null;
